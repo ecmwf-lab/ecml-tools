@@ -12,6 +12,9 @@ class Dataset:
     def __init__(self, path):
         self.z = zarr.open(path)
 
+    def __len__(self):
+        return self.z.data.shape[0]
+
     def __getitem__(self, n):
         return self.z.data[n]
 
@@ -19,6 +22,9 @@ class Dataset:
 class Concat:
     def __init__(self, *datasets):
         self.datasets = list(datasets)
+
+        # TODO: check that all datasets are compatible
+
 
     def __len__(self):
         return sum(len(i) for i in self.datasets)
