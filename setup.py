@@ -44,13 +44,10 @@ setuptools.setup(
     install_requires=[
         "zarr",
     ],
-    extras_require={
-
-    },
+    extras_require={},
     zip_safe=True,
     keywords="tool",
-    entry_points={
-    },
+    entry_points={},
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
