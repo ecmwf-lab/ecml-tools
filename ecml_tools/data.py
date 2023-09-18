@@ -25,7 +25,6 @@ class Concat:
 
         # TODO: check that all datasets are compatible
 
-
     def __len__(self):
         return sum(len(i) for i in self.datasets)
 
