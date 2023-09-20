@@ -59,7 +59,11 @@ class Base:
         start = self.dates[0].year if start is None else start
         end = self.dates[-1].year if end is None else end
 
-        return [i for i, date in enumerate(self.dates) if start <= date.year <= end]
+        return [
+            i
+            for i, date in enumerate(self.dates)
+            if start <= date.astype(object).year <= end
+        ]
 
 
 class Dataset(Base):
