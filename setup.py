@@ -43,6 +43,8 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         "zarr",
+        "pyyaml",
+        "numpy",
     ],
     extras_require={},
     zip_safe=True,
