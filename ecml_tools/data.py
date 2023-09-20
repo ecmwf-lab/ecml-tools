@@ -102,6 +102,10 @@ class Concat(Base):
 
 class Subset(Base):
     def __init__(self, dataset, indices):
+        while isinstance(dataset, Subset):
+            indices = [dataset.indices[i] for i in indices]
+            dataset = dataset.dataset
+
         self.dataset = dataset
         self.indices = list(indices)
 
