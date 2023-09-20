@@ -41,6 +41,18 @@ class Base:
 
             raise NotImplementedError(f"Unsupported start/end: {start} {end}")
 
+        if "select" in kwargs:
+            select = kwargs.pop("select")
+            return Select(self, self.select_to_columns(select)).subset(**kwargs)
+
+        if "drop" in kwargs:
+            drop = kwargs.pop("drop")
+            return Select(self, self.drop_to_columns(drop)).subset(**kwargs)
+
+        if "reorder" in kwargs:
+            reorder = kwargs.pop("reorder")
+            return Select(self, self.reorder_to_columns(reorder)).subset(**kwargs)
+
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 
     def frequency_to_indices(self, frequency):
@@ -65,6 +77,40 @@ class Base:
             for i, date in enumerate(self.dates)
             if start <= date.astype(object).year <= end
         ]
+
+    def select_to_columns(self, vars):
+        if isinstance(vars, set):
+            # We keep the order of the variables as they are in the zarr file
+            nvars = [v for v in self.name_to_index if v in vars]
+            assert len(nvars) == len(vars)
+            return self.select_to_columns(nvars)
+
+        if not isinstance(vars, (list, tuple)):
+            vars = [vars]
+
+        return [self.name_to_index[v] for v in vars]
+
+    def drop_to_columns(self, vars):
+        if not isinstance(vars, (list, tuple, set)):
+            vars = [vars]
+
+        assert set(vars) <= set(self.name_to_index)
+
+        return sorted([v for k, v in self.name_to_index.items() if k not in vars])
+
+    def reorder_to_columns(self, vars):
+        if  isinstance(vars, (list, tuple)):
+            vars = {k: i for i, k in enumerate(vars)}
+
+        print('REORDER', vars)
+
+        indices = []
+        for k, v in sorted(self.name_to_index.items(), key=lambda x: x[1]):
+            indices.append(vars[k])
+
+        assert set(indices) == set(range(len(self.name_to_index)))
+
+        return indices
 
 
 class Dataset(Base):
@@ -102,16 +148,20 @@ class Dataset(Base):
     def statistics(self):
         return self.z.statistics[:]
 
-    @cached_property
+    @property
     def resolution(self):
         return self.z.attrs["resolution"]
 
-    @cached_property
+    @property
     def frequency(self):
         return self.z.attrs["frequency"]
 
     def __repr__(self):
         return self.path
+
+    @property
+    def name_to_index(self):
+        return self.z.attrs["name_to_index"]
 
 
 class Combined(Base):
@@ -232,6 +282,40 @@ class Subset(Base):
     @cached_property
     def dates(self):
         return self.dataset.dates[self.indices]
+
+    @property
+    def latitudes(self):
+        return self.dataset.latitudes
+
+    @property
+    def longitudes(self):
+        return self.dataset.longitudes
+
+
+class Select(Base):
+    def __init__(self, dataset, indices):
+        while isinstance(dataset, Select):
+            indices = [dataset.indices[i] for i in indices]
+            dataset = dataset.dataset
+
+        self.dataset = dataset
+        self.indices = list(indices)
+        assert len(self.indices) > 0
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, n):
+        row = self.dataset[n]
+        return row[self.indices]
+
+    @cached_property
+    def shape(self):
+        return (len(self), len(self.indices)) + self.dataset.shape[2:]
+
+    @cached_property
+    def dates(self):
+        return self.dataset.dates
 
     @property
     def latitudes(self):
