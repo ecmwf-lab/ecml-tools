@@ -10,15 +10,21 @@ import datetime
 import numpy as np
 import zarr
 
-from ecml_tools.data import Concat, Join, open_dataset
+from ecml_tools.data import Concat, Join, Subset, open_dataset
 
 
-def ij(i, j, k=0):
-    return i * 100 + j + k * 1_000_000
+def _(date, var, k=0):
+    d = date.year * 10000 + date.month * 100 + date.day
+    v = ord(var) - ord("a") + 1
+    return d * 100 + v + k * 1_000_000_000
 
 
 def create_zarr(
-    vars=["2t", "msl", "10u", "10v"], start=2021, end=2021, frequency=6, k=0
+    vars=["a", "b", "c", "d"],
+    start=2021,
+    end=2021,
+    frequency=6,
+    k=0,
 ):
     root = zarr.group()
 
@@ -31,9 +37,9 @@ def create_zarr(
     dates = np.array(dates, dtype="datetime64")
 
     data = np.zeros((len(dates), len(vars)))
-    for i in range(len(dates)):
-        for j in range(len(vars)):
-            data[i, j] = ij(i, j, k)
+    for i, date in enumerate(dates):
+        for j, var in enumerate(vars):
+            data[i, j] = _(date.astype(object), var, k)
 
     root.data = data
     root.dates = dates
@@ -61,10 +67,13 @@ def test_concat():
     )
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
+
+    date = datetime.datetime(2021, 1, 1)
+
     for i, row in enumerate(ds):
-        n = i if i < 365 * 4 else i - 365 * 4
-        expect = [ij(n, 0), ij(n, 1), ij(n, 2), ij(n, 3)]
+        expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
         assert (row == expect).all()
+        date += datetime.timedelta(hours=6)
 
 
 def test_join():
@@ -75,37 +84,72 @@ def test_join():
 
     assert isinstance(ds, Join)
     assert len(ds) == 365 * 4
-    for i, row in enumerate(ds):
-        n = i
+    date = datetime.datetime(2021, 1, 1)
+    for row in ds:
         expect = [
-            ij(n, 0),
-            ij(n, 1),
-            ij(n, 2),
-            ij(n, 3),
-            ij(n, 0),
-            ij(n, 1),
-            ij(n, 2),
-            ij(n, 3),
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+            _(date, "e"),
+            _(date, "f"),
+            _(date, "g"),
+            _(date, "h"),
         ]
         assert (row == expect).all()
+        date += datetime.timedelta(hours=6)
 
 
 def test_subset_1():
     z = create_zarr(start=2021, end=2023, frequency=1)
     ds = open_dataset(z, frequency=12)
+    assert isinstance(ds, Subset)
     assert len(ds) == 365 * 3 * 2
+    date = datetime.datetime(2021, 1, 1)
+    for row in ds:
+        expect = [
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+        ]
+        assert (row == expect).all()
+        date += datetime.timedelta(hours=12)
 
 
 def test_subset_2():
     z = create_zarr(start=2021, end=2023, frequency=1)
     ds = open_dataset(z, start=2022, end=2022)
+    assert isinstance(ds, Subset)
     assert len(ds) == 365 * 24
+    date = datetime.datetime(2022, 1, 1)
+    for row in ds:
+        expect = [
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+        ]
+        assert (row == expect).all()
+        date += datetime.timedelta(hours=1)
 
 
 def test_subset_3():
     z = create_zarr(start=2021, end=2023, frequency=1)
     ds = open_dataset(z, start=2022, end=2022, frequency=12)
+    assert isinstance(ds, Subset)
+    assert not isinstance(ds.dataset, Subset)
     assert len(ds) == 365 * 2
+    date = datetime.datetime(2022, 1, 1)
+    for row in ds:
+        expect = [
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+        ]
+        assert (row == expect).all()
+        date += datetime.timedelta(hours=12)
 
 
 if __name__ == "__main__":
