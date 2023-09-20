@@ -68,7 +68,6 @@ class Base:
 
 class Dataset(Base):
     def __init__(self, path):
-        print(path)
         self.z = zarr.convenience.open(path, "r")
 
     def __len__(self):
@@ -85,12 +84,22 @@ class Dataset(Base):
     def dates(self):
         return self.z.dates[:]  # Convert to numpy
 
+    @cached_property
+    def resolution(self):
+        return self.z.attrs["resolution"]
+
+    @cached_property
+    def frequency(self):
+        return self.z.attrs["frequency"]
+
 
 class Concat(Base):
-    def __init__(self, *datasets):
-        self.datasets = list(datasets)
+    def __init__(self, datasets):
+        self.datasets = datasets
+        assert len(self.datasets) > 1, len(self.datasets)
 
-        # TODO: check that all datasets are compatible
+        for d in self.datasets[1:]:
+            self.check_compatibility(self.datasets[0], d)
 
     def __len__(self):
         return sum(len(i) for i in self.datasets)
@@ -102,6 +111,49 @@ class Concat(Base):
             n -= len(self.datasets[k])
             k += 1
         return self.datasets[k][n]
+
+    def check_compatibility(self, d1, d2):
+        # TODO:
+        # - check dates
+        # - check parameters
+        if d1.resolution != d2.resolution:
+            raise ValueError(
+                f"Incompatible resolutions: {d1.resolution} and {d2.resolution} ({d1} {d2})"
+            )
+
+        if d1.frequency != d2.frequency:
+            raise ValueError(
+                f"Incompatible frequencies: {d1.frequency} and {d2.frequency} ({d1} {d2})"
+            )
+
+        if d1.shape[1:] != d2.shape[1:]:
+            raise ValueError(
+                f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
+            )
+
+
+class Join(Base):
+    def __init__(self, datasets):
+        self.datasets = datasets
+        assert len(self.datasets) > 1, len(self.datasets)
+
+        for d in self.datasets[1:]:
+            self.check_compatibility(self.datasets[0], d)
+
+    def check_compatibility(self, d1, d2):
+        pass
+
+    @property
+    def dates(self):
+        return self.datasets[0].dates
+
+    @property
+    def resolution(self):
+        return self.datasets[0].resolution
+
+    @property
+    def frequency(self):
+        return self.datasets[0].frequency
 
 
 class Subset(Base):
@@ -157,9 +209,32 @@ def _frequency_to_hours(frequency):
     raise NotImplementedError()
 
 
+def concat_or_join(datasets):
+    # Study the dates
+    ranges = [(d.dates[0], d.dates[-1]) for d in datasets]
+
+    if len(set(ranges)) == 1:
+        return Join(datasets)
+
+    # Make sure the dates are disjoint
+    for i in range(len(ranges)):
+        r = ranges[i]
+        for j in range(i + 1, len(ranges)):
+            s = ranges[j]
+            if r[0] <= s[0] <= r[1] or r[0] <= s[1] <= r[1]:
+                raise ValueError(
+                    f"Overlapping dates: {r} and {s} ({datasets[i]} {datasets[j]})"
+                )
+
+    # TODO:
+    # - should we sort the datasets by date?
+    # - should we check for gaps?
+    return Concat(datasets)
+
+
 def open_dataset(*args, **kwargs):
     paths = [name_to_path(name) for name in args]
     assert len(paths) >= 1
-    if len(paths) > 2:
-        return Concat([Dataset(path) for path in paths]).subset(**kwargs)
+    if len(paths) > 1:
+        return concat_or_join([Dataset(path) for path in paths]).subset(**kwargs)
     return Dataset(paths[0]).subset(**kwargs)
