@@ -68,6 +68,7 @@ class Base:
 
 class Dataset(Base):
     def __init__(self, path):
+        self.path = path
         self.z = zarr.convenience.open(path, "r")
 
     def __len__(self):
@@ -92,8 +93,11 @@ class Dataset(Base):
     def frequency(self):
         return self.z.attrs["frequency"]
 
+    def __repr__(self):
+        return self.path
 
-class Concat(Base):
+
+class Combined(Base):
     def __init__(self, datasets):
         self.datasets = datasets
         assert len(self.datasets) > 1, len(self.datasets)
@@ -101,6 +105,19 @@ class Concat(Base):
         for d in self.datasets[1:]:
             self.check_compatibility(self.datasets[0], d)
 
+    def check_compatibility(self, d1, d2):
+        if d1.resolution != d2.resolution:
+            raise ValueError(
+                f"Incompatible resolutions: {d1.resolution} and {d2.resolution} ({d1} {d2})"
+            )
+
+        if d1.frequency != d2.frequency:
+            raise ValueError(
+                f"Incompatible frequencies: {d1.frequency} and {d2.frequency} ({d1} {d2})"
+            )
+
+
+class Concat(Combined):
     def __len__(self):
         return sum(len(i) for i in self.datasets)
 
@@ -114,34 +131,26 @@ class Concat(Base):
 
     def check_compatibility(self, d1, d2):
         # TODO:
-        # - check dates
         # - check parameters
-        if d1.resolution != d2.resolution:
-            raise ValueError(
-                f"Incompatible resolutions: {d1.resolution} and {d2.resolution} ({d1} {d2})"
-            )
-
-        if d1.frequency != d2.frequency:
-            raise ValueError(
-                f"Incompatible frequencies: {d1.frequency} and {d2.frequency} ({d1} {d2})"
-            )
+        super().check_compatibility(d1, d2)
 
         if d1.shape[1:] != d2.shape[1:]:
             raise ValueError(
                 f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
             )
 
+    def __repr__(self):
+        lst = ", ".join(repr(d) for d in self.datasets)
+        return f"Concat({lst})"
 
-class Join(Base):
-    def __init__(self, datasets):
-        self.datasets = datasets
-        assert len(self.datasets) > 1, len(self.datasets)
 
-        for d in self.datasets[1:]:
-            self.check_compatibility(self.datasets[0], d)
-
+class Join(Combined):
     def check_compatibility(self, d1, d2):
-        pass
+        super().check_compatibility(d1, d2)
+        if (d1.shape[0],) + d1.shape[2:] != (d2.shape[0],) + d2.shape[2:]:
+            raise ValueError(
+                f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
+            )
 
     @property
     def dates(self):
@@ -154,6 +163,10 @@ class Join(Base):
     @property
     def frequency(self):
         return self.datasets[0].frequency
+
+    def __repr__(self):
+        lst = ", ".join(repr(d) for d in self.datasets)
+        return f"Join({lst})"
 
 
 class Subset(Base):
