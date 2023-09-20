@@ -90,6 +90,18 @@ class Dataset(Base):
     def dates(self):
         return self.z.dates[:]  # Convert to numpy
 
+    @property
+    def latitudes(self):
+        return self.z.latitudes[:]
+
+    @property
+    def longitudes(self):
+        return self.z.longitudes[:]
+
+    @property
+    def statistics(self):
+        return self.z.statistics[:]
+
     @cached_property
     def resolution(self):
         return self.z.attrs["resolution"]
@@ -120,6 +132,14 @@ class Combined(Base):
             raise ValueError(
                 f"Incompatible frequencies: {d1.frequency} and {d2.frequency} ({d1} {d2})"
             )
+
+    @property
+    def latitudes(self):
+        return self.datasets[0].latitudes
+
+    @property
+    def longitudes(self):
+        return self.datasets[0].longitudes
 
 
 class Concat(Combined):
@@ -212,6 +232,14 @@ class Subset(Base):
     @cached_property
     def dates(self):
         return self.dataset.dates[self.indices]
+
+    @property
+    def latitudes(self):
+        return self.dataset.latitudes
+
+    @property
+    def longitudes(self):
+        return self.dataset.longitudes
 
 
 def name_to_path(name):

@@ -16,7 +16,8 @@ from ecml_tools.data import Concat, Join, Subset, open_dataset
 def _(date, var, k=0):
     d = date.year * 10000 + date.month * 100 + date.day
     v = ord(var) - ord("a") + 1
-    return d * 100 + v + k * 1_000_000_000
+    assert 0 <= k <= 9
+    return d * 100 + v + k / 10.0
 
 
 def create_zarr(
@@ -45,6 +46,7 @@ def create_zarr(
     root.dates = dates
     root.attrs["frequency"] = frequency
     root.attrs["resolution"] = 0
+    root.attrs["name_to_index"] = {k: i for i, k in enumerate(vars)}
 
     return root
 
