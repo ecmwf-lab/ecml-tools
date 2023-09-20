@@ -49,31 +49,25 @@ def create_zarr(
     return root
 
 
-def test_code():
-    ds = open_dataset(create_zarr())
-    print(len(ds))
-    print(ds.dates)
-
-    for i, e in enumerate(ds):
-        print(i, e)
-        if i > 10:
-            break
-
-
 def test_concat():
     ds = open_dataset(
         create_zarr(start=2021, end=2021),
         create_zarr(start=2022, end=2022),
     )
+
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
 
+    dates = []
     date = datetime.datetime(2021, 1, 1)
 
     for i, row in enumerate(ds):
         expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
         assert (row == expect).all()
+        dates.append(date)
         date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
 
 def test_join():
@@ -84,7 +78,10 @@ def test_join():
 
     assert isinstance(ds, Join)
     assert len(ds) == 365 * 4
+
+    dates = []
     date = datetime.datetime(2021, 1, 1)
+
     for row in ds:
         expect = [
             _(date, "a"),
@@ -97,15 +94,22 @@ def test_join():
             _(date, "h"),
         ]
         assert (row == expect).all()
+        dates.append(date)
         date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
 
 def test_subset_1():
     z = create_zarr(start=2021, end=2023, frequency=1)
     ds = open_dataset(z, frequency=12)
+
     assert isinstance(ds, Subset)
     assert len(ds) == 365 * 3 * 2
+
+    dates = []
     date = datetime.datetime(2021, 1, 1)
+
     for row in ds:
         expect = [
             _(date, "a"),
@@ -114,15 +118,22 @@ def test_subset_1():
             _(date, "d"),
         ]
         assert (row == expect).all()
+        dates.append(date)
         date += datetime.timedelta(hours=12)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
 
 def test_subset_2():
     z = create_zarr(start=2021, end=2023, frequency=1)
     ds = open_dataset(z, start=2022, end=2022)
+
     assert isinstance(ds, Subset)
     assert len(ds) == 365 * 24
+
+    dates = []
     date = datetime.datetime(2022, 1, 1)
+
     for row in ds:
         expect = [
             _(date, "a"),
@@ -131,16 +142,23 @@ def test_subset_2():
             _(date, "d"),
         ]
         assert (row == expect).all()
+        dates.append(date)
         date += datetime.timedelta(hours=1)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
 
 def test_subset_3():
     z = create_zarr(start=2021, end=2023, frequency=1)
     ds = open_dataset(z, start=2022, end=2022, frequency=12)
+
     assert isinstance(ds, Subset)
     assert not isinstance(ds.dataset, Subset)
     assert len(ds) == 365 * 2
+
+    dates = []
     date = datetime.datetime(2022, 1, 1)
+
     for row in ds:
         expect = [
             _(date, "a"),
@@ -149,7 +167,10 @@ def test_subset_3():
             _(date, "d"),
         ]
         assert (row == expect).all()
+        dates.append(date)
         date += datetime.timedelta(hours=12)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
 
 if __name__ == "__main__":

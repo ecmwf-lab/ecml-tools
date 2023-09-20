@@ -70,7 +70,7 @@ class Base:
 class Dataset(Base):
     def __init__(self, path):
         if isinstance(path, zarr.hierarchy.Group):
-            self.path = '-'
+            self.path = "-"
             self.z = path
         else:
             self.path = path
@@ -148,6 +148,10 @@ class Concat(Combined):
         lst = ", ".join(repr(d) for d in self.datasets)
         return f"Concat({lst})"
 
+    @property
+    def dates(self):
+        return np.concatenate([d.dates for d in self.datasets])
+
 
 class Join(Combined):
     def check_compatibility(self, d1, d2):
@@ -211,7 +215,6 @@ class Subset(Base):
 
 
 def name_to_path(name):
-
     if isinstance(name, zarr.hierarchy.Group):
         return name
 
