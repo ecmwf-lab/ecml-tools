@@ -9,6 +9,7 @@ import os
 import re
 from functools import cached_property
 
+import numpy as np
 import yaml
 import zarr
 
@@ -68,8 +69,12 @@ class Base:
 
 class Dataset(Base):
     def __init__(self, path):
-        self.path = path
-        self.z = zarr.convenience.open(path, "r")
+        if isinstance(path, zarr.hierarchy.Group):
+            self.path = '-'
+            self.z = path
+        else:
+            self.path = path
+            self.z = zarr.convenience.open(path, "r")
 
     def __len__(self):
         return self.z.data.shape[0]
@@ -164,9 +169,20 @@ class Join(Combined):
     def frequency(self):
         return self.datasets[0].frequency
 
+    def __len__(self):
+        return len(self.datasets[0])
+
     def __repr__(self):
         lst = ", ".join(repr(d) for d in self.datasets)
         return f"Join({lst})"
+
+    def __getitem__(self, n):
+        return np.concatenate([d[n] for d in self.datasets], axis=0)
+
+    @cached_property
+    def shape(self):
+        cols = sum(d.shape[1] for d in self.datasets)
+        return (len(self), cols) + self.datasets[0].shape[2:]
 
 
 class Subset(Base):
@@ -195,6 +211,10 @@ class Subset(Base):
 
 
 def name_to_path(name):
+
+    if isinstance(name, zarr.hierarchy.Group):
+        return name
+
     if name.endswith(".zarr"):
         return name
 

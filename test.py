@@ -27,13 +27,23 @@ z = open_dataset(
 )
 
 print(z)
+print(len(z))
 
 z = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-only-z",
     "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-without-z",
 )
 
+# z.save('new-zarr.zarr')
+
 print(z)
+print(z.shape)
+print(len(z))
+
+for i, e in enumerate(z):
+    print(i, e)
+    if i > 10:
+        break
 
 exit()
 
