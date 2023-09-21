@@ -44,6 +44,8 @@ def create_zarr(
 
     root.data = data
     root.dates = dates
+    root.latitudes = np.array([0, 1, 2, 3])
+    root.longitudes = np.array([0, 1, 2, 3])
     root.attrs["frequency"] = frequency
     root.attrs["resolution"] = 0
     root.attrs["name_to_index"] = {k: i for i, k in enumerate(vars)}
@@ -72,7 +74,7 @@ def test_concat():
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
 
-def test_join():
+def test_join_1():
     ds = open_dataset(
         create_zarr(vars=["a", "b", "c", "d"]),
         create_zarr(vars=["e", "f", "g", "h"]),
@@ -94,6 +96,60 @@ def test_join():
             _(date, "f"),
             _(date, "g"),
             _(date, "h"),
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+
+def test_join_2():
+    ds = open_dataset(
+        create_zarr(vars=["a", "b", "c", "d"], k=1),
+        create_zarr(vars=["b", "d", "e", "f"], k=2),
+    )
+
+    assert isinstance(ds, Select)
+    assert len(ds) == 365 * 4
+
+    dates = []
+    date = datetime.datetime(2021, 1, 1)
+
+    for row in ds:
+        expect = [
+            _(date, "a", 1),
+            _(date, "b", 2),
+            _(date, "c", 1),
+            _(date, "d", 2),
+            _(date, "e", 2),
+            _(date, "f", 2),
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+
+def test_join_3():
+    ds = open_dataset(
+        create_zarr(vars=["a", "b", "c", "d"], k=1),
+        create_zarr(vars=["a", "b", "c", "d"], k=2),
+    )
+
+    assert isinstance(ds, Select)
+    assert len(ds) == 365 * 4
+
+    dates = []
+    date = datetime.datetime(2021, 1, 1)
+
+    for row in ds:
+        expect = [
+            _(date, "a", 2),
+            _(date, "b", 2),
+            _(date, "c", 2),
+            _(date, "d", 2),
         ]
         assert (row == expect).all()
         dates.append(date)
@@ -284,4 +340,4 @@ def test_reorder_2():
 
 
 if __name__ == "__main__":
-    test_reorder_1()
+    test_join_3()

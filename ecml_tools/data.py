@@ -5,6 +5,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+import logging
 import os
 import re
 from functools import cached_property
@@ -13,6 +14,7 @@ import numpy as np
 import yaml
 import zarr
 
+LOG = logging.getLogger(__name__)
 # Question: should properties be cached?
 
 
@@ -57,10 +59,7 @@ class Base:
 
     def frequency_to_indices(self, frequency):
         requested_frequency = _frequency_to_hours(frequency)
-        delta = self.dates[1] - self.dates[0]
-        dataset_frequency = delta.item().total_seconds() / 3600
-        assert dataset_frequency.is_integer()
-        dataset_frequency = int(dataset_frequency)
+        dataset_frequency = _frequency_to_hours(self.frequency)
         assert requested_frequency % dataset_frequency == 0
         # Question: where do we start? first date, or first date that is a multiple of the frequency?
         step = requested_frequency // dataset_frequency
@@ -99,10 +98,10 @@ class Base:
         return sorted([v for k, v in self.name_to_index.items() if k not in vars])
 
     def reorder_to_columns(self, vars):
-        if  isinstance(vars, (list, tuple)):
+        if isinstance(vars, (list, tuple)):
             vars = {k: i for i, k in enumerate(vars)}
 
-        print('REORDER', vars)
+        print("REORDER", vars)
 
         indices = []
         for k, v in sorted(self.name_to_index.items(), key=lambda x: x[1]):
@@ -156,21 +155,62 @@ class Dataset(Base):
     def frequency(self):
         return self.z.attrs["frequency"]
 
-    def __repr__(self):
-        return self.path
-
     @property
     def name_to_index(self):
         return self.z.attrs["name_to_index"]
 
+    @property
+    def variables(self):
+        return [
+            k
+            for k, v in sorted(
+                self.name_to_index.items(),
+                key=lambda x: x[1],
+            )
+        ]
 
-class Combined(Base):
+    def __repr__(self):
+        return self.path
+
+
+class Forwards(Base):
+    def __init__(self, forward):
+        self.forward = forward
+
+    @property
+    def dates(self):
+        return self.forward.dates
+
+    @property
+    def resolution(self):
+        return self.forward.resolution
+
+    @property
+    def frequency(self):
+        return self.forward.frequency
+
+    @property
+    def latitudes(self):
+        return self.forward.latitudes
+
+    @property
+    def longitudes(self):
+        return self.forward.longitudes
+
+    @property
+    def name_to_index(self):
+        return self.forward.name_to_index
+
+
+class Combined(Forwards):
     def __init__(self, datasets):
         self.datasets = datasets
         assert len(self.datasets) > 1, len(self.datasets)
 
         for d in self.datasets[1:]:
             self.check_compatibility(self.datasets[0], d)
+
+        super().__init__(datasets[0])
 
     def check_compatibility(self, d1, d2):
         if d1.resolution != d2.resolution:
@@ -183,13 +223,10 @@ class Combined(Base):
                 f"Incompatible frequencies: {d1.frequency} and {d2.frequency} ({d1} {d2})"
             )
 
-    @property
-    def latitudes(self):
-        return self.datasets[0].latitudes
-
-    @property
-    def longitudes(self):
-        return self.datasets[0].longitudes
+        if (d1.latitudes != d2.latitudes).any() or (
+            d1.longitudes != d2.longitudes
+        ).any():
+            raise ValueError(f"Incompatible grid ({d1} {d2})")
 
 
 class Concat(Combined):
@@ -205,8 +242,6 @@ class Concat(Combined):
         return self.datasets[k][n]
 
     def check_compatibility(self, d1, d2):
-        # TODO:
-        # - check parameters
         super().check_compatibility(d1, d2)
 
         if d1.shape[1:] != d2.shape[1:]:
@@ -214,13 +249,18 @@ class Concat(Combined):
                 f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
             )
 
-    def __repr__(self):
-        lst = ", ".join(repr(d) for d in self.datasets)
-        return f"Concat({lst})"
+        if d1.variables != d2.variables:
+            raise ValueError(
+                f"Incompatible variables: {d1.variables} and {d2.variables} ({d1} {d2})"
+            )
 
     @property
     def dates(self):
         return np.concatenate([d.dates for d in self.datasets])
+
+    def __repr__(self):
+        lst = ", ".join(repr(d) for d in self.datasets)
+        return f"Concat({lst})"
 
 
 class Join(Combined):
@@ -231,24 +271,8 @@ class Join(Combined):
                 f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
             )
 
-    @property
-    def dates(self):
-        return self.datasets[0].dates
-
-    @property
-    def resolution(self):
-        return self.datasets[0].resolution
-
-    @property
-    def frequency(self):
-        return self.datasets[0].frequency
-
     def __len__(self):
         return len(self.datasets[0])
-
-    def __repr__(self):
-        lst = ", ".join(repr(d) for d in self.datasets)
-        return f"Join({lst})"
 
     def __getitem__(self, n):
         return np.concatenate([d[n] for d in self.datasets], axis=0)
@@ -258,8 +282,55 @@ class Join(Combined):
         cols = sum(d.shape[1] for d in self.datasets)
         return (len(self), cols) + self.datasets[0].shape[2:]
 
+    def __repr__(self):
+        lst = ", ".join(repr(d) for d in self.datasets)
+        return f"Join({lst})"
 
-class Subset(Base):
+    def overlay(self):
+        indices = {}
+        i = 0
+        for d in self.datasets:
+            for v in d.variables:
+                indices[v] = i
+                i += 1
+
+        if len(indices) == i:
+            # No overlay
+            return self
+
+        indices = list(indices.values())
+
+        i = 0
+        for d in self.datasets:
+            ok = False
+            for v in d.variables:
+                if i in indices:
+                    ok = True
+                i += 1
+            if not ok:
+                LOG.warning("Dataset %r completly occulted.", d)
+
+        return Select(self, indices)
+
+    @property
+    def variables(self):
+        result = []
+        for d in self.datasets:
+            for v in d.variables:
+                result.append(v)
+        return result
+
+    @property
+    def name_to_index(self):
+        result = {}
+        for d in self.datasets:
+            for k, v in d.name_to_index.items():
+                assert k not in result
+                result[k] = v
+        return result
+
+
+class Subset(Forwards):
     def __init__(self, dataset, indices):
         while isinstance(dataset, Subset):
             indices = [dataset.indices[i] for i in indices]
@@ -267,6 +338,8 @@ class Subset(Base):
 
         self.dataset = dataset
         self.indices = list(indices)
+
+        super().__init__(dataset)
 
     def __getitem__(self, n):
         n = self.indices[n]
@@ -283,16 +356,8 @@ class Subset(Base):
     def dates(self):
         return self.dataset.dates[self.indices]
 
-    @property
-    def latitudes(self):
-        return self.dataset.latitudes
 
-    @property
-    def longitudes(self):
-        return self.dataset.longitudes
-
-
-class Select(Base):
+class Select(Forwards):
     def __init__(self, dataset, indices):
         while isinstance(dataset, Select):
             indices = [dataset.indices[i] for i in indices]
@@ -301,6 +366,8 @@ class Select(Base):
         self.dataset = dataset
         self.indices = list(indices)
         assert len(self.indices) > 0
+
+        super().__init__(dataset)
 
     def __len__(self):
         return len(self.dataset)
@@ -314,16 +381,12 @@ class Select(Base):
         return (len(self), len(self.indices)) + self.dataset.shape[2:]
 
     @cached_property
-    def dates(self):
-        return self.dataset.dates
+    def variables(self):
+        return [self.dataset.variables[i] for i in self.indices]
 
-    @property
-    def latitudes(self):
-        return self.dataset.latitudes
-
-    @property
-    def longitudes(self):
-        return self.dataset.longitudes
+    @cached_property
+    def name_to_index(self):
+        return {k: i for i, k in enumerate(self.variables)}
 
 
 def name_to_path(name):
@@ -362,7 +425,7 @@ def concat_or_join(datasets):
     ranges = [(d.dates[0], d.dates[-1]) for d in datasets]
 
     if len(set(ranges)) == 1:
-        return Join(datasets)
+        return Join(datasets).overlay()
 
     # Make sure the dates are disjoint
     for i in range(len(ranges)):
