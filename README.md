@@ -21,11 +21,12 @@ The dataset can be passed as a path or URL to a `zarr` file, or as a name. In th
 You can create a view on the `zarr` file that selects a subset of dates.
 
 ### Changing the frequency
+
 ```python
 from ecml_tools.data import open_dataset
 
 ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-    freqency='12h')
+    freqency="12h")
 
 
 ```
@@ -33,7 +34,9 @@ ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
 The `frequency` parameter can be a integer (in hours) or a string following with the suffix `h` (hours) or `d` (days).
 
 ### Selecting years
+
 You can select ranges of years using the `start` and `end` keywords:
+
 ```python
 from ecml_tools.data import open_dataset
 
@@ -50,16 +53,18 @@ test = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2"
 ### Combining both
 
 You can combine both subsetting methods:
+
 ```python
 from ecml_tools.data import open_dataset
 
 training = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     start=1979,
     end=2020,
-    frequency='6h')
+    frequency="6h")
 ```
 
 ## Concatenating datasets
+
 You can concatenate two or more datasets along the dates dimension. The package will check that all datasets are compatible (same resolution, same variables, etc.). Currently, the datasets must be given in chronological order with no gaps between them.
 
 ```python
@@ -72,7 +77,7 @@ ds = open_dataset(
 
 ```
 
-Please note that you can pass more than two `zarr`s to the function.
+Please note that you can pass more than two `zarr` files to the function.
 
 ## Joining datasets
 
@@ -88,10 +93,12 @@ ds = open_dataset(
 
 ```
 
+|a|b|c|d| + |e|f|g|h| => |a|b|c|d|e|f|g|h|
+
+If a variable is present in more that one file, that last occurrence of that variable will be used, and will be position of the first occurrence of that name.
+
 Please note that you can join more than two `zarr` files.
 
 ## Difference between 'concatenation' and 'joining'
 
 When given a list of `zarr` files, the package will automatically work out if the files can be _concatenated_ or _joined_ by looking at the range of dates covered by each files.
-
-
