@@ -55,7 +55,7 @@ print(ds.variables)
 
 two_t_index = ds.name_to_index("2t")
 row = ds[10]
-print('2t', row[two_t_index])
+print("2t", row[two_t_index])
 
 # Get the list of dates (as NumPy datetime64)
 print(ds.dates)
@@ -95,7 +95,7 @@ To get the statistics for `2t`:
 ```python
 two_t_index = ds.name_to_index("2t")
 stats = ds.statistics
-print('Average 2t', stats['mean'][two_t_index])
+print("Average 2t", stats["mean"][two_t_index])
 ```
 
 
@@ -220,14 +220,14 @@ from ecml_tools.data import open_dataset
 
 ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-    select = ['2t', 'tp'],
+    select = ["2t", "tp"],
 )
 
 # Select '2t' and 'tp', but preserve the order in which they are in the file
 
 ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-    select = {'2t', 'tp'},
+    select = {"2t", "tp"},
 )
 
 ```
@@ -240,7 +240,7 @@ from ecml_tools.data import open_dataset
 
 ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-    drop = ['10u', '10v'],
+    drop = ["10u", "10v"],
 )
 ```
 
@@ -253,14 +253,14 @@ from ecml_tools.data import open_dataset
 
 ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-    reorder = ['2t', 'msl', 'sp', '10u', '10v'],
+    reorder = ["2t", "msl", "sp", "10u", "10v"],
 )
 
 # ... or using a dictionnary
 
 ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-    reorder = {'2t': 0, 'msl': 1, 'sp': 2, '10u': 3, '10v': 4},
+    reorder = {"2t": 0, "msl": 1, "sp": 2, "10u": 3, "10v": 4},
 )
 
 ```
@@ -278,8 +278,8 @@ ds = open_dataset(
     "some-extra-parameters-from-another-source-o96-1979-2022-1h-v2",
     start=2000,
     end=2001,
-    frequency='12h',
-    select={'2t', '2d'},
+    frequency="12h",
+    select={"2t", "2d"},
     ...
 )
 
