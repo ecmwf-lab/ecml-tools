@@ -119,6 +119,7 @@ class Dataset(Base):
             self.z = path
         else:
             self.path = path
+            print(path)
             self.z = zarr.convenience.open(path, "r")
 
     def __len__(self):
@@ -137,11 +138,19 @@ class Dataset(Base):
 
     @property
     def latitudes(self):
-        return self.z.latitudes[:]
+        try:
+            return self.z.latitudes[:]
+        except AttributeError:
+            LOG.warning("No 'latitudes' in %r, trying 'latitude'", self)
+            return self.z.latitude[:]
 
     @property
     def longitudes(self):
-        return self.z.longitudes[:]
+        try:
+            return self.z.longitudes[:]
+        except AttributeError:
+            LOG.warning("No 'longitudes' in %r, trying 'longitude'", self)
+            return self.z.longitude[:]
 
     @property
     def statistics(self):
@@ -153,7 +162,13 @@ class Dataset(Base):
 
     @property
     def frequency(self):
-        return self.z.attrs["frequency"]
+        try:
+            return self.z.attrs["frequency"]
+        except KeyError:
+            LOG.warning("No 'frequency' in %r, computing from 'dates'", self)
+        dates = self.dates
+        delta = dates[1].astype(object) - dates[0].astype(object)
+        return delta.total_seconds() // 3600
 
     @property
     def name_to_index(self):
