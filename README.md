@@ -121,4 +121,6 @@ ds = open_dataset(
 
 If a variable is present in more that one file, that last occurrence of that variable will be used, and will be at the position of the first occurrence of that name.
 
+![Overlay](overlay.png)
+
 Please note that you can join more than two `zarr` files.
