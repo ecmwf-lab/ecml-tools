@@ -87,6 +87,10 @@ If the dates are different, the files are concatenated:
 
 ![Concatenation](concat.png)
 
+If the dates are the same, the files are joined:
+
+![Join](join.png)
+
 ## Concatenating datasets
 
 You can concatenate two or more datasets along the dates dimension. The package will check that all datasets are compatible (same resolution, same variables, etc.). Currently, the datasets must be given in chronological order with no gaps between them.
