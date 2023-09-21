@@ -11,10 +11,91 @@ from ecml_tools.data import open_dataset
 
 ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2")
 
-
 ```
 
 The dataset can be passed as a path or URL to a `zarr` file, or as a name. In the later case, the package will use the entry `zarr_root` of `~/.ecml-tool` file to create the full path or URL.
+
+## Attributes of a dataset
+
+As the underlying `zarr`, the `dataset` is an iterable:
+
+```python
+from ecml_tools.data import open_dataset
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+)
+
+# Print the number of rows (i.e. dates):
+
+print(len(ds))
+
+# Iterate throw the rows
+
+for row in ds:
+    print(row)
+
+# Or access a item directly
+
+print(row[10])
+
+# You can retrieve the shape of the dataset
+
+print(ds.shape)
+
+# The list of variables
+
+print(ds.variables)
+
+# The mapping between variable names and columns index
+
+two_t_index = ds.name_to_index("2t")
+row = ds[10]
+print('2t', row[two_t_index])
+
+
+# Get the list of dates (as numpy datetime64)
+print(ds.dates)
+
+# The number of hours between consecutive dates
+print(ds.frequency)
+
+# The resolution of the underlying grid
+
+print(ds.resolution)
+
+# The list of latitudes of the data values (numpy array)
+print(ds.latitudes)
+
+# The same for longitudes
+print(ds.longitudes)
+
+# The statitics
+
+print(ds.statistics)
+
+```
+
+The statistics is a dictionary of numpy vectors following the order of the variables:
+
+```python
+{
+    "mean": ...,
+    "stdev": ...,
+    "minimum": ...,
+    "maximum": ...,
+}
+```
+
+To get the statistics for `2t`:
+
+```python
+two_t_index = ds.name_to_index("2t")
+stats = ds.statistics
+print('Average 2t', stats['mean'][two_t_index])
+```
+
+
 
 ## Subsetting datasets
 
@@ -124,3 +205,59 @@ If a variable is present in more that one file, that last occurrence of that var
 ![Overlay](overlay.png)
 
 Please note that you can join more than two `zarr` files.
+
+## Selection and ordering of variables
+
+You can select a subset of variables when opening a `zarr` file. If you pass a `list`, the variables are ordered according the that list. If you pass a `set`, the order of the file is preserved.
+
+```python
+from ecml_tools.data import open_dataset
+
+# Select '2t' and 'tp' in that order
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    select = ['2t', 'tp'],
+)
+
+# Select '2t' and 'tp', but preserve the order in which they are in the file
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    select = {'2t', 'tp'},
+)
+
+```
+
+You can also drop some variables:
+
+```python
+from ecml_tools.data import open_dataset
+
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    drop = ['10u', '10v'],
+)
+```
+
+and reorder them:
+
+```python
+from ecml_tools.data import open_dataset
+
+# ... using a list
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    reorder = ['2t', 'msl', 'sp', '10u', '10v'],
+)
+
+# ... or using a dictionnary
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    reorder = {'2t': 0, 'msl': 1, 'sp': 2, '10u': 3, '10v': 4},
+)
+
+```

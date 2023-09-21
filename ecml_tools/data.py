@@ -101,8 +101,6 @@ class Base:
         if isinstance(vars, (list, tuple)):
             vars = {k: i for i, k in enumerate(vars)}
 
-        print("REORDER", vars)
-
         indices = []
         for k, v in sorted(self.name_to_index.items(), key=lambda x: x[1]):
             indices.append(vars[k])
@@ -110,6 +108,9 @@ class Base:
         assert set(indices) == set(range(len(self.name_to_index)))
 
         return indices
+
+    def date_to_index(self, date):
+        raise NotImplementedError()
 
 
 class Dataset(Base):
@@ -154,7 +155,12 @@ class Dataset(Base):
 
     @property
     def statistics(self):
-        return self.z.statistics[:]
+        return dict(
+            mean=self.z.mean[:],
+            stdev=self.z.stdev[:],
+            maximum=self.z.maximum[:],
+            minimum=self.z.minimum[:],
+        )
 
     @property
     def resolution(self):
@@ -219,6 +225,10 @@ class Forwards(Base):
     @property
     def variables(self):
         return self.forward.variables
+
+    @property
+    def statistics(self):
+        return self.forward.statistics
 
 
 class Combined(Forwards):
@@ -336,17 +346,20 @@ class Join(Combined):
         result = []
         for d in self.datasets:
             for v in d.variables:
+                assert v not in result, "Duplicate variable: " + v
                 result.append(v)
         return result
 
     @property
     def name_to_index(self):
-        result = {}
-        for d in self.datasets:
-            for k, v in d.name_to_index.items():
-                assert k not in result
-                result[k] = v
-        return result
+        return {k: i for i, k in enumerate(self.variables)}
+
+    @property
+    def statistics(self):
+        return {
+            k: np.concatenate([d.statistics[k] for d in self.datasets], axis=0)
+            for k in self.datasets[0].statistics
+        }
 
 
 class Subset(Forwards):
@@ -406,6 +419,10 @@ class Select(Forwards):
     @cached_property
     def name_to_index(self):
         return {k: i for i, k in enumerate(self.variables)}
+
+    @cached_property
+    def statistics(self):
+        return {k: v[self.indices] for k, v in self.dataset.statistics.items()}
 
 
 def name_to_path(name):
@@ -472,6 +489,10 @@ def concat_or_join(datasets):
 
 
 def open_dataset(*args, **kwargs):
+    # if len(args) == 1 and isinstance(args[0], dict):
+    #     names = args[0].pop("datasets")
+    #     return open_dataset(*names, **args[0])
+
     paths = [name_to_path(name) for name in args]
     assert len(paths) >= 1
     if len(paths) > 1:
