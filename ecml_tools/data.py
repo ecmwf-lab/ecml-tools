@@ -5,6 +5,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+import datetime
 import logging
 import os
 import re
@@ -15,8 +16,6 @@ import yaml
 import zarr
 
 LOG = logging.getLogger(__name__)
-# Question: should properties be cached?
-
 
 class Base:
     def subset(self, **kwargs):
@@ -68,8 +67,8 @@ class Base:
 
     def years_to_indices(self, start, end):
         # TODO: optimize
-        start = self.dates[0].year if start is None else start
-        end = self.dates[-1].year if end is None else end
+        start = self.dates[0].astype(object).year if start is None else start
+        end = self.dates[-1].astype(object).year if end is None else end
 
         return [
             i
@@ -215,6 +214,10 @@ class Forwards(Base):
     @property
     def name_to_index(self):
         return self.forward.name_to_index
+
+    @property
+    def variables(self):
+        return self.forward.variables
 
 
 class Combined(Forwards):
@@ -437,7 +440,7 @@ def _frequency_to_hours(frequency):
 
 def concat_or_join(datasets):
     # Study the dates
-    ranges = [(d.dates[0], d.dates[-1]) for d in datasets]
+    ranges = [(d.dates[0].astype(object), d.dates[-1].astype(object)) for d in datasets]
 
     if len(set(ranges)) == 1:
         return Join(datasets).overlay()
@@ -452,9 +455,18 @@ def concat_or_join(datasets):
                     f"Overlapping dates: {r} and {s} ({datasets[i]} {datasets[j]})"
                 )
 
-    # TODO:
-    # - should we sort the datasets by date?
-    # - should we check for gaps?
+    # For now we should have the datasets in order with no gaps
+
+    frequency = _frequency_to_hours(datasets[0].frequency)
+
+    for i in range(len(ranges) - 1):
+        r = ranges[i]
+        s = ranges[i + 1]
+        if r[1] + datetime.timedelta(hours=frequency) != s[0]:
+            raise ValueError(
+                f"Datasets must be sorted by dates, with no gaps: {r} and {s} ({datasets[i]} {datasets[i+1]})"
+            )
+
     return Concat(datasets)
 
 
