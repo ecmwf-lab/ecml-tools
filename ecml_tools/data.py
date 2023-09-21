@@ -17,6 +17,7 @@ import zarr
 
 LOG = logging.getLogger(__name__)
 
+
 class Base:
     def subset(self, **kwargs):
         if not kwargs:

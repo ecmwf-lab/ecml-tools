@@ -57,3 +57,41 @@ training = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     start=1979,
     end=2020,
     frequency='6h')
+```
+
+## Concatenating datasets
+You can concatenate two or more datasets along the dates dimension. The package will check that all datasets are compatible (same resolution, same variables, etc.). Currently, the datasets must be given in chronological order with no gaps between them.
+
+```python
+from ecml_tools.data import open_dataset
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1940-1978-1h-v2",
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2"
+)
+
+```
+
+Please note that you can pass more than two `zarr`s to the function.
+
+## Joining datasets
+
+You can join two datasets that have the same dates, combining their variables.
+
+```python
+from ecml_tools.data import open_dataset
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    "some-extra-parameters-from-another-source-o96-1979-2022-1h-v2",
+)
+
+```
+
+Please note that you can join more than two `zarr` files.
+
+## Difference between 'concatenation' and 'joining'
+
+When given a list of `zarr` files, the package will automatically work out if the files can be _concatenated_ or _joined_ by looking at the range of dates covered by each files.
+
+
