@@ -13,7 +13,11 @@ ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2")
 
 ```
 
-The dataset can be passed as a path or URL to a `zarr` file, or as a name. In the later case, the package will use the entry `zarr_root` of `~/.ecml-tool` file to create the full path or URL.
+The dataset can be passed as a path or URL to a `zarr` file, or as a name. In the later case, the package will use the entry `zarr_root` of `~/.ecml-tool` file to create the full path or URL:
+
+```yaml
+zarr_root: /path_or_url/to/the/zarrs
+```
 
 ## Attributes of a dataset
 
@@ -30,31 +34,30 @@ ds = open_dataset(
 
 print(len(ds))
 
-# Iterate throw the rows
+# Iterate throw the rows,
 
 for row in ds:
     print(row)
 
-# Or access a item directly
+# or access a item directly.
 
 print(row[10])
 
-# You can retrieve the shape of the dataset
+# You can retrieve the shape of the dataset,
 
 print(ds.shape)
 
-# The list of variables
+# the list of variables,
 
 print(ds.variables)
 
-# The mapping between variable names and columns index
+# the mapping between variable names and columns index
 
 two_t_index = ds.name_to_index("2t")
 row = ds[10]
 print('2t', row[two_t_index])
 
-
-# Get the list of dates (as numpy datetime64)
+# Get the list of dates (as NumPy datetime64)
 print(ds.dates)
 
 # The number of hours between consecutive dates
@@ -64,7 +67,7 @@ print(ds.frequency)
 
 print(ds.resolution)
 
-# The list of latitudes of the data values (numpy array)
+# The list of latitudes of the data values (NumPy array)
 print(ds.latitudes)
 
 # The same for longitudes
@@ -76,7 +79,7 @@ print(ds.statistics)
 
 ```
 
-The statistics is a dictionary of numpy vectors following the order of the variables:
+The statistics is a dictionary of NumPy vectors following the order of the variables:
 
 ```python
 {
@@ -258,6 +261,26 @@ ds = open_dataset(
 ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     reorder = {'2t': 0, 'msl': 1, 'sp': 2, '10u': 3, '10v': 4},
+)
+
+```
+
+## Wrapping up
+
+You can combine all of the above
+
+
+```python
+from ecml_tools.data import open_dataset
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    "some-extra-parameters-from-another-source-o96-1979-2022-1h-v2",
+    start=2000,
+    end=2001,
+    frequency='12h',
+    select={'2t', '2d'},
+    ...
 )
 
 ```
