@@ -63,6 +63,27 @@ training = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     frequency="6h")
 ```
 
+
+## Combining datasets
+
+You can create a virtual dataset by combining two or more `zarr` files.
+
+```python
+from ecml_tools.data import open_dataset
+
+ds = open_dataset(
+    "dataset-1",
+    "dataset-2",
+    "dataset-3",
+    ...
+)
+
+```
+
+
+When given a list of `zarr` files, the package will automatically work out if the files can be _concatenated_ or _joined_ by looking at the range of dates covered by each files.
+
+
 ## Concatenating datasets
 
 You can concatenate two or more datasets along the dates dimension. The package will check that all datasets are compatible (same resolution, same variables, etc.). Currently, the datasets must be given in chronological order with no gaps between them.
@@ -98,7 +119,3 @@ ds = open_dataset(
 If a variable is present in more that one file, that last occurrence of that variable will be used, and will be position of the first occurrence of that name.
 
 Please note that you can join more than two `zarr` files.
-
-## Difference between 'concatenation' and 'joining'
-
-When given a list of `zarr` files, the package will automatically work out if the files can be _concatenated_ or _joined_ by looking at the range of dates covered by each files.
