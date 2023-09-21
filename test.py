@@ -1,6 +1,7 @@
 from ecml_tools.data import open_dataset
 
-name = "aifs-ea-an-enda-0001-mars-o96-2021-6h-v2"
+name = "aifs-od-an-oper-0001-mars-o96-2021-6h-v2"
+# aifs-od-an-oper-0001-mars-o96-2021-6h-v2"
 z = open_dataset(name)
 
 
