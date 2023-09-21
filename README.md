@@ -83,6 +83,9 @@ ds = open_dataset(
 
 When given a list of `zarr` files, the package will automatically work out if the files can be _concatenated_ or _joined_ by looking at the range of dates covered by each files.
 
+If the dates are different, the files are concatenated:
+
+![Concatenation](concat.png)
 
 ## Concatenating datasets
 
@@ -116,6 +119,6 @@ ds = open_dataset(
 
 |a|b|c|d| + |e|f|g|h| => |a|b|c|d|e|f|g|h|
 
-If a variable is present in more that one file, that last occurrence of that variable will be used, and will be position of the first occurrence of that name.
+If a variable is present in more that one file, that last occurrence of that variable will be used, and will be at the position of the first occurrence of that name.
 
 Please note that you can join more than two `zarr` files.
