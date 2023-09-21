@@ -185,6 +185,8 @@ ds = open_dataset(
 
 Please note that you can pass more than two `zarr` files to the function.
 
+> **_NOTE:_** When concatenating file, the statistics are not recomputed; it is the statistics of first file that are returned to the user.
+
 ## Joining datasets
 
 You can join two datasets that have the same dates, combining their variables.
@@ -263,9 +265,9 @@ ds = open_dataset(
 
 ```
 
-## Wrapping up
+## Using all options
 
-You can combine all of the above
+You can combine all of the above:
 
 
 ```python

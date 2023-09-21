@@ -18,7 +18,7 @@ import zarr
 LOG = logging.getLogger(__name__)
 
 
-class Base:
+class Dataset:
     def subset(self, **kwargs):
         if not kwargs:
             return self
@@ -113,14 +113,13 @@ class Base:
         raise NotImplementedError()
 
 
-class Dataset(Base):
+class Zarr(Dataset):
     def __init__(self, path):
         if isinstance(path, zarr.hierarchy.Group):
             self.path = "-"
             self.z = path
         else:
             self.path = path
-            print(path)
             self.z = zarr.convenience.open(path, "r")
 
     def __len__(self):
@@ -194,7 +193,7 @@ class Dataset(Base):
         return self.path
 
 
-class Forwards(Base):
+class Forwards(Dataset):
     def __init__(self, forward):
         self.forward = forward
 
@@ -388,6 +387,12 @@ class Subset(Forwards):
     def dates(self):
         return self.dataset.dates[self.indices]
 
+    @cached_property
+    def frequency(self):
+        dates = self.dates
+        delta = dates[1].astype(object) - dates[0].astype(object)
+        return delta.total_seconds() // 3600
+
 
 class Select(Forwards):
     def __init__(self, dataset, indices):
@@ -425,10 +430,7 @@ class Select(Forwards):
         return {k: v[self.indices] for k, v in self.dataset.statistics.items()}
 
 
-def name_to_path(name):
-    if isinstance(name, zarr.hierarchy.Group):
-        return name
-
+def _name_to_path(name):
     if name.endswith(".zarr"):
         return name
 
@@ -456,7 +458,7 @@ def _frequency_to_hours(frequency):
     raise NotImplementedError()
 
 
-def concat_or_join(datasets):
+def _concat_or_join(datasets):
     # Study the dates
     ranges = [(d.dates[0].astype(object), d.dates[-1].astype(object)) for d in datasets]
 
@@ -488,13 +490,41 @@ def concat_or_join(datasets):
     return Concat(datasets)
 
 
-def open_dataset(*args, **kwargs):
-    # if len(args) == 1 and isinstance(args[0], dict):
-    #     names = args[0].pop("datasets")
-    #     return open_dataset(*names, **args[0])
+def _open(a):
+    if isinstance(a, Dataset):
+        return a
 
-    paths = [name_to_path(name) for name in args]
-    assert len(paths) >= 1
-    if len(paths) > 1:
-        return concat_or_join([Dataset(path) for path in paths]).subset(**kwargs)
-    return Dataset(paths[0]).subset(**kwargs)
+    if isinstance(a, zarr.hierarchy.Group):
+        return Zarr(a)
+
+    if isinstance(a, str):
+        return Zarr(_name_to_path(a))
+
+    if isinstance(a, dict):
+        return open_dataset(**a)
+
+    if isinstance(a, (list, tuple)):
+        return open_dataset(*a)
+
+    raise NotImplementedError()
+
+
+def open_dataset(*args, **kwargs):
+    sets = []
+    for a in args:
+        sets.append(_open(a))
+
+    for name in ("datasets", "dataset"):
+        if name in kwargs:
+            datasets = kwargs.pop(name)
+            if not isinstance(datasets, (list, tuple)):
+                datasets = [datasets]
+            for a in datasets:
+                sets.append(_open(a))
+
+    assert len(sets) > 0, (args, kwargs)
+
+    if len(sets) > 1:
+        return _concat_or_join(sets).subset(**kwargs)
+
+    return sets[0].subset(**kwargs)
