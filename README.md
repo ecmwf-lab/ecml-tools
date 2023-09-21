@@ -26,9 +26,7 @@ As the underlying `zarr`, the `dataset` is an iterable:
 ```python
 from ecml_tools.data import open_dataset
 
-ds = open_dataset(
-    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-)
+ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2")
 
 # Print the number of rows (i.e. dates):
 
@@ -58,9 +56,11 @@ row = ds[10]
 print("2t", row[two_t_index])
 
 # Get the list of dates (as NumPy datetime64)
+
 print(ds.dates)
 
 # The number of hours between consecutive dates
+
 print(ds.frequency)
 
 # The resolution of the underlying grid
@@ -68,12 +68,14 @@ print(ds.frequency)
 print(ds.resolution)
 
 # The list of latitudes of the data values (NumPy array)
+
 print(ds.latitudes)
 
 # The same for longitudes
+
 print(ds.longitudes)
 
-# The statitics
+# And the statitics
 
 print(ds.statistics)
 
@@ -97,8 +99,6 @@ two_t_index = ds.name_to_index("2t")
 stats = ds.statistics
 print("Average 2t", stats["mean"][two_t_index])
 ```
-
-
 
 ## Subsetting datasets
 
@@ -147,7 +147,6 @@ training = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     frequency="6h")
 ```
 
-
 ## Combining datasets
 
 You can create a virtual dataset by combining two or more `zarr` files.
@@ -163,7 +162,6 @@ ds = open_dataset(
 )
 
 ```
-
 
 When given a list of `zarr` files, the package will automatically work out if the files can be _concatenated_ or _joined_ by looking at the range of dates covered by each files.
 
