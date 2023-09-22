@@ -5,6 +5,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+import calendar
 import datetime
 import logging
 import os
@@ -34,14 +35,7 @@ class Dataset:
             start = kwargs.pop("start")
             end = kwargs.pop("end")
 
-            def is_year(x):
-                return isinstance(x, int) and 1000 <= x <= 9999
-
-            if start is None or is_year(start):
-                if end is None or is_year(end):
-                    return Subset(self, self._years_to_indices(start, end))._subset(
-                        **kwargs
-                    )
+            return Subset(self, self._dates_to_indices(start, end))._subset(**kwargs)
 
             raise NotImplementedError(f"Unsupported start/end: {start} {end}")
 
@@ -70,16 +64,13 @@ class Dataset:
 
         return range(0, len(self), step)
 
-    def _years_to_indices(self, start, end):
+    def _dates_to_indices(self, start, end):
         # TODO: optimize
-        start = self.dates[0].astype(object).year if start is None else start
-        end = self.dates[-1].astype(object).year if end is None else end
 
-        return [
-            i
-            for i, date in enumerate(self.dates)
-            if start <= date.astype(object).year <= end
-        ]
+        start = self.dates[0] if start is None else _as_first_date(start)
+        end = self.dates[-1] if end is None else _as_last_date(end)
+
+        return [i for i, date in enumerate(self.dates) if start <= date <= end]
 
     def _select_to_columns(self, vars):
         if isinstance(vars, set):
@@ -488,6 +479,62 @@ def _frequency_to_hours(frequency):
         return frequency * 24
 
     raise NotImplementedError()
+
+
+def _as_date(d, last):
+    try:
+        d = int(d)
+    except ValueError:
+        pass
+
+    if isinstance(d, int):
+        if len(str(d)) == 4:
+            year = d
+            if last:
+                return np.datetime64(f"{year:04}-12-31T23:59:59")
+            else:
+                return np.datetime64(f"{year:04}-01-01T00:00:00")
+
+        if len(str(d)) == 6:
+            year = d // 100
+            month = d % 100
+            if last:
+                _, last_day = calendar.monthrange(year, month)
+                return np.datetime64(f"{year:04}-{month:02}-{last_day:02}T23:59:59")
+            else:
+                return np.datetime64(f"{year:04}-{month:02}-01T00:00:00")
+
+        if len(str(d)) == 8:
+            year = d // 10000
+            month = (d % 10000) // 100
+            day = d % 100
+            if last:
+                return np.datetime64(f"{year:04}-{month:02}-{day:02}T23:59:59")
+            else:
+                return np.datetime64(f"{year:04}-{month:02}-{day:02}T00:00:00")
+
+    if isinstance(d, str):
+        bits = d.split("-")
+        if len(bits) == 1:
+            return _as_date(int(bits[0]), last)
+
+        if len(bits) == 2:
+            return _as_date(int(bits[0]) * 100 + int(bits[1]), last)
+
+        if len(bits) == 3:
+            return _as_date(
+                int(bits[0]) * 10000 + int(bits[1]) * 100 + int(bits[2]), last
+            )
+
+    raise NotImplementedError(f"Unsupported date: {d} ({type(d)})")
+
+
+def _as_first_date(d):
+    return _as_date(d, last=False)
+
+
+def _as_last_date(d):
+    return _as_date(d, last=True)
 
 
 def _concat_or_join(datasets):

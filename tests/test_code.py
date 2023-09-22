@@ -17,6 +17,8 @@ from ecml_tools.data import (
     Rename,
     Select,
     Subset,
+    _as_first_date,
+    _as_last_date,
     _frequency_to_hours,
     open_dataset,
 )
@@ -360,6 +362,128 @@ def test_subset_3():
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
 
 
+def test_subset_4():
+    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=202206, end=202209)
+
+    assert isinstance(ds, Subset)
+    assert len(ds) == 365 * 24
+
+    dates = []
+    date = datetime.datetime(2022, 6, 1)
+
+    for row in ds:
+        expect = [
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=1)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 24, 4)
+
+    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+
+
+def test_subset_5():
+    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=20220601, end=20220931)
+
+    assert isinstance(ds, Subset)
+    assert len(ds) == 365 * 24
+
+    dates = []
+    date = datetime.datetime(2022, 6, 1)
+
+    for row in ds:
+        expect = [
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=1)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 24, 4)
+
+    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+
+
+def test_subset_6():
+    ds = open_dataset(
+        "test-2021-2023-1h-o96-abcd", start="2022-06-01", end="2022-09-31"
+    )
+
+    assert isinstance(ds, Subset)
+    assert len(ds) == 365 * 24
+
+    dates = []
+    date = datetime.datetime(2022, 6, 1)
+
+    for row in ds:
+        expect = [
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=1)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 24, 4)
+
+    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+
+
+def test_subset_7():
+    ds = open_dataset("test-2021-2023-1h-o96-abcd", start="2022-06", end="2022-09")
+
+    assert isinstance(ds, Subset)
+    assert len(ds) == 365 * 24
+
+    dates = []
+    date = datetime.datetime(2022, 6, 1)
+
+    for row in ds:
+        expect = [
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=1)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 24, 4)
+
+    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+
+
 def test_select_1():
     ds = open_dataset("test-2021-2021-6h-o96-abcd", select=["b", "d"])
 
@@ -674,5 +798,26 @@ def test_constructor_5():
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
 
 
+def test_dates():
+    _as_first_date(2021)
+    _as_last_date(2021)
+    _as_first_date("2021")
+    _as_last_date("2021")
+
+    _as_first_date(202106)
+    _as_last_date(202109)
+    _as_first_date("202106")
+    _as_last_date("202109")
+    _as_first_date("2021-06")
+    _as_last_date("2021-09")
+
+    _as_first_date(20210101)
+    _as_last_date(20210101)
+    _as_first_date("20210101")
+    _as_last_date("20210101")
+    _as_first_date("2021-01-01")
+    _as_last_date("2021-01-01")
+
+
 if __name__ == "__main__":
-    test_join_2()
+    test_dates()
