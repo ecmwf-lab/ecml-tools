@@ -127,6 +127,7 @@ def test_concat():
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
