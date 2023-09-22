@@ -50,7 +50,7 @@ print(ds.variables)
 
 # the mapping between variable names and columns index
 
-two_t_index = ds.name_to_index("2t")
+two_t_index = ds.name_to_index["2t"]
 row = ds[10]
 print("2t", row[two_t_index])
 
@@ -93,7 +93,7 @@ The statistics is a dictionary of NumPy vectors following the order of the varia
 To get the statistics for `2t`:
 
 ```python
-two_t_index = ds.name_to_index("2t")
+two_t_index = ds.name_to_index["2t"]
 stats = ds.statistics
 print("Average 2t", stats["mean"][two_t_index])
 ```

@@ -60,6 +60,11 @@ def create_zarr(
     root.attrs["resolution"] = resolution
     root.attrs["name_to_index"] = {k: i for i, k in enumerate(vars)}
 
+    root.mean = np.mean(data, axis=0)
+    root.stdev = np.std(data, axis=0)
+    root.maximum = np.max(data, axis=0)
+    root.minimum = np.min(data, axis=0)
+
     return root
 
 
@@ -93,6 +98,25 @@ zarr.convenience.open = zarr_from_str
 ecml_tools.data._name_to_path = lambda name: name
 
 
+def same_stats(ds1, ds2, vars1, vars2=None):
+    if vars2 is None:
+        vars2 = vars1
+
+    vars1 = [v for v in vars1]
+    vars2 = [v for v in vars2]
+    for v1, v2 in zip(vars1, vars2):
+        idx1 = ds1.name_to_index[v1]
+        idx2 = ds2.name_to_index[v2]
+        assert (ds1.statistics["mean"][idx1] == ds2.statistics["mean"][idx2]).all()
+        assert (ds1.statistics["stdev"][idx1] == ds2.statistics["stdev"][idx2]).all()
+        assert (
+            ds1.statistics["maximum"][idx1] == ds2.statistics["maximum"][idx2]
+        ).all()
+        assert (
+            ds1.statistics["minimum"][idx1] == ds2.statistics["minimum"][idx2]
+        ).all()
+
+
 def test_concat():
     ds = open_dataset(
         "test-2021-2021-6h-o96-abcd",
@@ -116,6 +140,8 @@ def test_concat():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
     assert ds.shape == (365 * 2 * 4, 4)
+
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
 
 
 def test_join_1():
@@ -161,6 +187,8 @@ def test_join_1():
 
     assert ds.shape == (365 * 4, 8)
 
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+
 
 def test_join_2():
     ds = open_dataset(
@@ -194,6 +222,15 @@ def test_join_2():
 
     assert ds.shape == (365 * 4, 6)
 
+    same_stats(
+        ds,
+        open_dataset(
+            "test-2021-2021-6h-o96-ac-1",
+            "test-2021-2021-6h-o96-bdef-2",
+        ),
+        "abcdef",
+    )
+
 
 def test_join_3():
     ds = open_dataset(
@@ -226,6 +263,7 @@ def test_join_3():
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
     assert ds.shape == (365 * 4, 4)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abcd")
 
 
 def test_subset_1():
@@ -254,6 +292,7 @@ def test_subset_1():
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
     assert ds.shape == (365 * 3 * 2, 4)
+    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
 
 
 def test_subset_2():
@@ -282,6 +321,8 @@ def test_subset_2():
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
     assert ds.shape == (365 * 24, 4)
+
+    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
 
 
 def test_subset_3():
@@ -316,6 +357,7 @@ def test_subset_3():
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
     assert ds.shape == (365 * 2, 4)
+    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
 
 
 def test_select_1():
@@ -339,6 +381,7 @@ def test_select_1():
     assert ds.name_to_index == {"b": 0, "d": 1}
 
     assert ds.shape == (365 * 4, 2)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bd")
 
 
 def test_select_2():
@@ -363,6 +406,8 @@ def test_select_2():
 
     assert ds.shape == (365 * 4, 2)
 
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
+
 
 def test_select_3():
     ds = open_dataset("test-2021-2021-6h-o96-abcd", select={"c", "a"})
@@ -385,6 +430,7 @@ def test_select_3():
     assert ds.name_to_index == {"a": 0, "c": 1}
 
     assert ds.shape == (365 * 4, 2)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
 
 
 def test_rename():
@@ -408,6 +454,7 @@ def test_rename():
     assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3}
 
     assert ds.shape == (365 * 4, 4)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
 
 
 def test_drop():
@@ -431,6 +478,7 @@ def test_drop():
     assert ds.name_to_index == {"b": 0, "c": 1, "d": 2}
 
     assert ds.shape == (365 * 4, 3)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
 
 
 def test_reorder_1():
@@ -454,6 +502,7 @@ def test_reorder_1():
     assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
 
     assert ds.shape == (365 * 4, 4)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
 
 
 def test_reorder_2():
@@ -477,6 +526,7 @@ def test_reorder_2():
     assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
 
     assert ds.shape == (365 * 4, 4)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
 
 
 def test_constructor_1():
@@ -504,6 +554,7 @@ def test_constructor_1():
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
     assert ds.shape == (365 * 2 * 4, 4)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
 
 
 def test_constructor_2():
@@ -529,6 +580,7 @@ def test_constructor_2():
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
     assert ds.shape == (365 * 2 * 4, 4)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
 
 
 def test_constructor_3():
@@ -554,6 +606,7 @@ def test_constructor_3():
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
     assert ds.shape == (365 * 2 * 4, 4)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
 
 
 def test_constructor_4():
@@ -580,6 +633,7 @@ def test_constructor_4():
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
     assert ds.shape == (365 * 2 * 4, 4)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
 
 
 def test_constructor_5():
@@ -616,7 +670,9 @@ def test_constructor_5():
     assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3, "a": 4, "z": 5, "t": 6}
 
     assert ds.shape == (365 * 4, 7)
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
+    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
 
 
 if __name__ == "__main__":
-    test_constructor_5()
+    test_join_2()
