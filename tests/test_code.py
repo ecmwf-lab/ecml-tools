@@ -119,6 +119,19 @@ def same_stats(ds1, ds2, vars1, vars2=None):
         ).all()
 
 
+def slices(ds):
+    start = 5
+    end = len(ds) - 5
+    step = len(ds) // 10
+    print(start, end, step)
+    print(list(range(start, end, step)))
+    s = ds[start:end:step]
+    print(len(s))
+    print(s.shape)
+    for i, n in enumerate(range(start, end, step)):
+        assert (s[i] == ds[n]).all()
+
+
 def test_concat():
     ds = open_dataset(
         "test-2021-2021-6h-o96-abcd",
@@ -127,6 +140,7 @@ def test_concat():
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
+
     assert len([row for row in ds]) == len(ds)
 
     dates = []
@@ -145,6 +159,7 @@ def test_concat():
     assert ds.shape == (365 * 2 * 4, 4)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_join_1():
@@ -155,6 +170,7 @@ def test_join_1():
 
     assert isinstance(ds, Join)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -191,6 +207,7 @@ def test_join_1():
     assert ds.shape == (365 * 4, 8)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_join_2():
@@ -201,6 +218,7 @@ def test_join_2():
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -233,6 +251,7 @@ def test_join_2():
         ),
         "abcdef",
     )
+    slices(ds)
 
 
 def test_join_3():
@@ -245,6 +264,7 @@ def test_join_3():
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -267,6 +287,7 @@ def test_join_3():
 
     assert ds.shape == (365 * 4, 4)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abcd")
+    slices(ds)
 
 
 def test_subset_1():
@@ -274,6 +295,7 @@ def test_subset_1():
 
     assert isinstance(ds, Subset)
     assert len(ds) == 365 * 3 * 2
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -296,6 +318,7 @@ def test_subset_1():
 
     assert ds.shape == (365 * 3 * 2, 4)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_subset_2():
@@ -303,6 +326,7 @@ def test_subset_2():
 
     assert isinstance(ds, Subset)
     assert len(ds) == 365 * 24
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2022, 1, 1)
@@ -326,6 +350,7 @@ def test_subset_2():
     assert ds.shape == (365 * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_subset_3():
@@ -339,6 +364,7 @@ def test_subset_3():
     assert isinstance(ds, Subset)
     assert not isinstance(ds.dataset, Subset)
     assert len(ds) == 365 * 2
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2022, 1, 1)
@@ -361,6 +387,7 @@ def test_subset_3():
 
     assert ds.shape == (365 * 2, 4)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_subset_4():
@@ -368,6 +395,7 @@ def test_subset_4():
 
     assert isinstance(ds, Subset)
     assert len(ds) == (30 + 31 + 31) * 24
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2022, 6, 1)
@@ -391,6 +419,7 @@ def test_subset_4():
     assert ds.shape == ((30 + 31 + 31) * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_subset_5():
@@ -398,6 +427,7 @@ def test_subset_5():
 
     assert isinstance(ds, Subset)
     assert len(ds) == (30 + 31 + 31) * 24
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2022, 6, 1)
@@ -421,6 +451,7 @@ def test_subset_5():
     assert ds.shape == ((30 + 31 + 31) * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_subset_6():
@@ -432,6 +463,7 @@ def test_subset_6():
 
     assert isinstance(ds, Subset)
     assert len(ds) == (30 + 31 + 31) * 24
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2022, 6, 1)
@@ -455,6 +487,7 @@ def test_subset_6():
     assert ds.shape == ((30 + 31 + 31) * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_subset_7():
@@ -462,6 +495,7 @@ def test_subset_7():
 
     assert isinstance(ds, Subset)
     assert len(ds) == (30 + 31 + 31) * 24
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2022, 6, 1)
@@ -485,6 +519,7 @@ def test_subset_7():
     assert ds.shape == ((30 + 31 + 31) * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_select_1():
@@ -492,6 +527,7 @@ def test_select_1():
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -509,6 +545,7 @@ def test_select_1():
 
     assert ds.shape == (365 * 4, 2)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bd")
+    slices(ds)
 
 
 def test_select_2():
@@ -534,6 +571,7 @@ def test_select_2():
     assert ds.shape == (365 * 4, 2)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
+    slices(ds)
 
 
 def test_select_3():
@@ -541,6 +579,7 @@ def test_select_3():
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -558,6 +597,7 @@ def test_select_3():
 
     assert ds.shape == (365 * 4, 2)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
+    slices(ds)
 
 
 def test_rename():
@@ -565,6 +605,7 @@ def test_rename():
 
     assert isinstance(ds, Rename)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -582,6 +623,7 @@ def test_rename():
 
     assert ds.shape == (365 * 4, 4)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
+    slices(ds)
 
 
 def test_drop():
@@ -606,6 +648,7 @@ def test_drop():
 
     assert ds.shape == (365 * 4, 3)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
+    slices(ds)
 
 
 def test_reorder_1():
@@ -613,6 +656,7 @@ def test_reorder_1():
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -630,6 +674,7 @@ def test_reorder_1():
 
     assert ds.shape == (365 * 4, 4)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_reorder_2():
@@ -637,6 +682,7 @@ def test_reorder_2():
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -654,6 +700,7 @@ def test_reorder_2():
 
     assert ds.shape == (365 * 4, 4)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_constructor_1():
@@ -665,6 +712,7 @@ def test_constructor_1():
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -682,6 +730,7 @@ def test_constructor_1():
 
     assert ds.shape == (365 * 2 * 4, 4)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_constructor_2():
@@ -691,6 +740,7 @@ def test_constructor_2():
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -708,6 +758,7 @@ def test_constructor_2():
 
     assert ds.shape == (365 * 2 * 4, 4)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_constructor_3():
@@ -717,6 +768,7 @@ def test_constructor_3():
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -734,6 +786,7 @@ def test_constructor_3():
 
     assert ds.shape == (365 * 2 * 4, 4)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_constructor_4():
@@ -744,6 +797,7 @@ def test_constructor_4():
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
+    assert len([row for row in ds]) == len(ds)
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
@@ -761,6 +815,7 @@ def test_constructor_4():
 
     assert ds.shape == (365 * 2 * 4, 4)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
 
 
 def test_constructor_5():
@@ -771,6 +826,7 @@ def test_constructor_5():
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
+    assert len([row for row in ds]) == len(ds)
 
     print(ds.variables)
 
@@ -799,6 +855,7 @@ def test_constructor_5():
     assert ds.shape == (365 * 4, 7)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
+    slices(ds)
 
 
 def test_dates():
@@ -874,8 +931,4 @@ def test_slice_5():
 
 
 if __name__ == "__main__":
-    test_slice_1()
-    test_slice_2()
-    test_slice_3()
-    test_slice_4()
-    test_slice_5()
+    test_concat()
