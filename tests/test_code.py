@@ -363,10 +363,10 @@ def test_subset_3():
 
 
 def test_subset_4():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=202206, end=202209)
+    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=202206, end=202208)
 
     assert isinstance(ds, Subset)
-    assert len(ds) == 365 * 24
+    assert len(ds) == (30 + 31 + 31) * 24
 
     dates = []
     date = datetime.datetime(2022, 6, 1)
@@ -387,16 +387,16 @@ def test_subset_4():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 24, 4)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
 
 
 def test_subset_5():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=20220601, end=20220931)
+    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=20220601, end=20220831)
 
     assert isinstance(ds, Subset)
-    assert len(ds) == 365 * 24
+    assert len(ds) == (30 + 31 + 31) * 24
 
     dates = []
     date = datetime.datetime(2022, 6, 1)
@@ -417,18 +417,20 @@ def test_subset_5():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 24, 4)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
 
 
 def test_subset_6():
     ds = open_dataset(
-        "test-2021-2023-1h-o96-abcd", start="2022-06-01", end="2022-09-31"
+        "test-2021-2023-1h-o96-abcd",
+        start="2022-06-01",
+        end="2022-08-31",
     )
 
     assert isinstance(ds, Subset)
-    assert len(ds) == 365 * 24
+    assert len(ds) == (30 + 31 + 31) * 24
 
     dates = []
     date = datetime.datetime(2022, 6, 1)
@@ -449,16 +451,16 @@ def test_subset_6():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 24, 4)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
 
 
 def test_subset_7():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd", start="2022-06", end="2022-09")
+    ds = open_dataset("test-2021-2023-1h-o96-abcd", start="2022-06", end="2022-08")
 
     assert isinstance(ds, Subset)
-    assert len(ds) == 365 * 24
+    assert len(ds) == (30 + 31 + 31) * 24
 
     dates = []
     date = datetime.datetime(2022, 6, 1)
@@ -479,7 +481,7 @@ def test_subset_7():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 24, 4)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
 
@@ -799,24 +801,24 @@ def test_constructor_5():
 
 
 def test_dates():
-    _as_first_date(2021)
-    _as_last_date(2021)
-    _as_first_date("2021")
-    _as_last_date("2021")
+    assert _as_first_date(2021) == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date(2021) == np.datetime64("2021-12-31T23:59:59")
+    assert _as_first_date("2021") == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date("2021") == np.datetime64("2021-12-31T23:59:59")
 
-    _as_first_date(202106)
-    _as_last_date(202109)
-    _as_first_date("202106")
-    _as_last_date("202109")
-    _as_first_date("2021-06")
-    _as_last_date("2021-09")
+    assert _as_first_date(202106) == np.datetime64("2021-06-01T00:00:00")
+    assert _as_last_date(202108) == np.datetime64("2021-08-31T23:59:59")
+    assert _as_first_date("202106") == np.datetime64("2021-06-01T00:00:00")
+    assert _as_last_date("202108") == np.datetime64("2021-08-31T23:59:59")
+    assert _as_first_date("2021-06") == np.datetime64("2021-06-01T00:00:00")
+    assert _as_last_date("2021-08") == np.datetime64("2021-08-31T23:59:59")
 
-    _as_first_date(20210101)
-    _as_last_date(20210101)
-    _as_first_date("20210101")
-    _as_last_date("20210101")
-    _as_first_date("2021-01-01")
-    _as_last_date("2021-01-01")
+    assert _as_first_date(20210101) == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date(20210101) == np.datetime64("2021-01-01T23:59:59")
+    assert _as_first_date("20210101") == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date("20210101") == np.datetime64("2021-01-01T23:59:59")
+    assert _as_first_date("2021-01-01") == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date("2021-01-01") == np.datetime64("2021-01-01T23:59:59")
 
 
 if __name__ == "__main__":
