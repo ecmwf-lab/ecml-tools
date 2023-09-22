@@ -14,6 +14,7 @@ import ecml_tools.data
 from ecml_tools.data import (
     Concat,
     Join,
+    Rename,
     Select,
     Subset,
     _frequency_to_hours,
@@ -88,15 +89,14 @@ def zarr_from_str(name, mode):
     )
 
 
-zarr.open = zarr_from_str
 zarr.convenience.open = zarr_from_str
 ecml_tools.data._name_to_path = lambda name: name
 
 
 def test_concat():
     ds = open_dataset(
-        "test-2021-2021-6h-o96-abcd-0",
-        "test-2022-2022-6h-o96-abcd-0",
+        "test-2021-2021-6h-o96-abcd",
+        "test-2022-2022-6h-o96-abcd",
     )
 
     assert isinstance(ds, Concat)
@@ -113,11 +113,15 @@ def test_concat():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+    assert ds.shape == (365 * 2 * 4, 4)
+
 
 def test_join_1():
     ds = open_dataset(
-        "test-2021-2021-6h-o96-abcd-0",
-        "test-2021-2021-6h-o96-efgh-0",
+        "test-2021-2021-6h-o96-abcd",
+        "test-2021-2021-6h-o96-efgh",
     )
 
     assert isinstance(ds, Join)
@@ -142,6 +146,20 @@ def test_join_1():
         date += datetime.timedelta(hours=6)
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d", "e", "f", "g", "h"]
+    assert ds.name_to_index == {
+        "a": 0,
+        "b": 1,
+        "c": 2,
+        "d": 3,
+        "e": 4,
+        "f": 5,
+        "g": 6,
+        "h": 7,
+    }
+
+    assert ds.shape == (365 * 4, 8)
 
 
 def test_join_2():
@@ -171,6 +189,11 @@ def test_join_2():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "b", "c", "d", "e", "f"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5}
+
+    assert ds.shape == (365 * 4, 6)
+
 
 def test_join_3():
     ds = open_dataset(
@@ -199,9 +222,14 @@ def test_join_3():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 4, 4)
+
 
 def test_subset_1():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd-0", frequency=12)
+    ds = open_dataset("test-2021-2023-1h-o96-abcd", frequency=12)
 
     assert isinstance(ds, Subset)
     assert len(ds) == 365 * 3 * 2
@@ -222,9 +250,14 @@ def test_subset_1():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 3 * 2, 4)
+
 
 def test_subset_2():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd-0", start=2022, end=2022)
+    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=2022, end=2022)
 
     assert isinstance(ds, Subset)
     assert len(ds) == 365 * 24
@@ -245,10 +278,15 @@ def test_subset_2():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 24, 4)
+
 
 def test_subset_3():
     ds = open_dataset(
-        "test-2021-2023-1h-o96-abcd-0",
+        "test-2021-2023-1h-o96-abcd",
         start=2022,
         end=2022,
         frequency=12,
@@ -274,9 +312,14 @@ def test_subset_3():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 2, 4)
+
 
 def test_select_1():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd-0", select=["b", "d"])
+    ds = open_dataset("test-2021-2021-6h-o96-abcd", select=["b", "d"])
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -292,9 +335,14 @@ def test_select_1():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["b", "d"]
+    assert ds.name_to_index == {"b": 0, "d": 1}
+
+    assert ds.shape == (365 * 4, 2)
+
 
 def test_select_2():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd-0", select=["c", "a"])
+    ds = open_dataset("test-2021-2021-6h-o96-abcd", select=["c", "a"])
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -310,9 +358,14 @@ def test_select_2():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["c", "a"]
+    assert ds.name_to_index == {"c": 0, "a": 1}
+
+    assert ds.shape == (365 * 4, 2)
+
 
 def test_select_3():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd-0", select={"c", "a"})
+    ds = open_dataset("test-2021-2021-6h-o96-abcd", select={"c", "a"})
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -328,9 +381,37 @@ def test_select_3():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "c"]
+    assert ds.name_to_index == {"a": 0, "c": 1}
+
+    assert ds.shape == (365 * 4, 2)
+
+
+def test_rename():
+    ds = open_dataset("test-2021-2021-6h-o96-abcd", rename={"a": "x", "c": "y"})
+
+    assert isinstance(ds, Rename)
+    assert len(ds) == 365 * 4
+
+    dates = []
+    date = datetime.datetime(2021, 1, 1)
+
+    for row in ds:
+        expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["x", "b", "y", "d"]
+    assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3}
+
+    assert ds.shape == (365 * 4, 4)
+
 
 def test_drop():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd-0", drop="a")
+    ds = open_dataset("test-2021-2021-6h-o96-abcd", drop="a")
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -346,9 +427,14 @@ def test_drop():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["b", "c", "d"]
+    assert ds.name_to_index == {"b": 0, "c": 1, "d": 2}
+
+    assert ds.shape == (365 * 4, 3)
+
 
 def test_reorder_1():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd-0", reorder=["d", "c", "b", "a"])
+    ds = open_dataset("test-2021-2021-6h-o96-abcd", reorder=["d", "c", "b", "a"])
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -363,10 +449,15 @@ def test_reorder_1():
         date += datetime.timedelta(hours=6)
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["d", "c", "b", "a"]
+    assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
+
+    assert ds.shape == (365 * 4, 4)
 
 
 def test_reorder_2():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd-0", reorder=dict(a=3, b=2, c=1, d=0))
+    ds = open_dataset("test-2021-2021-6h-o96-abcd", reorder=dict(a=3, b=2, c=1, d=0))
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -382,11 +473,16 @@ def test_reorder_2():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["d", "c", "b", "a"]
+    assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
+
+    assert ds.shape == (365 * 4, 4)
+
 
 def test_constructor_1():
-    ds1 = open_dataset("test-2021-2021-6h-o96-abcd-0")
+    ds1 = open_dataset("test-2021-2021-6h-o96-abcd")
 
-    ds2 = open_dataset("test-2022-2022-6h-o96-abcd-0")
+    ds2 = open_dataset("test-2022-2022-6h-o96-abcd")
 
     ds = open_dataset(ds1, ds2)
 
@@ -404,10 +500,15 @@ def test_constructor_1():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 2 * 4, 4)
+
 
 def test_constructor_2():
     ds = open_dataset(
-        datasets=["test-2021-2021-6h-o96-abcd-0", "test-2022-2022-6h-o96-abcd-0"]
+        datasets=["test-2021-2021-6h-o96-abcd", "test-2022-2022-6h-o96-abcd"]
     )
 
     assert isinstance(ds, Concat)
@@ -423,11 +524,16 @@ def test_constructor_2():
         date += datetime.timedelta(hours=6)
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 2 * 4, 4)
 
 
 def test_constructor_3():
     ds = open_dataset(
-        {"datasets": ["test-2021-2021-6h-o96-abcd-0", "test-2022-2022-6h-o96-abcd-0"]}
+        {"datasets": ["test-2021-2021-6h-o96-abcd", "test-2022-2022-6h-o96-abcd"]}
     )
 
     assert isinstance(ds, Concat)
@@ -443,12 +549,17 @@ def test_constructor_3():
         date += datetime.timedelta(hours=6)
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 2 * 4, 4)
 
 
 def test_constructor_4():
     ds = open_dataset(
-        "test-2021-2021-6h-o96-abcd-0",
-        {"dataset": "test-2022-2022-1h-o96-abcd-0", "frequency": 6},
+        "test-2021-2021-6h-o96-abcd",
+        {"dataset": "test-2022-2022-1h-o96-abcd", "frequency": 6},
     )
 
     assert isinstance(ds, Concat)
@@ -465,6 +576,47 @@ def test_constructor_4():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 2 * 4, 4)
+
+
+def test_constructor_5():
+    ds = open_dataset(
+        {"dataset": "test-2021-2021-6h-o96-abcd-1", "rename": {"a": "x", "c": "y"}},
+        {"dataset": "test-2021-2021-6h-o96-abcd-2", "rename": {"c": "z", "d": "t"}},
+    )
+
+    assert isinstance(ds, Select)
+    assert len(ds) == 365 * 4
+
+    print(ds.variables)
+
+    dates = []
+    date = datetime.datetime(2021, 1, 1)
+
+    for row in ds:
+        expect = [
+            _(date, "a", 1),
+            _(date, "b", 2),
+            _(date, "c", 1),
+            _(date, "d", 1),
+            _(date, "a", 2),
+            _(date, "c", 2),
+            _(date, "d", 2),
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["x", "b", "y", "d", "a", "z", "t"]
+    assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3, "a": 4, "z": 5, "t": 6}
+
+    assert ds.shape == (365 * 4, 7)
+
 
 if __name__ == "__main__":
-    test_constructor_4()
+    test_constructor_5()

@@ -17,16 +17,18 @@ import zarr
 
 LOG = logging.getLogger(__name__)
 
+__all__ = ["open_dataset"]
+
 
 class Dataset:
-    def subset(self, **kwargs):
+    def _subset(self, **kwargs):
         if not kwargs:
             return self
 
         if "frequency" in kwargs:
             frequency = kwargs.pop("frequency")
 
-            return Subset(self, self.frequency_to_indices(frequency)).subset(**kwargs)
+            return Subset(self, self._frequency_to_indices(frequency))._subset(**kwargs)
 
         if "start" in kwargs or "end" in kwargs:
             start = kwargs.pop("start")
@@ -37,7 +39,7 @@ class Dataset:
 
             if start is None or is_year(start):
                 if end is None or is_year(end):
-                    return Subset(self, self.years_to_indices(start, end)).subset(
+                    return Subset(self, self._years_to_indices(start, end))._subset(
                         **kwargs
                     )
 
@@ -45,19 +47,21 @@ class Dataset:
 
         if "select" in kwargs:
             select = kwargs.pop("select")
-            return Select(self, self.select_to_columns(select)).subset(**kwargs)
+            return Select(self, self._select_to_columns(select))._subset(**kwargs)
 
         if "drop" in kwargs:
             drop = kwargs.pop("drop")
-            return Select(self, self.drop_to_columns(drop)).subset(**kwargs)
+            return Select(self, self._drop_to_columns(drop))._subset(**kwargs)
 
         if "reorder" in kwargs:
             reorder = kwargs.pop("reorder")
-            return Select(self, self.reorder_to_columns(reorder)).subset(**kwargs)
-
+            return Select(self, self._reorder_to_columns(reorder))._subset(**kwargs)
+        if "rename" in kwargs:
+            rename = kwargs.pop("rename")
+            return Rename(self, rename)._subset(**kwargs)
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 
-    def frequency_to_indices(self, frequency):
+    def _frequency_to_indices(self, frequency):
         requested_frequency = _frequency_to_hours(frequency)
         dataset_frequency = _frequency_to_hours(self.frequency)
         assert requested_frequency % dataset_frequency == 0
@@ -66,7 +70,7 @@ class Dataset:
 
         return range(0, len(self), step)
 
-    def years_to_indices(self, start, end):
+    def _years_to_indices(self, start, end):
         # TODO: optimize
         start = self.dates[0].astype(object).year if start is None else start
         end = self.dates[-1].astype(object).year if end is None else end
@@ -77,19 +81,19 @@ class Dataset:
             if start <= date.astype(object).year <= end
         ]
 
-    def select_to_columns(self, vars):
+    def _select_to_columns(self, vars):
         if isinstance(vars, set):
             # We keep the order of the variables as they are in the zarr file
             nvars = [v for v in self.name_to_index if v in vars]
             assert len(nvars) == len(vars)
-            return self.select_to_columns(nvars)
+            return self._select_to_columns(nvars)
 
         if not isinstance(vars, (list, tuple)):
             vars = [vars]
 
         return [self.name_to_index[v] for v in vars]
 
-    def drop_to_columns(self, vars):
+    def _drop_to_columns(self, vars):
         if not isinstance(vars, (list, tuple, set)):
             vars = [vars]
 
@@ -97,7 +101,7 @@ class Dataset:
 
         return sorted([v for k, v in self.name_to_index.items() if k not in vars])
 
-    def reorder_to_columns(self, vars):
+    def _reorder_to_columns(self, vars):
         if isinstance(vars, (list, tuple)):
             vars = {k: i for i, k in enumerate(vars)}
 
@@ -108,9 +112,6 @@ class Dataset:
         assert set(indices) == set(range(len(self.name_to_index)))
 
         return indices
-
-    def date_to_index(self, date):
-        raise NotImplementedError()
 
 
 class Zarr(Dataset):
@@ -197,6 +198,12 @@ class Forwards(Dataset):
     def __init__(self, forward):
         self.forward = forward
 
+    def __len__(self):
+        return len(self.forward)
+
+    def __getitem__(self, n):
+        return self.forward[n]
+
     @property
     def dates(self):
         return self.forward.dates
@@ -228,6 +235,10 @@ class Forwards(Dataset):
     @property
     def statistics(self):
         return self.forward.statistics
+
+    @property
+    def shape(self):
+        return self.forward.shape
 
 
 class Combined(Forwards):
@@ -290,6 +301,10 @@ class Concat(Combined):
         lst = ", ".join(repr(d) for d in self.datasets)
         return f"Concat({lst})"
 
+    @property
+    def shape(self):
+        return (len(self),) + self.datasets[0].shape[1:]
+
 
 class Join(Combined):
     def check_compatibility(self, d1, d2):
@@ -314,7 +329,7 @@ class Join(Combined):
         lst = ", ".join(repr(d) for d in self.datasets)
         return f"Join({lst})"
 
-    def overlay(self):
+    def _overlay(self):
         indices = {}
         i = 0
         for d in self.datasets:
@@ -340,16 +355,20 @@ class Join(Combined):
 
         return Select(self, indices)
 
-    @property
+    @cached_property
     def variables(self):
+        seen = set()
         result = []
-        for d in self.datasets:
-            for v in d.variables:
-                assert v not in result, "Duplicate variable: " + v
-                result.append(v)
+        for d in reversed(self.datasets):
+            for v in reversed(d.variables):
+                while v in seen:
+                    v = f"({v})"
+                seen.add(v)
+                result.insert(0, v)
+
         return result
 
-    @property
+    @cached_property
     def name_to_index(self):
         return {k: i for i, k in enumerate(self.variables)}
 
@@ -406,9 +425,6 @@ class Select(Forwards):
 
         super().__init__(dataset)
 
-    def __len__(self):
-        return len(self.dataset)
-
     def __getitem__(self, n):
         row = self.dataset[n]
         return row[self.indices]
@@ -428,6 +444,22 @@ class Select(Forwards):
     @cached_property
     def statistics(self):
         return {k: v[self.indices] for k, v in self.dataset.statistics.items()}
+
+
+class Rename(Forwards):
+    def __init__(self, dataset, rename):
+        super().__init__(dataset)
+        for n in rename:
+            assert n in dataset.variables
+        self._variables = [rename.get(v, v) for v in dataset.variables]
+
+    @property
+    def variables(self):
+        return self._variables
+
+    @cached_property
+    def name_to_index(self):
+        return {k: i for i, k in enumerate(self.variables)}
 
 
 def _name_to_path(name):
@@ -463,7 +495,7 @@ def _concat_or_join(datasets):
     ranges = [(d.dates[0].astype(object), d.dates[-1].astype(object)) for d in datasets]
 
     if len(set(ranges)) == 1:
-        return Join(datasets).overlay()
+        return Join(datasets)._overlay()
 
     # Make sure the dates are disjoint
     for i in range(len(ranges)):
@@ -484,7 +516,8 @@ def _concat_or_join(datasets):
         s = ranges[i + 1]
         if r[1] + datetime.timedelta(hours=frequency) != s[0]:
             raise ValueError(
-                f"Datasets must be sorted by dates, with no gaps: {r} and {s} ({datasets[i]} {datasets[i+1]})"
+                "Datasets must be sorted by dates, with no gaps: "
+                f"{r} and {s} ({datasets[i]} {datasets[i+1]})"
             )
 
     return Concat(datasets)
@@ -525,6 +558,6 @@ def open_dataset(*args, **kwargs):
     assert len(sets) > 0, (args, kwargs)
 
     if len(sets) > 1:
-        return _concat_or_join(sets).subset(**kwargs)
+        return _concat_or_join(sets)._subset(**kwargs)
 
-    return sets[0].subset(**kwargs)
+    return sets[0]._subset(**kwargs)
