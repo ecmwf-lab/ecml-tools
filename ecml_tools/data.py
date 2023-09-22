@@ -22,6 +22,34 @@ __all__ = ["open_dataset"]
 
 
 class Dataset:
+    def __getitem__(self, n):
+        if isinstance(n, int):
+            return self._getitem_int(n)
+        else:
+            return self._getitem_slice(n)
+
+    def _getitem_slice(self, sl):
+        print(sl)
+        start = sl.start or 0
+        stop = sl.stop or len(self)
+        stop = min(stop, len(self))
+        step = sl.step or 1
+        print(start, stop, step)
+
+        assert start >= 0, "not implemented"
+        assert stop >= start, "not implemented"
+        assert step >= 0, "not implemented"
+
+        lst = [self._getitem_int(i) for i in range(start, stop, step)]
+        out = np.stack(lst)
+        if lst:
+            assert out.shape[1:] == lst[0].shape
+
+        return out
+
+    def _getitem_int(self, i):
+        raise NotImplementedError()
+
     def _subset(self, **kwargs):
         if not kwargs:
             return self
@@ -117,8 +145,11 @@ class Zarr(Dataset):
     def __len__(self):
         return self.z.data.shape[0]
 
-    def __getitem__(self, n):
+    def _getitem_int(self, n):
         return self.z.data[n]
+
+    # def _getitem_slice(self, n):
+    #    return self.z.data[n]
 
     @property
     def shape(self):
@@ -192,8 +223,11 @@ class Forwards(Dataset):
     def __len__(self):
         return len(self.forward)
 
-    def __getitem__(self, n):
-        return self.forward[n]
+    def _getitem_int(self, n):
+        return self.forward._getitem_int(n)
+
+    def _getitem_slice(self, n):
+        return self.forward._getitem_slice(n)
 
     @property
     def dates(self):
@@ -268,7 +302,7 @@ class Concat(Combined):
     def __len__(self):
         return sum(len(i) for i in self.datasets)
 
-    def __getitem__(self, n):
+    def _getitem_int(self, n):
         # TODO: optimize
         k = 0
         while n >= len(self.datasets[k]):
@@ -309,7 +343,8 @@ class Join(Combined):
     def __len__(self):
         return len(self.datasets[0])
 
-    def __getitem__(self, n):
+    def _getitem_int(self, n):
+        # TODO: optimize _getitem_slice if needed
         return np.concatenate([d[n] for d in self.datasets], axis=0)
 
     @cached_property
@@ -377,12 +412,16 @@ class Subset(Forwards):
         self.dataset = dataset
         self.indices = list(indices)
 
-        # Forward other properties to the global dataset
+        # Forward other properties to the super dataset
         super().__init__(dataset)
 
-    def __getitem__(self, n):
+    def _getitem_int(self, n):
         n = self.indices[n]
         return self.dataset[n]
+
+    def _getitem_slice(self, n):
+        # TODO: optimize _getitem_slice
+        super()._getitem_slice(n)
 
     def __len__(self):
         return len(self.indices)
@@ -415,7 +454,7 @@ class Select(Forwards):
         # Forward other properties to the global dataset
         super().__init__(dataset)
 
-    def __getitem__(self, n):
+    def _getitem_int(self, n):
         row = self.dataset[n]
         return row[self.indices]
 

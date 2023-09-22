@@ -821,5 +821,60 @@ def test_dates():
     assert _as_last_date("2021-01-01") == np.datetime64("2021-01-01T23:59:59")
 
 
+def test_slice_1():
+    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+
+    s = ds[0:10:2]
+    assert len(s) == 5
+    assert (s[0] == ds[0]).all()
+    assert (s[1] == ds[2]).all()
+    assert (s[2] == ds[4]).all()
+    assert (s[3] == ds[6]).all()
+    assert (s[4] == ds[8]).all()
+
+
+def test_slice_2():
+    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+    s = ds[2:5]
+    assert len(s) == 3
+    assert (s[0] == ds[2]).all()
+    assert (s[1] == ds[3]).all()
+    assert (s[2] == ds[5]).all()
+
+
+def test_slice_3():
+    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+
+    s = ds[:5:2]
+    assert len(s) == 3
+    assert (s[0] == ds[0]).all()
+    assert (s[1] == ds[2]).all()
+    assert (s[2] == ds[4]).all()
+
+
+def test_slice_4():
+    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+
+    n = len(ds)
+    s = ds[2:]
+    assert len(s) == n - 2
+    assert (s[0] == ds[2]).all()
+    assert (s[n - 3] == ds[n - 1]).all()
+
+
+def test_slice_5():
+    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+
+    n = len(ds)
+    s = ds[2 : (n + 10)]  # slice too large
+    assert len(s) == n - 2
+    assert (s[0] == ds[2]).all()
+    assert (s[n - 3] == ds[n - 1]).all()
+
+
 if __name__ == "__main__":
-    test_dates()
+    test_slice_1()
+    test_slice_2()
+    test_slice_3()
+    test_slice_4()
+    test_slice_5()
