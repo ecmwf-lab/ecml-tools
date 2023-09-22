@@ -10,7 +10,6 @@ A `dataset` wraps a `zarr` file that follows the format used by ECMWF to train i
 from ecml_tools.data import open_dataset
 
 ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2")
-
 ```
 
 The dataset can be passed as a path or URL to a `zarr` file, or as a name. In the later case, the package will use the entry `zarr_root` of `~/.ecml-tool` file to create the full path or URL:
@@ -78,7 +77,6 @@ print(ds.longitudes)
 # And the statitics
 
 print(ds.statistics)
-
 ```
 
 The statistics is a dictionary of NumPy vectors following the order of the variables:
@@ -111,8 +109,6 @@ from ecml_tools.data import open_dataset
 
 ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     freqency="12h")
-
-
 ```
 
 The `frequency` parameter can be a integer (in hours) or a string following with the suffix `h` (hours) or `d` (days).
@@ -131,7 +127,6 @@ training = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
 test = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2"
     start=2021,
     end=2022)
-
 ```
 
 ### Combining both
@@ -160,7 +155,6 @@ ds = open_dataset(
     "dataset-3",
     ...
 )
-
 ```
 
 When given a list of `zarr` files, the package will automatically work out if the files can be _concatenated_ or _joined_ by looking at the range of dates covered by each files.
@@ -178,7 +172,6 @@ ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1940-1978-1h-v2",
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2"
 )
-
 ```
 
 ![Concatenation](concat.png)
@@ -198,7 +191,6 @@ ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     "some-extra-parameters-from-another-source-o96-1979-2022-1h-v2",
 )
-
 ```
 
 ![Join](join.png)
@@ -209,7 +201,7 @@ If a variable is present in more that one file, that last occurrence of that var
 
 Please note that you can join more than two `zarr` files.
 
-## Selection and ordering of variables
+## Selection, ordering and renaming of variables
 
 You can select a subset of variables when opening a `zarr` file. If you pass a `list`, the variables are ordered according the that list. If you pass a `set`, the order of the file is preserved.
 
@@ -229,7 +221,6 @@ ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     select = {"2t", "tp"},
 )
-
 ```
 
 You can also drop some variables:
@@ -262,8 +253,22 @@ ds = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     reorder = {"2t": 0, "msl": 1, "sp": 2, "10u": 3, "10v": 4},
 )
-
 ```
+
+You can also rename variables:
+
+```python
+from ecml_tools.data import open_dataset
+
+
+ds = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    rename = {"2t": "t2m"},
+)
+```
+
+This will be useful when your join datasets and do not want variables from one dataset to override the ones from the other.
+
 
 ## Using all options
 
@@ -282,6 +287,88 @@ ds = open_dataset(
     select={"2t", "2d"},
     ...
 )
-
 ```
 
+## Building a dataset from a configuration
+
+In practice, you will be building datasets from a configuration file, such as a YAML file:
+
+
+```python
+import yaml
+from ecml_tools.data import open_dataset
+
+with open("config.yaml") as f:
+    config = yaml.safe_load(f)
+
+training = open_dataset(config["training"])
+test = open_dataset(config["test"])
+```
+
+This is possible because `open_dataset` can be build from simple lists and dictionaries:
+
+```python
+# From a string
+
+ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2")
+
+# From a list of strings
+
+ds = open_dataset(
+    [
+        "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+        "aifs-ea-an-oper-0001-mars-o96-2023-2023-1h-v2",
+    ]
+)
+
+
+# From a dictionnary
+
+ds = open_dataset(
+    {
+        "dataset": "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+        "frequency": "6h",
+    }
+)
+
+# From a list of dictionnary
+
+ds = open_dataset(
+    [
+        {
+            "dataset": "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+            "frequency": "6h",
+        },
+        {
+            "dataset": "some-extra-parameters-from-another-source-o96-1979-2022-1h-v2",
+            "frequency": "6h",
+            "select": ["sst", "cape"],
+        },
+    ]
+)
+
+# And even deeper constructs
+
+ds = open_dataset(
+    [
+        {
+            "dataset": "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+            "frequency": "6h",
+        },
+        {
+            "dataset": [
+                {
+                    "dataset": "aifs-od-an-oper-8888-mars-o96-1979-2022-6h-v2",
+                    "drop": ["ws"],
+                },
+                {
+                    "dataset": "aifs-od-an-oper-9999-mars-o96-1979-2022-6h-v2",
+                    "select": ["ws"],
+                },
+            ],
+            "frequency": "6h",
+            "select": ["sst", "cape"],
+        },
+    ]
+)
+```
