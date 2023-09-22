@@ -24,7 +24,9 @@ __all__ = ["open_dataset"]
 class Dataset:
     def __getitem__(self, n):
         if isinstance(n, int):
-            if n >= len(self):
+            if n == len(self):
+                raise StopIteration()
+            if n > len(self):
                 raise KeyError(f"{n} out of bound for dataset of size {len(self)}")
             return self._getitem_int(n)
         else:
