@@ -238,6 +238,7 @@ class Combined(Forwards):
         for d in self.datasets[1:]:
             self.check_compatibility(self.datasets[0], d)
 
+        # Forward most properties to the first dataset
         super().__init__(datasets[0])
 
     def check_compatibility(self, d1, d2):
@@ -255,6 +256,11 @@ class Combined(Forwards):
             d1.longitudes != d2.longitudes
         ).any():
             raise ValueError(f"Incompatible grid ({d1} {d2})")
+
+    def __repr__(self):
+        lst = ", ".join(repr(d) for d in self.datasets)
+        return f"{self.__class__.__name__}({lst})"
+
 
 
 class Concat(Combined):
@@ -286,10 +292,6 @@ class Concat(Combined):
     def dates(self):
         return np.concatenate([d.dates for d in self.datasets])
 
-    def __repr__(self):
-        lst = ", ".join(repr(d) for d in self.datasets)
-        return f"Concat({lst})"
-
 
 class Join(Combined):
     def check_compatibility(self, d1, d2):
@@ -309,10 +311,6 @@ class Join(Combined):
     def shape(self):
         cols = sum(d.shape[1] for d in self.datasets)
         return (len(self), cols) + self.datasets[0].shape[2:]
-
-    def __repr__(self):
-        lst = ", ".join(repr(d) for d in self.datasets)
-        return f"Join({lst})"
 
     def overlay(self):
         indices = {}
@@ -370,6 +368,7 @@ class Subset(Forwards):
         self.dataset = dataset
         self.indices = list(indices)
 
+        # Forward other properties to the global dataset
         super().__init__(dataset)
 
     def __getitem__(self, n):
@@ -404,6 +403,7 @@ class Select(Forwards):
         self.indices = list(indices)
         assert len(self.indices) > 0
 
+        # Forward other properties to the global dataset
         super().__init__(dataset)
 
     def __len__(self):
