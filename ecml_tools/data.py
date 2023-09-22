@@ -264,7 +264,6 @@ class Combined(Forwards):
         return f"{self.__class__.__name__}({lst})"
 
 
-
 class Concat(Combined):
     def __len__(self):
         return sum(len(i) for i in self.datasets)
@@ -294,9 +293,9 @@ class Concat(Combined):
     def dates(self):
         return np.concatenate([d.dates for d in self.datasets])
 
-    def __repr__(self):
-        lst = ", ".join(repr(d) for d in self.datasets)
-        return f"Concat({lst})"
+    @property
+    def shape(self):
+        return (len(self),) + self.datasets[0].shape[1:]
 
 
 class Join(Combined):
@@ -318,11 +317,7 @@ class Join(Combined):
         cols = sum(d.shape[1] for d in self.datasets)
         return (len(self), cols) + self.datasets[0].shape[2:]
 
-    def __repr__(self):
-        lst = ", ".join(repr(d) for d in self.datasets)
-        return f"Join({lst})"
-
-    def overlay(self):
+    def _overlay(self):
         indices = {}
         i = 0
         for d in self.datasets:
