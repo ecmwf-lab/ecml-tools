@@ -21,64 +21,10 @@ LOG = logging.getLogger(__name__)
 __all__ = ["open_dataset"]
 
 
-def _expand_slice(s, length):
-    start, stop, step = s.start, s.stop, s.step
-
-    if step is None:
-        step = 1
-    if start is None:
-        start = 0
-    if stop is None:
-        stop = length
-
-    if start < 0:
-        start = length - start
-
-    if stop < 0:
-        stop = length - stop
-
-    stop = min(stop, length)
-
-    assert step > 0
-    assert stop > start
-    assert start >= 0
-
-    return slice(start, stop, step)
-
-
-def _intersect_slices(s1, s2):
-    assert s1.step == s2.step
-    return slice(
-        max(s1.start, s2.start),
-        min(s1.stop, s2.stop),
-        s1.step,
-    )
-
-
 class Dataset:
     @cached_property
-    def _cached_length(self):
+    def _len(self):
         return len(self)
-
-    def __getitem__(self, n):
-        if isinstance(n, int):
-            return self._getitem_int(n)
-        return self._getitem_slice(_expand_slice(n, self._cached_length))
-
-    def _getitem_slice(self, s):
-        return np.vstack(
-            [
-                self._getitem_int(i)
-                for i in range(
-                    s.start,
-                    s.stop,
-                    s.step,
-                )
-            ]
-        )
-
-    def _getitem_int(self, i):
-        raise NotImplementedError()
 
     def _subset(self, **kwargs):
         if not kwargs:
@@ -160,6 +106,9 @@ class Dataset:
 
         return indices
 
+    def _expand_slice(self, s):
+        return slice(*s.indices(self._len))
+
 
 class Zarr(Dataset):
     def __init__(self, path):
@@ -173,11 +122,8 @@ class Zarr(Dataset):
     def __len__(self):
         return self.z.data.shape[0]
 
-    def _getitem_int(self, n):
+    def __getitem__(self, n):
         return self.z.data[n]
-
-    # def _getitem_slice(self, n):
-    #     return self.z.data[n]
 
     @property
     def shape(self):
@@ -251,11 +197,8 @@ class Forwards(Dataset):
     def __len__(self):
         return len(self.forward)
 
-    def _getitem_int(self, n):
-        return self.forward._getitem_int(n)
-
-    # def _getitem_slice(self, n):
-    #     return self.forward._getitem_slice(n)
+    def __getitem__(self, n):
+        return self.forward[n]
 
     @property
     def dates(self):
@@ -330,24 +273,33 @@ class Concat(Combined):
     def __len__(self):
         return sum(len(i) for i in self.datasets)
 
-    def _getitem_int(self, n):
+    def __getitem__(self, n):
+        if isinstance(n, slice):
+            return self._get_slice(n)
+
         # TODO: optimize
         k = 0
-        while n >= self.datasets[k]._cached_length:
-            n -= self.datasets[k]._cached_length
+        while n >= self.datasets[k]._len:
+            n -= self.datasets[k]._len
             k += 1
-        return self.datasets[k]._getitem_int(n)
+        return self.datasets[k][n]
 
-    def _getitem_sliceX(self, n):
+    def _get_slice(self, s):
         result = []
-        k = 0
+
+        start, stop, step = s.indices(self._len)
+
         for d in self.datasets:
-            s = slice(k, k + d._cached_length, n.step)
-            t = _intersect_slices(n, s)
-            if t.stop > t.start:
-                t = slice(t.start - k, t.stop - k, t.step)
-                result.append(d._getitem_slice(t))
-            k += d._cached_length
+            length = d._len
+            begin = start
+            while begin < 0:
+                begin += step
+
+            result.append(d[begin:stop:step])
+
+            start -= length
+            stop -= length
+
         return np.vstack(result)
 
     def check_compatibility(self, d1, d2):
@@ -383,7 +335,12 @@ class Join(Combined):
     def __len__(self):
         return len(self.datasets[0])
 
-    def _getitem_int(self, n):
+    def _get_slice(self, s):
+        return np.vstack([self[i] for i in range(*s.indices(self._len))])
+
+    def __getitem__(self, n):
+        if isinstance(n, slice):
+            return self._get_slice(n)
         return np.concatenate([d[n] for d in self.datasets], axis=0)
 
     @cached_property
@@ -454,9 +411,18 @@ class Subset(Forwards):
         # Forward other properties to the super dataset
         super().__init__(dataset)
 
-    def _getitem_int(self, n):
+    def __getitem__(self, n):
+        if isinstance(n, slice):
+            return self._get_slice(n)
         n = self.indices[n]
-        return self.dataset._getitem_int(n)
+        return self.dataset[n]
+
+    def _get_slice(self, s):
+        # TODO: check if the indices can be simplified to a slice
+        # the time checking maybe be longer than the time saved
+        # using a slice
+        indices = [self.indices[i] for i in range(*s.indices(self._len))]
+        return np.vstack([self.dataset[i] for i in indices])
 
     def __len__(self):
         return len(self.indices)
@@ -486,11 +452,13 @@ class Select(Forwards):
         self.indices = list(indices)
         assert len(self.indices) > 0
 
-        # Forward other properties to the global dataset
+        # Forward other properties to the main dataset
         super().__init__(dataset)
 
-    def _getitem_int(self, n):
-        row = self.dataset._getitem_int(n)
+    def __getitem__(self, n):
+        row = self.dataset[n]
+        if isinstance(n, slice):
+            return row[:, self.indices]
         return row[self.indices]
 
     @cached_property

@@ -119,15 +119,25 @@ def same_stats(ds1, ds2, vars1, vars2=None):
         ).all()
 
 
-def slices(ds):
-    start = 5
-    end = len(ds) - 5
-    step = len(ds) // 10
+def slices(ds, start=None, end=None, step=None):
+    if start is None:
+        start = 5
+    if end is None:
+        end = len(ds) - 5
+    if step is None:
+        step = len(ds) // 10
     print(start, end, step)
     print(list(range(start, end, step)))
     s = ds[start:end:step]
     print(len(s))
-    print(s.shape)
+
+    assert s[0].shape == ds[0].shape, (
+        s.shape,
+        ds.shape,
+        len(list(range(start, end, step))),
+        list(range(start, end, step)),
+    )
+
     for i, n in enumerate(range(start, end, step)):
         assert (s[i] == ds[n]).all()
 
@@ -930,5 +940,14 @@ def test_slice_5():
     assert (s[n - 3] == ds[n - 1]).all()
 
 
+def test_slice_6():
+    ds = open_dataset([f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)])
+
+    slices(ds)
+    slices(ds, 0, len(ds), 1)
+    slices(ds, 0, len(ds), 10)
+    slices(ds, 7, -123, 13)
+
+
 if __name__ == "__main__":
-    test_concat()
+    test_select_1()
