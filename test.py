@@ -1,21 +1,24 @@
 from ecml_tools.data import open_dataset
 
 name = "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-only-z"
-# aifs-od-an-oper-0001-mars-o96-2021-6h-v2"
-z = open_dataset(name)
-z.save("new-zarr.zarr")
-exit(0)
+# # aifs-od-an-oper-0001-mars-o96-2021-6h-v2"
+# z = open_dataset(name)
+# z.save("new-zarr.zarr")
+# exit(0)
 
 
 # print(z.shape)
 # print(z.dates)
 
-# z = open_dataset(
-#     "aifs-od-an-oper-0001-mars-o96-2011-2022-6h-v2",
-#     "aifs-od-an-oper-0001-mars-o96-2021-6h-v2",
-#     # statistics="compute",
-# )
+z = open_dataset(
+    "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-only-z",
+    "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-without-z",
+)
 
+print(z)
+
+z.save("new-zarr.zarr")
+exit(0)
 
 z = open_dataset(name, frequency="1d")
 # print(z.shape)

@@ -136,6 +136,9 @@ class Dataset:
             j = min(i + buffer_size, self._len)
             z.data[i:j] = self[i:j]
 
+    def zarrs(self):
+        return []
+
 
 class Zarr(Dataset):
     def __init__(self, path):
@@ -144,6 +147,7 @@ class Zarr(Dataset):
             self.z = path
         else:
             self.path = path
+            print(path)
             self.z = zarr.convenience.open(path, "r")
 
     def __len__(self):
@@ -217,6 +221,9 @@ class Zarr(Dataset):
             )
         ]
 
+    def zarrs(self):
+        return [self.z]
+
     def __repr__(self):
         return self.path
 
@@ -271,6 +278,9 @@ class Forwards(Dataset):
     def dtype(self):
         return self.forward.dtype
 
+    def zarrs(self):
+        return self.forward.zarrs()
+
 
 class Combined(Forwards):
     def __init__(self, datasets):
@@ -298,6 +308,9 @@ class Combined(Forwards):
             d1.longitudes != d2.longitudes
         ).any():
             raise ValueError(f"Incompatible grid ({d1} {d2})")
+
+    def zarrs(self):
+        return sum([d.zarrs() for d in self.datasets], [])
 
     def __repr__(self):
         lst = ", ".join(repr(d) for d in self.datasets)
@@ -338,7 +351,7 @@ class Concat(Combined):
             if start > stop:
                 break
 
-        return np.vstack(result)
+        return np.concatenate(result)
 
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)
@@ -374,12 +387,12 @@ class Join(Combined):
         return len(self.datasets[0])
 
     def _get_slice(self, s):
-        return np.vstack([self[i] for i in range(*s.indices(self._len))])
+        return np.stack([self[i] for i in range(*s.indices(self._len))])
 
     def __getitem__(self, n):
         if isinstance(n, slice):
             return self._get_slice(n)
-        return np.concatenate([d[n] for d in self.datasets], axis=0)
+        return np.concatenate([d[n] for d in self.datasets])
 
     @cached_property
     def shape(self):
@@ -460,7 +473,7 @@ class Subset(Forwards):
         # the time checking maybe be longer than the time saved
         # using a slice
         indices = [self.indices[i] for i in range(*s.indices(self._len))]
-        return np.vstack([self.dataset[i] for i in indices])
+        return np.stack([self.dataset[i] for i in indices])
 
     def __len__(self):
         return len(self.indices)

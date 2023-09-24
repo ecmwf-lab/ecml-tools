@@ -6,6 +6,7 @@
 # nor does it submit to any jurisdiction.
 
 import datetime
+from functools import cache
 
 import numpy as np
 import zarr
@@ -23,12 +24,15 @@ from ecml_tools.data import (
     open_dataset,
 )
 
+VALUES = 10
 
+
+@cache
 def _(date, var, k=0):
     d = date.year * 10000 + date.month * 100 + date.day
     v = ord(var) - ord("a") + 1
     assert 0 <= k <= 9
-    return d * 100 + v + k / 10.0
+    return np.array([d * 100 + v + k / 10.0 + w / 100.0 for w in range(VALUES)])
 
 
 def create_zarr(
@@ -49,7 +53,7 @@ def create_zarr(
 
     dates = np.array(dates, dtype="datetime64")
 
-    data = np.zeros((len(dates), len(vars)))
+    data = np.zeros((len(dates), len(vars), VALUES))
     for i, date in enumerate(dates):
         for j, var in enumerate(vars):
             data[i, j] = _(date.astype(object), var, k)
@@ -164,7 +168,7 @@ def test_concat():
 
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-    assert ds.shape == (365 * 2 * 4, 4)
+    assert ds.shape == (365 * 2 * 4, 4, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
@@ -212,7 +216,7 @@ def test_join_1():
         "h": 7,
     }
 
-    assert ds.shape == (365 * 4, 8)
+    assert ds.shape == (365 * 4, 8, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
@@ -249,7 +253,7 @@ def test_join_2():
     assert ds.variables == ["a", "b", "c", "d", "e", "f"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5}
 
-    assert ds.shape == (365 * 4, 6)
+    assert ds.shape == (365 * 4, 6, VALUES)
 
     same_stats(
         ds,
@@ -293,7 +297,7 @@ def test_join_3():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 4, 4)
+    assert ds.shape == (365 * 4, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abcd")
     slices(ds)
 
@@ -324,7 +328,7 @@ def test_subset_1():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 3 * 2, 4)
+    assert ds.shape == (365 * 3 * 2, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -355,7 +359,7 @@ def test_subset_2():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 24, 4)
+    assert ds.shape == (365 * 24, 4, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -393,7 +397,7 @@ def test_subset_3():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2, 4)
+    assert ds.shape == (365 * 2, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -424,7 +428,7 @@ def test_subset_4():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -456,7 +460,7 @@ def test_subset_5():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -492,7 +496,7 @@ def test_subset_6():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -524,7 +528,7 @@ def test_subset_7():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -551,7 +555,7 @@ def test_select_1():
     assert ds.variables == ["b", "d"]
     assert ds.name_to_index == {"b": 0, "d": 1}
 
-    assert ds.shape == (365 * 4, 2)
+    assert ds.shape == (365 * 4, 2, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bd")
     slices(ds)
 
@@ -576,7 +580,7 @@ def test_select_2():
     assert ds.variables == ["c", "a"]
     assert ds.name_to_index == {"c": 0, "a": 1}
 
-    assert ds.shape == (365 * 4, 2)
+    assert ds.shape == (365 * 4, 2, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
     slices(ds)
@@ -603,7 +607,7 @@ def test_select_3():
     assert ds.variables == ["a", "c"]
     assert ds.name_to_index == {"a": 0, "c": 1}
 
-    assert ds.shape == (365 * 4, 2)
+    assert ds.shape == (365 * 4, 2, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
     slices(ds)
 
@@ -629,7 +633,7 @@ def test_rename():
     assert ds.variables == ["x", "b", "y", "d"]
     assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3}
 
-    assert ds.shape == (365 * 4, 4)
+    assert ds.shape == (365 * 4, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
     slices(ds)
 
@@ -654,7 +658,7 @@ def test_drop():
     assert ds.variables == ["b", "c", "d"]
     assert ds.name_to_index == {"b": 0, "c": 1, "d": 2}
 
-    assert ds.shape == (365 * 4, 3)
+    assert ds.shape == (365 * 4, 3, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
     slices(ds)
 
@@ -680,7 +684,7 @@ def test_reorder_1():
     assert ds.variables == ["d", "c", "b", "a"]
     assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
 
-    assert ds.shape == (365 * 4, 4)
+    assert ds.shape == (365 * 4, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -706,7 +710,7 @@ def test_reorder_2():
     assert ds.variables == ["d", "c", "b", "a"]
     assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
 
-    assert ds.shape == (365 * 4, 4)
+    assert ds.shape == (365 * 4, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -736,7 +740,7 @@ def test_constructor_1():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2 * 4, 4)
+    assert ds.shape == (365 * 2 * 4, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -764,7 +768,7 @@ def test_constructor_2():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2 * 4, 4)
+    assert ds.shape == (365 * 2 * 4, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -792,7 +796,7 @@ def test_constructor_3():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2 * 4, 4)
+    assert ds.shape == (365 * 2 * 4, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -821,7 +825,7 @@ def test_constructor_4():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2 * 4, 4)
+    assert ds.shape == (365 * 2 * 4, 4, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -860,7 +864,7 @@ def test_constructor_5():
     assert ds.variables == ["x", "b", "y", "d", "a", "z", "t"]
     assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3, "a": 4, "z": 5, "t": 6}
 
-    assert ds.shape == (365 * 4, 7)
+    assert ds.shape == (365 * 4, 7, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
     slices(ds)
