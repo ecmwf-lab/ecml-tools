@@ -45,6 +45,7 @@ setuptools.setup(
         "zarr",
         "pyyaml",
         "numpy",
+        "tqdm",
     ],
     extras_require={},
     zip_safe=True,

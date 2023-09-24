@@ -173,5 +173,5 @@ bar
 *.nc
 *.npz
 *.json
-*.zarr
+*.zarr/
 ~$images.pptx

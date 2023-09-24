@@ -13,6 +13,7 @@ import re
 from functools import cached_property
 
 import numpy as np
+import tqdm
 import yaml
 import zarr
 
@@ -106,8 +107,34 @@ class Dataset:
 
         return indices
 
-    def _expand_slice(self, s):
-        return slice(*s.indices(self._len))
+    def save(self, path, chunks=None, buffer_size=10):
+        z = zarr.convenience.open(path, "w")
+
+        if chunks is None:
+            chunks = (1,) + self.shape[1:]
+
+        z.create_dataset(
+            "data",
+            shape=self.shape,
+            chunks=chunks,
+            dtype=self.dtype,
+        )
+
+        z.create_dataset("dates", data=self.dates)
+        z.create_dataset("latitudes", data=self.latitudes)
+        z.create_dataset("longitudes", data=self.longitudes)
+
+        for k, v in self.statistics.items():
+            z.create_dataset(k, data=v)
+
+        z.attrs["resolution"] = self.resolution
+        z.attrs["frequency"] = self.frequency
+        z.attrs["name_to_index"] = self.name_to_index
+        z.attrs["variables"] = self.variables
+
+        for i in tqdm.tqdm(range(0, self._len, buffer_size)):
+            j = min(i + buffer_size, self._len)
+            z.data[i:j] = self[i:j]
 
 
 class Zarr(Dataset):
@@ -128,6 +155,10 @@ class Zarr(Dataset):
     @property
     def shape(self):
         return self.z.data.shape
+
+    @property
+    def dtype(self):
+        return self.z.data.dtype
 
     @cached_property
     def dates(self):
@@ -235,6 +266,10 @@ class Forwards(Dataset):
     @property
     def shape(self):
         return self.forward.shape
+
+    @property
+    def dtype(self):
+        return self.forward.dtype
 
 
 class Combined(Forwards):
@@ -625,15 +660,15 @@ def _open(a):
         return Zarr(_name_to_path(a))
 
     if isinstance(a, dict):
-        return open_dataset(**a)
+        return _open_dataset(**a)
 
     if isinstance(a, (list, tuple)):
-        return open_dataset(*a)
+        return _open_dataset(*a)
 
     raise NotImplementedError()
 
 
-def open_dataset(*args, **kwargs):
+def _open_dataset(*args, **kwargs):
     sets = []
     for a in args:
         sets.append(_open(a))
@@ -652,3 +687,9 @@ def open_dataset(*args, **kwargs):
         return _concat_or_join(sets)._subset(**kwargs)
 
     return sets[0]._subset(**kwargs)
+
+
+def open_dataset(*args, **kwargs):
+    ds = _open_dataset(*args, **kwargs)
+    ds.metadata = {"args": args, "kwargs": kwargs}
+    return ds
