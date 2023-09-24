@@ -153,6 +153,8 @@ The following are equivalent way of describing `start` or `end`:
 * `202306`, `"202306"` and `"2023-06"`
 * `20200301`, `"20200301"` and `"2020-03-01"`
 
+You can omit either `start` or `end`. In that case the first and last date of the dataset will be used respectively.
+
 ### Combining both
 
 You can combine both subsetting methods:
