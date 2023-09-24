@@ -155,7 +155,6 @@ class Zarr(Dataset):
             self.z = path
         else:
             self.path = path
-            print(path)
             self.z = zarr.convenience.open(path, "r")
 
     def __len__(self):

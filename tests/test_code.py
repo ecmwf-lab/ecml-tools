@@ -957,5 +957,60 @@ def test_slice_6():
             slices(ds, i, i + s, 13)
 
 
+def test_slice_7():
+    ds = open_dataset(
+        [
+            f"test-2020-2020-1h-o96-{vars}"
+            for vars in ("abcd", "efgh", "ijkl", "mnop", "qrst", "uvwx", "yz")
+        ]
+    )
+
+    slices(ds)
+    slices(ds, 0, len(ds), 1)
+    slices(ds, 0, len(ds), 10)
+    slices(ds, 7, -123, 13)
+
+    for i in range(0, len(ds), len(ds) // 10):
+        for s in range(1, 3):
+            slices(ds, i, i + s, 1)
+            slices(ds, i, i + s, 10)
+            slices(ds, i, i + s, 13)
+
+
+def test_slice_8():
+    ds = open_dataset(
+        [f"test-2020-2020-1h-o96-{vars}" for vars in ("abcd", "cd", "a", "c")]
+    )
+
+    slices(ds)
+    slices(ds, 0, len(ds), 1)
+    slices(ds, 0, len(ds), 10)
+    slices(ds, 7, -123, 13)
+
+    for i in range(0, len(ds), len(ds) // 10):
+        for s in range(1, 3):
+            slices(ds, i, i + s, 1)
+            slices(ds, i, i + s, 10)
+            slices(ds, i, i + s, 13)
+
+
+def test_slice_9():
+    ds = open_dataset(
+        [f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)],
+        frequency=18,
+    )
+
+    slices(ds)
+    slices(ds, 0, len(ds), 1)
+    slices(ds, 0, len(ds), 10)
+    slices(ds, 7, -123, 13)
+
+    for i in range(0, len(ds), len(ds) // 10):
+        for s in range(1, 3):
+            slices(ds, i, i + s, 1)
+            slices(ds, i, i + s, 10)
+            slices(ds, i, i + s, 13)
+
+
 if __name__ == "__main__":
-    test_slice_6()
+    test_slice_9()
