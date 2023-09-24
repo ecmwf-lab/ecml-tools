@@ -291,14 +291,17 @@ class Concat(Combined):
 
         for d in self.datasets:
             length = d._len
-            begin = start
-            while begin < 0:
-                begin += step
 
-            result.append(d[begin:stop:step])
+            result.append(d[start:stop:step])
 
             start -= length
+            while start < 0:
+                start += step
+
             stop -= length
+
+            if start > stop:
+                break
 
         return np.vstack(result)
 

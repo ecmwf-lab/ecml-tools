@@ -129,6 +129,30 @@ test = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2"
     end=2022)
 ```
 
+The selection includes all the dates of the `end` years.
+
+### Selecting more precise ranges
+
+You can select a few months, or even a few days:
+
+```python
+from ecml_tools.data import open_dataset
+
+training = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+    start=202306,
+    end=202308)
+
+test = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2"
+    start=20200301,
+    end=20200410)
+```
+
+The following are equivalent way of describing `start` or `end`:
+
+* `2020` and `"2020"`
+* `202306`, `"202306"` and `"2023-06"`
+* `20200301`, `"20200301"` and `"2020-03-01"`
+
 ### Combining both
 
 You can combine both subsetting methods:

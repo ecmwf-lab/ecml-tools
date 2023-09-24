@@ -126,10 +126,8 @@ def slices(ds, start=None, end=None, step=None):
         end = len(ds) - 5
     if step is None:
         step = len(ds) // 10
-    print(start, end, step)
-    print(list(range(start, end, step)))
+
     s = ds[start:end:step]
-    print(len(s))
 
     assert s[0].shape == ds[0].shape, (
         s.shape,
@@ -948,6 +946,12 @@ def test_slice_6():
     slices(ds, 0, len(ds), 10)
     slices(ds, 7, -123, 13)
 
+    for i in range(0, len(ds), len(ds) // 10):
+        for s in range(1, 3):
+            slices(ds, i, i + s, 1)
+            slices(ds, i, i + s, 10)
+            slices(ds, i, i + s, 13)
+
 
 if __name__ == "__main__":
-    test_select_1()
+    test_slice_6()
