@@ -7,6 +7,7 @@
 
 import calendar
 import datetime
+import json
 import logging
 import os
 import re
@@ -23,6 +24,8 @@ __all__ = ["open_dataset"]
 
 
 class Dataset:
+    metadata = {}
+
     @cached_property
     def _len(self):
         return len(self)
@@ -37,8 +40,8 @@ class Dataset:
             return Subset(self, self._frequency_to_indices(frequency))._subset(**kwargs)
 
         if "start" in kwargs or "end" in kwargs:
-            start = kwargs.pop("start")
-            end = kwargs.pop("end")
+            start = kwargs.pop("start", None)
+            end = kwargs.pop("end", None)
 
             return Subset(self, self._dates_to_indices(start, end))._subset(**kwargs)
 
@@ -53,9 +56,11 @@ class Dataset:
         if "reorder" in kwargs:
             reorder = kwargs.pop("reorder")
             return Select(self, self._reorder_to_columns(reorder))._subset(**kwargs)
+
         if "rename" in kwargs:
             rename = kwargs.pop("rename")
             return Rename(self, rename)._subset(**kwargs)
+
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 
     def _frequency_to_indices(self, frequency):
@@ -110,6 +115,9 @@ class Dataset:
     def save(self, path, chunks=None, buffer_size=10):
         z = zarr.convenience.open(path, "w")
 
+        print(json.dumps(self.metadata, indent=4))
+        print(json.dumps(self.zarrs(), indent=4))
+
         if chunks is None:
             chunks = (1,) + self.shape[1:]
 
@@ -137,13 +145,13 @@ class Dataset:
             z.data[i:j] = self[i:j]
 
     def zarrs(self):
-        return []
+        return {}
 
 
 class Zarr(Dataset):
     def __init__(self, path):
         if isinstance(path, zarr.hierarchy.Group):
-            self.path = "-"
+            self.path = str(id(path))
             self.z = path
         else:
             self.path = path
@@ -222,7 +230,7 @@ class Zarr(Dataset):
         ]
 
     def zarrs(self):
-        return [self.z]
+        return {self.path: dict(**self.z.attrs)}
 
     def __repr__(self):
         return self.path
@@ -310,7 +318,10 @@ class Combined(Forwards):
             raise ValueError(f"Incompatible grid ({d1} {d2})")
 
     def zarrs(self):
-        return sum([d.zarrs() for d in self.datasets], [])
+        result = {}
+        for d in self.datasets:
+            result.update(d.zarrs())
+        return result
 
     def __repr__(self):
         lst = ", ".join(repr(d) for d in self.datasets)

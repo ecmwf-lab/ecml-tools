@@ -13,9 +13,11 @@ name = "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-only-z"
 z = open_dataset(
     "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-only-z",
     "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-without-z",
+    end="2021-01-01",
 )
+print(len(z))
 
-print(z)
+# print(z)
 
 z.save("new-zarr.zarr")
 exit(0)
