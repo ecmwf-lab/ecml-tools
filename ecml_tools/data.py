@@ -733,7 +733,6 @@ def _open(a):
         return Zarr(_name_to_path(a))
 
     if isinstance(a, PurePath):
-        print(a)
         return Zarr(a)
 
     if isinstance(a, dict):
