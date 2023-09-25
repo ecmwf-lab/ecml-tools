@@ -10,10 +10,18 @@ name = "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-only-z"
 # print(z.shape)
 # print(z.dates)
 
+# z = open_dataset(
+#     "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-only-z",
+#     "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-without-z",
+#     frequency=24,
+#     # end="2021-01-01",
+# )
+
 z = open_dataset(
-    "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-only-z",
-    "aifs-ea-an-oper-0001-mars-o96-2021-6h-v2-without-z",
-    end="2021-01-01",
+    "only-z",
+    "without-z",
+    frequency=24,
+    # end="2021-01-01",
 )
 print(len(z))
 

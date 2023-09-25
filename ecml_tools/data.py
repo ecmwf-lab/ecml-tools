@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import traceback
 from functools import cached_property
 
 import numpy as np
@@ -24,7 +25,7 @@ __all__ = ["open_dataset"]
 
 
 class Dataset:
-    metadata = {}
+    arguments = {}
 
     @cached_property
     def _len(self):
@@ -115,8 +116,17 @@ class Dataset:
     def save(self, path, chunks=None, buffer_size=10):
         z = zarr.convenience.open(path, "w")
 
-        print(json.dumps(self.metadata, indent=4))
-        print(json.dumps(self.zarrs(), indent=4))
+        z.attrs["version"] = "0.4"
+        z.attrs["versions"] = {
+            "ecml-tools": "0.1.0",  # TODO.....
+        }
+
+        # z.attrs["date"] = self.arguments
+        z.attrs["arguments"] = self.arguments
+        z.attrs["provenance"] = self.provenance()
+
+        # print(json.dumps(self.arguments, indent=4))
+        print(json.dumps(self.provenance(), indent=4))
 
         if chunks is None:
             chunks = (1,) + self.shape[1:]
@@ -144,8 +154,39 @@ class Dataset:
             j = min(i + buffer_size, self._len)
             z.data[i:j] = self[i:j]
 
-    def zarrs(self):
+    def provenance(self):
         return {}
+
+
+class _DebugStore(zarr.storage.BaseStore):
+    def __init__(self, store):
+        self.store = store
+        self.counters = {}
+
+    def __delitem__(self, key):
+        raise NotImplementedError()
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError()
+
+    def __len__(self):
+        return len(self.store)
+
+    def __getitem__(self, key):
+        if key not in self.counters:
+            self.counters[key] = 0
+        else:
+            # if key != "data/.zarray":
+                # print(f"Reading {key} for the {self.counters[key]}th time")
+                if self.counters[key] > 20:
+                    raise RuntimeError(f"Too many reads of {key}")
+
+        self.counters[key] += 1
+
+        return self.store[key]
+
+    def __iter__(self):
+        return self
 
 
 class Zarr(Dataset):
@@ -155,7 +196,15 @@ class Zarr(Dataset):
             self.z = path
         else:
             self.path = path
-            self.z = zarr.convenience.open(path, "r")
+            if False:
+                if path.startswith("/"):
+                    store = zarr.storage.DirectoryStore(path)
+                else:
+                    store = zarr.storage.FSStore(path)
+                store = _DebugStore(store)
+                self.z = zarr.convenience.open(store, "r")
+            else:
+                self.z = zarr.convenience.open(path, "r")
 
     def __len__(self):
         return self.z.data.shape[0]
@@ -228,7 +277,7 @@ class Zarr(Dataset):
             )
         ]
 
-    def zarrs(self):
+    def provenance(self):
         return {self.path: dict(**self.z.attrs)}
 
     def __repr__(self):
@@ -285,8 +334,8 @@ class Forwards(Dataset):
     def dtype(self):
         return self.forward.dtype
 
-    def zarrs(self):
-        return self.forward.zarrs()
+    def provenance(self):
+        return self.forward.provenance()
 
 
 class Combined(Forwards):
@@ -316,10 +365,10 @@ class Combined(Forwards):
         ).any():
             raise ValueError(f"Incompatible grid ({d1} {d2})")
 
-    def zarrs(self):
+    def provenance(self):
         result = {}
         for d in self.datasets:
-            result.update(d.zarrs())
+            result.update(d.provenance())
         return result
 
     def __repr__(self):
@@ -714,5 +763,5 @@ def _open_dataset(*args, **kwargs):
 
 def open_dataset(*args, **kwargs):
     ds = _open_dataset(*args, **kwargs)
-    ds.metadata = {"args": args, "kwargs": kwargs}
+    ds.arguments = {"args": args, "kwargs": kwargs}
     return ds
