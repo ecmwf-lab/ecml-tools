@@ -11,7 +11,6 @@ import json
 import logging
 import os
 import re
-import traceback
 from functools import cached_property
 
 import numpy as np
@@ -177,9 +176,9 @@ class _DebugStore(zarr.storage.BaseStore):
             self.counters[key] = 0
         else:
             # if key != "data/.zarray":
-                # print(f"Reading {key} for the {self.counters[key]}th time")
-                if self.counters[key] > 20:
-                    raise RuntimeError(f"Too many reads of {key}")
+            # print(f"Reading {key} for the {self.counters[key]}th time")
+            if self.counters[key] > 20:
+                raise RuntimeError(f"Too many reads of {key}")
 
         self.counters[key] += 1
 
@@ -206,19 +205,22 @@ class Zarr(Dataset):
             else:
                 self.z = zarr.convenience.open(path, "r")
 
+            # This seems to speed up the reading of the data
+            self.data = self.z.data
+
     def __len__(self):
-        return self.z.data.shape[0]
+        return self.data.shape[0]
 
     def __getitem__(self, n):
-        return self.z.data[n]
+        return self.data[n]
 
-    @property
+    @cached_property
     def shape(self):
-        return self.z.data.shape
+        return self.data.shape
 
-    @property
+    @cached_property
     def dtype(self):
-        return self.z.data.dtype
+        return self.data.dtype
 
     @cached_property
     def dates(self):
