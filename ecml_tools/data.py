@@ -195,7 +195,7 @@ class Zarr(Dataset):
             self.path = str(id(path))
             self.z = path
         else:
-            self.path = path
+            self.path = str(path)
             if False:
                 if path.startswith("/"):
                     store = zarr.storage.DirectoryStore(path)
@@ -735,7 +735,6 @@ def _open(a):
         return Zarr(_name_to_path(a))
 
     if isinstance(a, PurePath):
-        print(a)
         return Zarr(a)
 
     if isinstance(a, dict):
