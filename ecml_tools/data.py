@@ -9,7 +9,6 @@ import calendar
 import datetime
 import json
 import logging
-import os
 import re
 import traceback
 from functools import cached_property
@@ -18,6 +17,8 @@ import numpy as np
 import tqdm
 import yaml
 import zarr
+
+from pathlib import PurePath, Path
 
 LOG = logging.getLogger(__name__)
 
@@ -177,9 +178,9 @@ class _DebugStore(zarr.storage.BaseStore):
             self.counters[key] = 0
         else:
             # if key != "data/.zarray":
-                # print(f"Reading {key} for the {self.counters[key]}th time")
-                if self.counters[key] > 20:
-                    raise RuntimeError(f"Too many reads of {key}")
+            # print(f"Reading {key} for the {self.counters[key]}th time")
+            if self.counters[key] > 20:
+                raise RuntimeError(f"Too many reads of {key}")
 
         self.counters[key] += 1
 
@@ -606,12 +607,12 @@ class Rename(Forwards):
 
 def _name_to_path(name):
     if name.endswith(".zarr"):
-        return name
+        return Path(name)
 
-    with open(os.path.expanduser("~/.ecml-tools")) as f:
+    with open(Path("~/.ecml-tools").expanduser()) as f:
         config = yaml.safe_load(f)
 
-    return os.path.join(config["zarr_root"], name + ".zarr")
+    return Path(config["zarr_root"], name + ".zarr")
 
 
 def _frequency_to_hours(frequency):
@@ -730,6 +731,10 @@ def _open(a):
 
     if isinstance(a, str):
         return Zarr(_name_to_path(a))
+
+    if isinstance(a, PurePath):
+        print(a)
+        return Zarr(a)
 
     if isinstance(a, dict):
         return _open_dataset(**a)
