@@ -196,12 +196,12 @@ class Zarr(Dataset):
         else:
             self.path = str(path)
             if DEBUG:
-                if path.startswith("/"):
-                    store = zarr.storage.DirectoryStore(path)
+                if self.path.startswith("/"):
+                    store = zarr.storage.DirectoryStore(self.path)
                 else:
-                    store = zarr.storage.FSStore(path)
+                    store = zarr.storage.FSStore(self.path)
                 store = _DebugStore(store)
-                path = zarr.convenience.open(store, "r")
+                self.path = zarr.convenience.open(store, "r")
 
             self.z = zarr.convenience.open(path, "r")
 
