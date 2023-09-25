@@ -9,17 +9,18 @@ import calendar
 import datetime
 import json
 import logging
+import os
 import re
 from functools import cached_property
+from pathlib import Path, PurePath
 
 import numpy as np
 import tqdm
 import yaml
 import zarr
 
-from pathlib import PurePath, Path
-
 LOG = logging.getLogger(__name__)
+DEBUG = int(os.environ.get("ECML_TOOLS_DEBUG", 1))
 
 __all__ = ["open_dataset"]
 
@@ -176,8 +177,6 @@ class _DebugStore(zarr.storage.BaseStore):
         if key not in self.counters:
             self.counters[key] = 0
         else:
-            # if key != "data/.zarray":
-            # print(f"Reading {key} for the {self.counters[key]}th time")
             if self.counters[key] > 20:
                 raise RuntimeError(f"Too many reads of {key}")
 
@@ -196,15 +195,15 @@ class Zarr(Dataset):
             self.z = path
         else:
             self.path = str(path)
-            if False:
+            if DEBUG:
                 if path.startswith("/"):
                     store = zarr.storage.DirectoryStore(path)
                 else:
                     store = zarr.storage.FSStore(path)
                 store = _DebugStore(store)
-                self.z = zarr.convenience.open(store, "r")
-            else:
-                self.z = zarr.convenience.open(path, "r")
+                path = zarr.convenience.open(store, "r")
+
+            self.z = zarr.convenience.open(path, "r")
 
             # This seems to speed up the reading of the data
             self.data = self.z.data
