@@ -148,7 +148,6 @@ class Dataset:
 
         z.attrs["resolution"] = self.resolution
         z.attrs["frequency"] = self.frequency
-        z.attrs["name_to_index"] = self.name_to_index
         z.attrs["variables"] = self.variables
 
         for i in tqdm.tqdm(range(0, self._len, buffer_size)):
@@ -267,6 +266,8 @@ class Zarr(Dataset):
 
     @property
     def name_to_index(self):
+        if "variables" in self.z.attrs:
+            return {n: i for i, n in enumerate(self.z.attrs["variables"])}
         return self.z.attrs["name_to_index"]
 
     @property
