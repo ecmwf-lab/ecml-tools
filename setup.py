@@ -41,13 +41,18 @@ setuptools.setup(
     url="https://github.com/ecmwf-lab/ecml-tools",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    install_requires=[
-        "zarr",
-        "pyyaml",
-        "numpy",
-        "tqdm",
-    ],
-    extras_require={},
+    install_requires=[],
+    extras_require={
+        "data": [
+            "zarr",
+            "pyyaml",
+            "numpy",
+            "tqdm",
+        ],
+        "provenance": [
+            "git",
+        ],
+    },
     zip_safe=True,
     keywords="tool",
     entry_points={},

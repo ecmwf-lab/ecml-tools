@@ -101,7 +101,7 @@ def zarr_from_str(name, mode):
 
 
 zarr.convenience.open = zarr_from_str
-ecml_tools.data._name_to_path = lambda name: name
+ecml_tools.data._name_to_path = lambda name, zarr_root: name
 
 
 def same_stats(ds1, ds2, vars1, vars2=None):

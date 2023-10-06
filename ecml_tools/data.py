@@ -20,7 +20,7 @@ import yaml
 import zarr
 
 LOG = logging.getLogger(__name__)
-DEBUG = int(os.environ.get("ECML_TOOLS_DEBUG", 1))
+DEBUG = int(os.environ.get("ECML_TOOLS_DEBUG", 0))
 
 __all__ = ["open_dataset"]
 
@@ -607,14 +607,15 @@ class Rename(Forwards):
         return {k: i for i, k in enumerate(self.variables)}
 
 
-def _name_to_path(name):
+def _name_to_path(name, zarr_root):
     if name.endswith(".zarr"):
         return Path(name)
 
-    with open(Path("~/.ecml-tools").expanduser()) as f:
-        config = yaml.safe_load(f)
+    if zarr_root is None:
+        with open(Path("~/.ecml-tools").expanduser()) as f:
+            zarr_root = yaml.safe_load(f)["zarr_root"]
 
-    return Path(config["zarr_root"], name + ".zarr")
+    return Path(zarr_root, name + ".zarr")
 
 
 def _frequency_to_hours(frequency):
@@ -724,7 +725,7 @@ def _concat_or_join(datasets):
     return Concat(datasets)
 
 
-def _open(a):
+def _open(a, zarr_root):
     if isinstance(a, Dataset):
         return a
 
@@ -732,24 +733,24 @@ def _open(a):
         return Zarr(a)
 
     if isinstance(a, str):
-        return Zarr(_name_to_path(a))
+        return Zarr(_name_to_path(a, zarr_root))
 
     if isinstance(a, PurePath):
         return Zarr(a)
 
     if isinstance(a, dict):
-        return _open_dataset(**a)
+        return _open_dataset(zarr_root=zarr_root, **a)
 
     if isinstance(a, (list, tuple)):
-        return _open_dataset(*a)
+        return _open_dataset(*a, zarr_root=zarr_root)
 
     raise NotImplementedError()
 
 
-def _open_dataset(*args, **kwargs):
+def _open_dataset(*args, zarr_root, **kwargs):
     sets = []
     for a in args:
-        sets.append(_open(a))
+        sets.append(_open(a, zarr_root))
 
     for name in ("datasets", "dataset"):
         if name in kwargs:
@@ -757,7 +758,7 @@ def _open_dataset(*args, **kwargs):
             if not isinstance(datasets, (list, tuple)):
                 datasets = [datasets]
             for a in datasets:
-                sets.append(_open(a))
+                sets.append(_open(a, zarr_root))
 
     assert len(sets) > 0, (args, kwargs)
 
@@ -767,7 +768,7 @@ def _open_dataset(*args, **kwargs):
     return sets[0]._subset(**kwargs)
 
 
-def open_dataset(*args, **kwargs):
-    ds = _open_dataset(*args, **kwargs)
+def open_dataset(*args, zarr_root=None, **kwargs):
+    ds = _open_dataset(*args, zarr_root=zarr_root, **kwargs)
     ds.arguments = {"args": args, "kwargs": kwargs}
     return ds
