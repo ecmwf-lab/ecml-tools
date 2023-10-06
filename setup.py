@@ -50,14 +50,14 @@ setuptools.setup(
             "tqdm",
         ],
         "provenance": [
-            "git",
+            "GitPython",
         ],
         "all": [
             "zarr",
             "pyyaml",
             "numpy",
             "tqdm",
-            "git",
+            "GitPython",
         ],
     },
     zip_safe=True,
