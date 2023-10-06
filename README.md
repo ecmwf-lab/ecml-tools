@@ -2,6 +2,30 @@
 
 A package to hold various functions to support training of ML models on ECMWF data.
 
+## Installation
+
+This package will be a collection of tools, with their own dependencies. In order to not
+install unnecessary dependencies, the package is split in parts.
+
+For handling datasets, you will need to install the `data` extra:
+
+
+```bash
+pip install ecml-tools[data]
+```
+
+For provenance tracking, you will need to install the `provenance` extra:
+
+```bash
+pip install ecml-tools[provenance]
+```
+
+To install everything:
+
+```bash
+pip install ecml-tools[all]
+```
+
 # Datasets
 
 A `dataset` wraps a `zarr` file that follows the format used by ECMWF to train its machine learning models.

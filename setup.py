@@ -52,6 +52,13 @@ setuptools.setup(
         "provenance": [
             "git",
         ],
+        "all": [
+            "zarr",
+            "pyyaml",
+            "numpy",
+            "tqdm",
+            "git",
+        ],
     },
     zip_safe=True,
     keywords="tool",
