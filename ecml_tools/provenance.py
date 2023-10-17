@@ -8,6 +8,7 @@
 import datetime
 import json
 import os
+import subprocess
 import sys
 import sysconfig
 
@@ -143,7 +144,10 @@ def gpu_info():
     if not nvsmi.is_nvidia_smi_on_path():
         return "nvdia-smi not found"
 
-    return [json.loads(gpu.to_json()) for gpu in nvsmi.get_gpus()]
+    try:
+        return [json.loads(gpu.to_json()) for gpu in nvsmi.get_gpus()]
+    except subprocess.CalledProcessError as e:
+        return e.output.decode("utf-8").strip()
 
 
 def path_md5(path):
@@ -185,7 +189,7 @@ def assets_info(paths):
     return result
 
 
-def gather_provenance_info(assets):
+def gather_provenance_info(assets=[]):
     executable = sys.executable
 
     versions, git_versions = module_versions()

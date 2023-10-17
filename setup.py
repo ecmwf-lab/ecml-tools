@@ -29,6 +29,20 @@ for line in read("ecml_tools/__init__.py").split("\n"):
 assert version
 
 
+data_requires = [
+    "zarr",
+    "pyyaml",
+    "numpy",
+    "tqdm",
+]
+
+provenance_requires = [
+    "GitPython",
+    "nvsmi",
+]
+
+all_requires = data_requires + provenance_requires
+
 setuptools.setup(
     name="ecml-tools",
     version=version,
@@ -43,22 +57,9 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[],
     extras_require={
-        "data": [
-            "zarr",
-            "pyyaml",
-            "numpy",
-            "tqdm",
-        ],
-        "provenance": [
-            "GitPython",
-        ],
-        "all": [
-            "zarr",
-            "pyyaml",
-            "numpy",
-            "tqdm",
-            "GitPython",
-        ],
+        "data": data_requires,
+        "provenance": provenance_requires,
+        "all": all_requires,
     },
     zip_safe=True,
     keywords="tool",
