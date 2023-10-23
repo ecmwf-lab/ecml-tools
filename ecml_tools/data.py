@@ -114,6 +114,9 @@ class Dataset:
 
         return indices
 
+    def metedata(self):
+        return {}
+
     def save(self, path, chunks=None, buffer_size=10):
         z = zarr.convenience.open(path, "w")
 
