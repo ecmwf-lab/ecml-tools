@@ -114,6 +114,9 @@ class Dataset:
 
         return indices
 
+    def dates_interval_to_indices(self, start, end):
+        return self._dates_to_indices(start, end)
+
     def metedata(self):
         return {}
 
@@ -207,8 +210,10 @@ class Zarr(Dataset):
 
             self.z = zarr.convenience.open(path, "r")
 
-            # This seems to speed up the reading of the data
-            self.data = self.z.data
+    @cached_property
+    def data(self):
+        # This seems to speed up the reading of the data
+        return self.z.data
 
     def __len__(self):
         return self.data.shape[0]
@@ -640,6 +645,13 @@ def _frequency_to_hours(frequency):
 
 
 def _as_date(d, last):
+    if isinstance(d, datetime.datetime):
+        assert d.minutes == 0 and d.hours == 0 and d.seconds == 0, d
+        d = datetime.date(d.year, d.month, d.day)
+
+    if isinstance(d, datetime.date):
+        d = d.year * 10_000 + d.month * 100 + d.day
+
     try:
         d = int(d)
     except ValueError:
