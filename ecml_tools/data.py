@@ -114,7 +114,7 @@ class Dataset:
 
         return indices
 
-    def metedata(self):
+    def metadata(self):
         return {}
 
     def save(self, path, chunks=None, buffer_size=10):
@@ -288,6 +288,9 @@ class Zarr(Dataset):
 
     def __repr__(self):
         return self.path
+
+    def end_of_statistics_date(self):
+        return self.dates[-1]
 
 
 class Forwards(Dataset):
