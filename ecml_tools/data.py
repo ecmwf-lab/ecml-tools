@@ -12,7 +12,7 @@ import logging
 import os
 import re
 from functools import cached_property
-from pathlib import Path, PurePath
+from pathlib import PurePath
 
 import numpy as np
 import tqdm
@@ -118,7 +118,7 @@ class Dataset:
         return self._dates_to_indices(start, end)
 
     def metadata(self):
-        return {}
+        raise NotImplementedError()
 
     def save(self, path, chunks=None, buffer_size=10):
         z = zarr.convenience.open(path, "w")
@@ -208,7 +208,7 @@ class Zarr(Dataset):
                 store = _DebugStore(store)
                 self.path = zarr.convenience.open(store, "r")
 
-            self.z = zarr.convenience.open(path, "r")
+            self.z = zarr.convenience.open(self.path, "r")
 
     @cached_property
     def data(self):
@@ -288,8 +288,20 @@ class Zarr(Dataset):
             )
         ]
 
-    def provenance(self):
-        return {self.path: dict(**self.z.attrs)}
+    def metadata(self):
+        result = {
+            k: self.z.attrs[k]
+            for k in (
+                "uuid",
+                "version",
+                "description",
+                "data_request",
+                "order_by",
+                "remapping",
+                "resolution",
+                "variables",
+            )
+        }
 
     def __repr__(self):
         return self.path
@@ -348,8 +360,8 @@ class Forwards(Dataset):
     def dtype(self):
         return self.forward.dtype
 
-    def provenance(self):
-        return self.forward.provenance()
+    def metadata(self):
+        return self.forward.metadata()
 
 
 class Combined(Forwards):
@@ -620,13 +632,13 @@ class Rename(Forwards):
 
 def _name_to_path(name, zarr_root):
     if name.endswith(".zarr"):
-        return Path(name)
+        return name
 
     if zarr_root is None:
-        with open(Path("~/.ecml-tools").expanduser()) as f:
+        with open(os.path.expanduser("~/.ecml-tools")) as f:
             zarr_root = yaml.safe_load(f)["zarr_root"]
 
-    return Path(zarr_root, name + ".zarr")
+    return os.path.join(zarr_root, name + ".zarr")
 
 
 def _frequency_to_hours(frequency):
@@ -754,7 +766,7 @@ def _open(a, zarr_root):
         return Zarr(_name_to_path(a, zarr_root))
 
     if isinstance(a, PurePath):
-        return Zarr(a)
+        return Zarr(str(a))
 
     if isinstance(a, dict):
         return _open_dataset(zarr_root=zarr_root, **a)
