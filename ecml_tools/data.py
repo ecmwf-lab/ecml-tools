@@ -289,19 +289,11 @@ class Zarr(Dataset):
         ]
 
     def metadata(self):
-        result = {
-            k: self.z.attrs[k]
-            for k in (
-                "uuid",
-                "version",
-                "description",
-                "data_request",
-                "order_by",
-                "remapping",
-                "resolution",
-                "variables",
-            )
-        }
+        result = {}
+        for k, v in self.z.attrs.items():
+            if not k.startswith("_"):
+                result[k] = v
+        return result
 
     def __repr__(self):
         return self.path
