@@ -18,6 +18,7 @@ from ecml_tools.data import (
     Rename,
     Select,
     Subset,
+    Ensemble,
     _as_first_date,
     _as_last_date,
     _frequency_to_hours,
@@ -28,11 +29,15 @@ VALUES = 10
 
 
 @cache
-def _(date, var, k=0):
+def _(date, var, k=0, e=0):
     d = date.year * 10000 + date.month * 100 + date.day
     v = ord(var) - ord("a") + 1
     assert 0 <= k <= 9
-    return np.array([d * 100 + v + k / 10.0 + w / 100.0 for w in range(VALUES)])
+    assert 0 <= e <= 9
+
+    return np.array(
+        [d * 100 + v + k / 10.0 + w / 100.0 + e / 1000.0 for w in range(VALUES)]
+    )
 
 
 def create_zarr(
@@ -42,6 +47,7 @@ def create_zarr(
     frequency=6,
     resolution="o96",
     k=0,
+    ensemble=None,
 ):
     root = zarr.group()
 
@@ -53,10 +59,17 @@ def create_zarr(
 
     dates = np.array(dates, dtype="datetime64")
 
-    data = np.zeros((len(dates), len(vars), VALUES))
-    for i, date in enumerate(dates):
-        for j, var in enumerate(vars):
-            data[i, j] = _(date.astype(object), var, k)
+    if ensemble is not None:
+        data = np.zeros((len(dates), len(vars), ensemble, VALUES))
+        for i, date in enumerate(dates):
+            for j, var in enumerate(vars):
+                for e in range(ensemble):
+                    data[i, j, e] = _(date.astype(object), var, k, e)
+    else:
+        data = np.zeros((len(dates), len(vars), VALUES))
+        for i, date in enumerate(dates):
+            for j, var in enumerate(vars):
+                data[i, j] = _(date.astype(object), var, k)
 
     root.data = data
     root.dates = dates
@@ -85,6 +98,7 @@ def zarr_from_str(name, mode):
         resolution="o96",
         vars="abcd",
         k=0,
+        ensemble=None,
     )
 
     for name, bit in zip(args, name.split("-")):
@@ -97,6 +111,7 @@ def zarr_from_str(name, mode):
         resolution=args["resolution"],
         vars=[x for x in args["vars"]],
         k=int(args["k"]),
+        ensemble=int(args["ensemble"]) if args["ensemble"] is not None else None,
     )
 
 
@@ -1012,5 +1027,86 @@ def test_slice_9():
             slices(ds, i, i + s, 13)
 
 
+def test_ensemble_1():
+    ds = open_dataset(
+        ensemble=[
+            "test-2021-2021-6h-o96-abcd-1-10",
+            "test-2021-2021-6h-o96-abcd-2-1",
+        ]
+    )
+
+    assert isinstance(ds, Ensemble)
+    assert len(ds) == 365 * 1 * 4
+    assert len([row for row in ds]) == len(ds)
+
+    dates = []
+    date = datetime.datetime(2021, 1, 1)
+
+    for row in ds:
+        expect = [
+            [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)],
+            [_(date, "b", 1, i) for i in range(10)] + [_(date, "b", 2, 0)],
+            [_(date, "c", 1, i) for i in range(10)] + [_(date, "c", 2, 0)],
+            [_(date, "d", 1, i) for i in range(10)] + [_(date, "d", 2, 0)],
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 4, 4, 11, VALUES)
+    # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
+
+
+def test_ensemble_2():
+    ds = open_dataset(
+        ensemble=[
+            "test-2021-2021-6h-o96-abcd-1-10",
+            "test-2021-2021-6h-o96-abcd-2-1",
+            "test-2021-2021-6h-o96-abcd-3-5",
+        ]
+    )
+
+    assert isinstance(ds, Ensemble)
+    assert len(ds) == 365 * 1 * 4
+    assert len([row for row in ds]) == len(ds)
+
+    dates = []
+    date = datetime.datetime(2021, 1, 1)
+
+    for row in ds:
+        expect = [
+            [_(date, "a", 1, i) for i in range(10)]
+            + [_(date, "a", 2, 0)]
+            + [_(date, "a", 3, i) for i in range(5)],
+            [_(date, "b", 1, i) for i in range(10)]
+            + [_(date, "b", 2, 0)]
+            + [_(date, "b", 3, i) for i in range(5)],
+            [_(date, "c", 1, i) for i in range(10)]
+            + [_(date, "c", 2, 0)]
+            + [_(date, "c", 3, i) for i in range(5)],
+            [_(date, "d", 1, i) for i in range(10)]
+            + [_(date, "d", 2, 0)]
+            + [_(date, "d", 3, i) for i in range(5)],
+        ]
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 4, 4, 16, VALUES)
+    # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
+
+
 if __name__ == "__main__":
-    test_slice_9()
+    test_ensemble_1()

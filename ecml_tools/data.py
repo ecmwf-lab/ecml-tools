@@ -452,6 +452,64 @@ class Concat(Combined):
         return (len(self),) + self.datasets[0].shape[1:]
 
 
+class Ensemble(Combined):
+    def __init__(self, datasets, axis):
+        self.axis = axis
+        super().__init__(datasets)
+
+        assert axis > 0 and axis < len(self.datasets[0].shape) - 1, (
+            axis,
+            self.datasets[0].shape,
+        )
+
+    def check_compatibility(self, d1, d2):
+        super().check_compatibility(d1, d2)
+
+        s1 = d1.shape[: self.axis] + (None,) + d1.shape[self.axis + 1 :]
+        s2 = d2.shape[: self.axis] + (None,) + d2.shape[self.axis + 1 :]
+        if s1 != s2:
+            raise ValueError(f"Incompatible shapes: {s1} and {s2} ({d1} {d2})")
+
+        if d1._len != d2._len:
+            raise ValueError(f"Incompatible lengths: {d1._len} and {d2._len}")
+
+        if d1.variables != d2.variables:
+            raise ValueError(
+                f"Incompatible variables: {d1.variables} and {d2.variables} ({d1} {d2})"
+            )
+
+        # Frequency and resolution are checked in the super class
+        if d1.dates[0] != d2.dates[0]:
+            raise ValueError(
+                f"Incompatible start dates: {d1.dates[0]} and {d2.dates[0]} ({d1} {d2})"
+            )
+
+        if d1.dates[-1] != d2.dates[-1]:
+            raise ValueError(
+                f"Incompatible end dates: {d1.dates[-1]} and {d2.dates[-1]} ({d1} {d2})"
+            )
+
+
+    def metadata(self):
+        raise NotImplementedError()
+
+
+    @cached_property
+    def shape(self):
+        shapes = [d.shape for d in self.datasets]
+        before = shapes[0][: self.axis]
+        after = shapes[0][self.axis + 1 :]
+        return before + (sum(s[self.axis] for s in shapes),) + after
+
+    def _get_slice(self, s):
+        return np.stack([self[i] for i in range(*s.indices(self._len))])
+
+    def __getitem__(self, n):
+        if isinstance(n, slice):
+            return self._get_slice(n)
+        return np.concatenate([d[n] for d in self.datasets], axis=self.axis-1)
+
+
 class Join(Combined):
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)
@@ -773,6 +831,15 @@ def _open_dataset(*args, zarr_root, **kwargs):
     sets = []
     for a in args:
         sets.append(_open(a, zarr_root))
+
+    if "ensemble" in kwargs:
+        ensemble = kwargs.pop("ensemble")
+        axis = kwargs.pop("axis", 2)
+        assert len(args) == 0
+        assert isinstance(ensemble, (list, tuple))
+        return Ensemble([_open(e, zarr_root) for e in ensemble], axis=axis)._subset(
+            **kwargs
+        )
 
     for name in ("datasets", "dataset"):
         if name in kwargs:
