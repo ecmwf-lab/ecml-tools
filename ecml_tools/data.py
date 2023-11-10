@@ -489,10 +489,8 @@ class Ensemble(Combined):
                 f"Incompatible end dates: {d1.dates[-1]} and {d2.dates[-1]} ({d1} {d2})"
             )
 
-
     def metadata(self):
         raise NotImplementedError()
-
 
     @cached_property
     def shape(self):
@@ -507,7 +505,7 @@ class Ensemble(Combined):
     def __getitem__(self, n):
         if isinstance(n, slice):
             return self._get_slice(n)
-        return np.concatenate([d[n] for d in self.datasets], axis=self.axis-1)
+        return np.concatenate([d[n] for d in self.datasets], axis=self.axis - 1)
 
 
 class Join(Combined):

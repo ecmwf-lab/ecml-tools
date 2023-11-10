@@ -14,11 +14,11 @@ import zarr
 import ecml_tools.data
 from ecml_tools.data import (
     Concat,
+    Ensemble,
     Join,
     Rename,
     Select,
     Subset,
-    Ensemble,
     _as_first_date,
     _as_last_date,
     _frequency_to_hours,
