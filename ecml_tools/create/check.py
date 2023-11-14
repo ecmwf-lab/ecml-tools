@@ -8,6 +8,11 @@
 #
 
 import os
+import numpy as np
+import logging
+
+LOG = logging.getLogger(__name__)
+
 
 def compute_directory_size(path):
     if not os.path.isdir(path):
@@ -23,8 +28,6 @@ def compute_directory_size(path):
             n += 1
     return size, n
 
-
-LOG = logging.getLogger(__name__)
 
 class DatasetName:
     def __init__(
@@ -189,5 +192,3 @@ def check_stats(minimum, maximum, mean, msg, **kwargs):
         raise ValueError(
             f"Mean is not in min/max interval{msg} : we should have {minimum} <= {mean} <= {maximum}"
         )
-
-

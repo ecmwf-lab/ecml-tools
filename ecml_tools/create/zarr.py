@@ -8,6 +8,9 @@
 #
 import numpy as np
 import datetime
+import logging
+
+LOG = logging.getLogger(__name__)
 
 def add_zarr_dataset(
     *,

@@ -21,8 +21,10 @@ from functools import cached_property
 import numpy as np
 
 from climetlab.core.order import build_remapping, normalize_order_by
-from climetlab.utils import load_json_or_yaml
 from climetlab.utils.humanize import seconds
+from ..utils import load_json_or_yaml
+from ..utils import make_list_int, to_datetime_list, to_datetime
+from .normalise import normalize_config
 
 LOG = logging.getLogger(__name__)
 
@@ -57,6 +59,14 @@ class Config(DictObj):
             config = load_json_or_yaml(config)
         super().__init__(config)
 
+
+class LoadersConfig(Config):
+    def __init__(self, config, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
+        normalize_config(self)
+
+    def input_handler(self, partial=False):
+        return InputHandler(self.loop, self.input, output=self.output, partial=partial)
 
 class Inputs(list):
     _do_load = None
@@ -119,52 +129,6 @@ class Inputs(list):
         return "\n".join(str(i) for i in self)
 
 
-class DatetimeGetter:
-    def __init__(self, kwargs) -> None:
-        self.kwargs = kwargs
-
-    @property
-    def values(self):
-        raise NotImplementedError(type(self))
-
-
-class MarsDatetimeGetter(DatetimeGetter):
-    def __init__(self, kwargs) -> None:
-        super().__init__(kwargs)
-
-        date = self.kwargs.get("date", [])
-        hdate = self.kwargs.get("hdate", [])
-        time = self.kwargs.get("time", [0])
-        step = self.kwargs.get("step", [0])
-
-        from climetlab.utils.dates import to_datetime_list
-
-        date = to_datetime_list(date)
-        hdate = to_datetime_list(hdate)
-        time = make_list_int(time)
-        step = make_list_int(step)
-
-    pass
-
-
-class StandardMarsDatetimeGetter(MarsDatetimeGetter):
-    pass
-
-
-class HindcastMarsDatetimeGetter(DatetimeGetter):
-    pass
-
-
-class Era5AccumulationDatetimeGetter(DatetimeGetter):
-    pass
-
-
-class ConstantDatetimeGetter(DatetimeGetter):
-    @property
-    def values(self):
-        return None
-
-
 class Input:
     _inheritance_done = False
     _inheritance_others = None
@@ -173,24 +137,23 @@ class Input:
     def __init__(self, dic):
         assert isinstance(dic, dict), dic
         assert len(dic) == 1, dic
+        name = list(dic.keys())[0]
+        config = dic[name]
 
-        self.name = list(dic.keys())[0]
-        self.config = dic[self.name]
+        self.name = name
+        self.kwargs = config.get("kwargs", {})
+        self.inherit = config.get("inherit", None)
+        self.function = config.get("function", None)
 
-        if self.name == "forcing" or self.name == "constants":
-            if "source_or_dataset" in self.config:
-                # add $ to source_or_dataset for constants source.
-                # climetlab will be refactored to remove this.
-                assert self.config["source_or_dataset"][0] != "$", self.config[
-                    "source_or_dataset"
-                ]
-                self.config["source_or_dataset"] = (
-                    "$" + self.config["source_or_dataset"]
-                )
+        assert self.inherit is None or isinstance(self.inherit, str), self.inherit
 
-        self.kwargs = self.config.get("kwargs", {})
-        self.inherit = self.config.get("inherit", [])
-        self.function = self.config.get("function", None)
+        if self.kwargs['name'] in ["forcing", "constants"]:
+            # add $ to source_or_dataset for constants source.
+            # TODO: refactor to remove this.
+            v = self.kwargs.get("source_or_dataset")
+            if isinstance(v, str) and not v.startswith("$"):
+                self.kwargs["source_or_dataset"] = "$" + v
+
 
     def get_datetimes(self):
         name = self.kwargs.get("name", None)
@@ -214,8 +177,6 @@ class Input:
             hdate = self.kwargs.get("hdate", [])
             time = self.kwargs.get("time", [0])
             step = self.kwargs.get("step", [0])
-
-            from climetlab.utils.dates import to_datetime_list
 
             date = to_datetime_list(date)
             hdate = to_datetime_list(hdate)
@@ -263,6 +224,10 @@ class Input:
                 None: load_source,
                 "load_source": load_source,
                 "load_dataset": load_dataset,
+                "climetlab.load_source": load_source,
+                "climetlab.load_dataset": load_dataset,
+                "cml.load_source": load_source,
+                "cml.load_dataset": load_dataset,
             }[self.function]
 
             kwargs = dict(**self.kwargs)
@@ -288,7 +253,7 @@ class Input:
             name = o.name
             if name.startswith("$"):
                 name = name[1:]
-            if name not in self.inherit:
+            if name != self.inherit:
                 continue
             if not o._inheritance_done:
                 o.process_inheritance(others)
@@ -300,15 +265,6 @@ class Input:
 
         self._inheritance_others = others
         self._inheritance_done = True
-
-    def __repr__(self) -> str:
-        def repr(v):
-            if isinstance(v, list):
-                return f"{'/'.join(str(x) for x in v)}"
-            return str(v)
-
-        details = ", ".join(f"{k}={repr(v)}" for k, v in self.kwargs.items())
-        return f"Input({self.name}, {details})<{self.inherit}"
 
     def substitute(self, *args, **kwargs):
         new_kwargs = substitute(self.kwargs.copy(), *args, **kwargs)
@@ -325,32 +281,19 @@ class Input:
         #    i.process_inheritance(self._inheritance_others)
         return i
 
+    def __repr__(self) -> str:
+        def repr(v):
+            if isinstance(v, list):
+                return f"{'/'.join(str(x) for x in v)}"
+            return str(v)
 
-def make_list_int(value):
-    if isinstance(value, str):
-        if "/" not in value:
-            return [value]
-        bits = value.split("/")
-        if len(bits) == 3 and bits[1].lower() == "to":
-            value = list(range(int(bits[0]), int(bits[2]) + 1, 1))
+        details = ", ".join(f"{k}={repr(v)}" for k, v in self.kwargs.items())
+        return f"Input({self.name}, {details})<{self.inherit}"
 
-        elif len(bits) == 5 and bits[1].lower() == "to" and bits[3].lower() == "by":
-            value = list(range(int(bits[0]), int(bits[2]) + int(bits[4]), int(bits[4])))
-
-    if isinstance(value, list):
-        return value
-    if isinstance(value, tuple):
-        return value
-    if isinstance(value, int):
-        return [value]
-
-    raise ValueError(f"Cannot make list from {value}")
 
 
 def build_datetime(date, time, step):
     if isinstance(date, str):
-        from climetlab.utils.dates import to_datetime
-
         date = to_datetime(date)
 
     if isinstance(time, int):
@@ -847,132 +790,6 @@ class Info:
         )
 
 
-class Purpose:
-    def __init__(self, name):
-        self.name = name
-
-    def __str__(self):
-        return str(self.name)
-
-    def __call__(self, config):
-        pass
-
-    @classmethod
-    def dict_to_str(cls, x):
-        if isinstance(x, str):
-            return x
-        return list(x.keys())[0]
-
-
-class NonePurpose(Purpose):
-    def __call__(self, config):
-        config.output.flatten_grid = config.output.get("flatten_grid", False)
-        config.output.ensemble_dimension = config.output.get(
-            "ensemble_dimension", False
-        )
-
-
-class AifsPurpose(Purpose):
-    def __call__(self, config):
-        def check_dict_value_and_set(dic, key, value):
-            if key in dic:
-                if dic[key] != value:
-                    raise ValueError(
-                        f"Cannot use {key}={dic[key]} with {self} purpose. Must use {value}."
-                    )
-            dic[key] = value
-
-        def ensure_element_in_list(lst, elt, index):
-            if elt in lst:
-                assert lst[index] == elt
-                return lst
-
-            _lst = [self.dict_to_str(d) for d in lst]
-            if elt in _lst:
-                assert _lst[index] == elt
-                return lst
-
-            return lst[:index] + [elt] + lst[index:]
-
-        check_dict_value_and_set(config.output, "flatten_grid", True)
-        check_dict_value_and_set(config.output, "ensemble_dimension", 2)
-
-        assert isinstance(config.output.order_by, (list, tuple)), config.output.order_by
-        config.output.order_by = ensure_element_in_list(
-            config.output.order_by, "number", config.output.ensemble_dimension
-        )
-
-        order_by = config.output.order_by
-        assert len(order_by) == 3, order_by
-        assert self.dict_to_str(order_by[0]) == "valid_datetime", order_by
-        assert self.dict_to_str(order_by[2]) == "number", order_by
-
-
-PURPOSES = {None: NonePurpose, "aifs": AifsPurpose}
-
-
-class LoadersConfig(Config):
-    def __init__(self, config, *args, **kwargs):
-        super().__init__(config, *args, **kwargs)
-
-        if "description" not in self:
-            raise ValueError("Must provide a description in the config.")
-
-        purpose = PURPOSES[self.get("purpose")](self.get("purpose"))
-        purpose(self)
-
-        if not isinstance(self.input, (tuple, list)):
-            LOG.warning(f"{self.input=} is not a list")
-            self.input = [self.input]
-
-        if "loops" in self:
-            warnings.warn("Should use loop instead of loops in config")
-            assert "loop" not in self
-            self.loop = self.pop("loops")
-
-        if not isinstance(self.loop, list):
-            assert isinstance(self.loop, dict), self.loop
-            self.loop = [dict(loop_a=self.loop)]
-
-        if "order" in self.output:
-            raise ValueError(f"Do not use 'order'. Use order_by in {config}")
-        if "order_by" in self.output:
-            self.output.order_by = normalize_order_by(self.output.order_by)
-
-        self.output.remapping = self.output.get("remapping", {})
-        self.output.remapping = build_remapping(
-            self.output.remapping, patches={"number": {None: 0}}
-        )
-
-        self.output.chunking = self.output.get("chunking", {})
-        self.output.dtype = self.output.get("dtype", "float32")
-
-        self.reading_chunks = self.get("reading_chunks")
-        assert "flatten_values" not in self.output
-        assert "flatten_grid" in self.output
-
-        # The axis along which we append new data
-        # TODO: assume grid points can be 2d as well
-        self.output.append_axis = 0
-
-        assert "statistics" in self.output
-        statistics_axis_name = self.output.statistics
-        statistics_axis = -1
-        for i, k in enumerate(self.output.order_by):
-            if k == statistics_axis_name:
-                statistics_axis = i
-
-        assert (
-            statistics_axis >= 0
-        ), f"{self.output.statistics} not in {list(self.output.order_by.keys())}"
-
-        self.statistics_names = self.output.order_by[statistics_axis_name]
-
-        # TODO: consider 2D grid points
-        self.statistics_axis = statistics_axis
-
-    def input_handler(self, partial=False):
-        return InputHandler(self.loop, self.input, output=self.output, partial=partial)
 
 
 def substitute(x, vars=None, ignore_missing=False):
@@ -1091,7 +908,6 @@ def hdates_from_date(date, start_year, end_year):
     start_year = int(start_year)
     end_year = int(end_year)
 
-    from climetlab.utils.dates import to_datetime
 
     if isinstance(date, (list, tuple)):
         if len(date) != 1:
@@ -1118,7 +934,6 @@ class Expand(list):
         self.parse_config()
 
     def parse_config(self):
-        from climetlab.utils.dates import to_datetime
 
         self.start = self._config.get("start")
         if self.start is not None:

@@ -21,11 +21,16 @@ from contextlib import contextmanager
 import numpy as np
 import tqdm
 
-from climetlab.core.order import build_remapping  # noqa:F401
 from climetlab.utils import progress_bar
 from .config import LoadersConfig
-from .utils import _prepare_serialisation, normalize_and_check_dates
-from climetlab.utils.humanize import bytes, seconds
+from .utils import (
+    _prepare_serialisation,
+    normalize_and_check_dates,
+    compute_directory_sizes,
+    bytes,
+)
+from climetlab.utils.humanize import seconds
+from .check import check_data_values
 
 
 LOG = logging.getLogger(__name__)
@@ -168,7 +173,7 @@ class OffsetView(ArrayLike):
 
 
 class CubesFilter:
-    def __init__(self, *, loader, parts, **kwargs):
+    def __init__(self, *, loader, parts):
         self.loader = loader
 
         if parts is None:
@@ -214,9 +219,12 @@ class CubesFilter:
 
 class Loader:
     def __init__(self, *, path, config, print=print, partial=False, **kwargs):
-        np.seterr(
-            all="raise"
-        )  # Catch all floating point errors, including overflow, sqrt(<0), etc
+        # Catch all floating point errors, including overflow, sqrt(<0), etc
+        np.seterr(all="raise")
+
+        # config is the path to the config file or a dict with the config
+        assert isinstance(config, dict) or isinstance(config, str), config
+        assert isinstance(path, str), path
 
         self.main_config = LoadersConfig(config)
         self.input_handler = self.main_config.input_handler(partial)
@@ -225,10 +233,12 @@ class Loader:
         self.print = print
 
     @classmethod
-    def from_config(cls, *, config, path, **kwargs):
-        # config is the path to the config file
-        # or a dict with the config
-        return cls(config=config, path=path, **kwargs)
+    def from_config(cls, *, config, path, print=print, **kwargs):
+        return cls(config=config, path=path, print=print, **kwargs)
+
+    @classmethod
+    def from_dataset(cls, *, path, print=print, **kwargs):
+        raise NotImplementedError()
 
     @classmethod
     def cache_context(cls, cache_dir):
@@ -264,7 +274,13 @@ class Loader:
 
     @classmethod
     def initialise_dataset(
-        cls, path, config, force=False, no_check_name=True, cache_dir=None
+        cls,
+        path,
+        config,
+        force=False,
+        no_check_name=True,
+        cache_dir=None,
+        print=print,
     ):
         # check path
         _, ext = os.path.splitext(path)
@@ -274,8 +290,22 @@ class Loader:
             raise Exception(f"{path} already exists. Use --force to overwrite.")
 
         with cls.cache_context(cache_dir):
-            loader = cls.from_config(partial=True, path=path, config=config)
+            loader = cls.from_config(
+                partial=True, path=path, config=config, print=print
+            )
             loader.initialise(check_name=not no_check_name)
+
+    @classmethod
+    def load_dataset(
+        cls,
+        path,
+        parts=None,
+        cache_dir=None,
+        print=print,
+    ):
+        with cls.cache_context(cache_dir):
+            loader = cls.from_dataset(path=path, print=print)
+            loader.load(parts=parts)
 
     def initialise(self, check_name=True):
         """Create empty dataset"""
@@ -424,13 +454,13 @@ class Loader:
     def _variables_names(self):
         return self.main_config.output.order_by[self.main_config.output.statistics]
 
-    def load(self, **kwargs):
+    def load(self, parts):
         import zarr
 
         self.z = zarr.open(self.path, mode="r+")
-        self.registry.add_to_history("loading_data_start", parts=kwargs.get("parts"))
+        self.registry.add_to_history("loading_data_start", parts=parts)
 
-        filter = CubesFilter(loader=self, **kwargs)
+        filter = CubesFilter(loader=self, parts=parts)
         ncubes = self.input_handler.n_cubes
         for icube, cubecreator in enumerate(self.input_handler.iter_cubes()):
             if not filter(icube):
@@ -465,7 +495,7 @@ class Loader:
 
             self.registry.set_flag(icube)
 
-        self.registry.add_to_history("loading_data_end", parts=kwargs.get("parts"))
+        self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
 
     def load_datacube(self, cube, array):
@@ -569,15 +599,14 @@ class ZarrLoader(Loader):
         return ZarrStatisticsRegistry(self.path)
 
     @classmethod
-    def from_dataset(cls, *, config, path, **kwargs):
+    def from_dataset(cls, *, path, print=print, **kwargs):
         import zarr
 
         assert os.path.exists(path), path
         z = zarr.open(path, mode="r")
         config = z.attrs["_create_yaml_config"]
-        # config = yaml.safe_load(z.attrs["_yaml_dump"])["_create_yaml_config"]
-        kwargs.get("print", print)("Config loaded from zarr: ", config)
-        return cls.from_config(config=config, path=path, **kwargs)
+        print("Config loaded from zarr: ", config)
+        return cls.from_config(config=config, path=path, print=print, **kwargs)
 
     def initialise_dataset_backend(self):
         import zarr
@@ -615,9 +644,19 @@ class ZarrLoader(Loader):
         except Exception as e:
             print(e)
 
-    def add_total_size(self, **kwargs):
-        size, n = compute_directory_size(self.path)
-        self.update_metadata(total_size=size, total_number_of_files=n)
+    @classmethod
+    def add_total_size(cls, path):
+        dic = compute_directory_sizes(path)
+        size = dic["total_size"]
+        n = dic["total_number_of_files"]
+
+        print(f"Total size: {bytes(size)}")
+        print(f"Total number of files: {n}")
+
+        try:
+            self.update_metadata(total_size=size, total_number_of_files=n)
+        except PermissionError as e:
+            print(f"Cannot update metadata ({e})")
 
     def add_statistics(self, no_write, **kwargs):
         do_write = not no_write
