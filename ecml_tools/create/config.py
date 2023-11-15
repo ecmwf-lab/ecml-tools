@@ -182,6 +182,41 @@ class AifsPurposeConfig(LoadersConfig):
 
         super().normalise()  # must be called last
 
+    def get_serialisable_dict(self):
+        return _prepare_serialisation(self)
+
+    def get_variables_names(self):
+        return self.output.order_by[self.output.statistics]
+
+def _prepare_serialisation(o):
+    if isinstance(o, dict):
+        dic = {}
+        for k, v in o.items():
+            v = _prepare_serialisation(v)
+            if k == "order_by":
+                # zarr attributes are saved with sort_keys=True
+                # and ordered dict are reordered.
+                # This is a problem for "order_by"
+                # We ensure here that the order_by key contains
+                # a list of dict
+                v = [{kk: vv} for kk, vv in v.items()]
+            dic[k] = v
+        return dic
+
+    if isinstance(o, (list, tuple)):
+        return [_prepare_serialisation(v) for v in o]
+
+    if o in (None, True, False):
+        return o
+
+    if isinstance(o, (str, int, float)):
+        return o
+
+    if isinstance(o, (datetime.date, datetime.datetime)):
+        return o.isoformat()
+
+    return str(o)
+
 
 CONFIGS = {
     None: UnknownPurposeConfig,

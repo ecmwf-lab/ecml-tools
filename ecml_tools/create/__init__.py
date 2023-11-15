@@ -23,10 +23,9 @@ import tqdm
 from climetlab.utils import progress_bar
 from climetlab.utils.humanize import seconds
 
-from .check import check_data_values
+from .writer import DataWriter
 from .config import loader_config
 from .utils import (
-    _prepare_serialisation,
     bytes,
     compute_directory_sizes,
     normalize_and_check_dates,
@@ -35,140 +34,6 @@ from .utils import (
 LOG = logging.getLogger(__name__)
 
 VERSION = "0.13"
-
-
-class ArrayLike:
-    def flush():
-        pass
-
-
-class DummyArrayLike(ArrayLike):
-    """"""
-
-    def __init__(self, array, shape):
-        self.array = array
-
-    def __getattribute__(self, __name: str):
-        return super().__getattribute__(__name)
-
-    def new_key(self, key, values_shape):
-        return key
-
-
-class FastWriter(ArrayLike):
-    """
-    A class that provides a caching mechanism for writing to a NumPy-like array.
-
-    The `FastWriter` instance is initialized with a NumPy-like array and its shape.
-    The array is used to store the final data, while the cache is used to temporarily
-    store the data before flushing it to the array. The cache is a NumPy array of the same
-    shape as the final array, initialized with zeros.
-
-    The `flush` method copies the contents of the cache to the final array.
-    """
-
-    def __init__(self, array, shape):
-        self.array = array
-        self.shape = shape
-        self.dtype = array.dtype
-        self.cache = np.zeros(shape, dtype=self.dtype)
-
-    def __setitem__(self, key, value):
-        self.cache[key] = value
-
-    def __getitem__(self, key):
-        return self.cache[key]
-
-    def new_key(self, key, values_shape):
-        return self.array.new_key(key, values_shape)
-
-    def flush(self):
-        self.array[:] = self.cache[:]
-
-    def compute_statistics(self, statistics_registry, names):
-        nvars = self.shape[1]
-
-        stats_shape = (self.shape[0], nvars)
-
-        count = np.zeros(stats_shape, dtype=np.int64)
-        sums = np.zeros(stats_shape, dtype=np.float64)
-        squares = np.zeros(stats_shape, dtype=np.float64)
-
-        minimum = np.zeros(stats_shape, dtype=np.float64)
-        maximum = np.zeros(stats_shape, dtype=np.float64)
-
-        for i, chunk in enumerate(self.cache):
-            values = chunk.reshape((nvars, -1))
-            minimum[i] = np.min(values, axis=1)
-            maximum[i] = np.max(values, axis=1)
-            sums[i] = np.sum(values, axis=1)
-            squares[i] = np.sum(values * values, axis=1)
-            count[i] = values.shape[1]
-
-        stats = {
-            "minimum": minimum,
-            "maximum": maximum,
-            "sums": sums,
-            "squares": squares,
-            "count": count,
-        }
-        new_key = self.array.new_key(slice(None, None), self.shape)
-        assert self.array.axis == 0, self.array.axis
-        # print("new_key", new_key, self.array.offset, self.array.axis)
-        new_key = new_key[0]
-        statistics_registry[new_key] = stats
-        return stats
-
-    def save_statistics(self, icube, statistics_registry, names):
-        now = time.time()
-        self.compute_statistics(statistics_registry, names)
-        LOG.info(f"Computed statistics in {seconds(time.time()-now)}.")
-        # for k, v in stats.items():
-        #     with open(f"stats_{icube}_{k}.npy", "wb") as f:
-        #         np.save(f, v)
-
-
-class OffsetView(ArrayLike):
-    """
-    A view on a portion of the large_array.
-    'axis' is the axis along which the offset applies.
-    'shape' is the shape of the view.
-    """
-
-    def __init__(self, large_array, *, offset, axis, shape):
-        self.large_array = large_array
-        self.dtype = large_array.dtype
-        self.offset = offset
-        self.axis = axis
-        self.shape = shape
-
-    def new_key(self, key, values_shape):
-        if isinstance(key, slice):
-            # Ensure that the slice covers the entire view along the axis.
-            print(self.shape)
-            assert key.start is None and key.stop is None, key
-
-            # Create a new key for indexing the large array.
-            new_key = tuple(
-                slice(self.offset, self.offset + values_shape[i])
-                if i == self.axis
-                else slice(None)
-                for i in range(len(self.shape))
-            )
-        else:
-            # For non-slice keys, adjust the key based on the offset and axis.
-            new_key = tuple(
-                k + self.offset if i == self.axis else k for i, k in enumerate(key)
-            )
-        return new_key
-
-    def __setitem__(self, key, values):
-        new_key = self.new_key(key, values.shape)
-
-        start = time.time()
-        LOG.info("Writing data to disk")
-        self.large_array[new_key] = values
-        LOG.info(f"Writing data done in {seconds(time.time()-start)}.")
 
 
 class CubesFilter:
@@ -361,7 +226,7 @@ class Loader:
 
         metadata.update(self.main_config.get("add_metadata", {}))
 
-        metadata["_create_yaml_config"] = _prepare_serialisation(self.main_config)
+        metadata["_create_yaml_config"] = self.main_config.get_serialisable_dict()
 
         metadata["description"] = self.main_config.description
         metadata["resolution"] = resolution
@@ -433,9 +298,6 @@ class Loader:
         for vars in self.input_handler.iter_loops():
             yield vars
 
-    @property
-    def _variables_names(self):
-        return self.main_config.output.order_by[self.main_config.output.statistics]
 
     def load(self, parts):
         import zarr
@@ -445,6 +307,7 @@ class Loader:
 
         filter = CubesFilter(loader=self, parts=parts)
         ncubes = self.input_handler.n_cubes
+        self.data_writer = DataWriter(self, self.z["data"], ncubes)
         for icube, cubecreator in enumerate(self.input_handler.iter_cubes()):
             if not filter(icube):
                 continue
@@ -454,82 +317,13 @@ class Loader:
             self.print(f" -> Processing i={icube} total={ncubes}")
 
             cube = cubecreator.to_cube()
-            shape = cube.extended_user_shape
-            chunks = cube.chunking(self.input_handler.main_config.output.chunking)
-            axis = self.input_handler.main_config.output.append_axis
 
-            slice = self.registry.get_slice_for(icube)
-
-            LOG.info(
-                f"Building ZARR '{self.path}' i={icube} total={ncubes} (total shape ={shape}) at {slice}, {chunks=}"
-            )
-            self.print(f"Building ZARR (total shape ={shape}) at {slice}, {chunks=}")
-
-            offset = slice.start
-            array = OffsetView(self.z["data"], offset=offset, axis=axis, shape=shape)
-            array = FastWriter(array, shape=shape)
-            self.load_datacube(cube, array)
-
-            array.save_statistics(
-                icube, self.statistics_registry, self._variables_names
-            )
-
-            array.flush()
-
-            self.registry.set_flag(icube)
+            self.data_writer.write_cube(cube, icube)
 
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
 
-    def load_datacube(self, cube, array):
-        start = time.time()
-        load = 0
-        save = 0
 
-        reading_chunks = None
-        total = cube.count(reading_chunks)
-        self.print(f"Loading datacube {cube}")
-        bar = progress_bar(
-            iterable=cube.iterate_cubelets(reading_chunks),
-            total=total,
-            desc=f"Loading datacube {cube}",
-        )
-        for i, cubelet in enumerate(bar):
-            now = time.time()
-            data = cubelet.to_numpy()
-            bar.set_description(
-                f"Loading {i}/{total} {str(cubelet)} ({data.shape}) {cube=}"
-            )
-            load += time.time() - now
-
-            j = cubelet.extended_icoords[1]
-            check_data_values(
-                data[:],
-                name=self._variables_names[j],
-                log=[i, j, data.shape, cubelet.extended_icoords],
-            )
-
-            now = time.time()
-            array[cubelet.extended_icoords] = data
-            save += time.time() - now
-
-        now = time.time()
-        save += time.time() - now
-
-        LOG.info("Written")
-        self.print_info()
-        LOG.info("Written.")
-
-        self.print(
-            f"Elapsed: {seconds(time.time() - start)},"
-            f" load time: {seconds(load)},"
-            f" write time: {seconds(save)}."
-        )
-        LOG.info(
-            f"Elapsed: {seconds(time.time() - start)},"
-            f" load time: {seconds(load)},"
-            f" write time: {seconds(save)}."
-        )
 
     def statistics_start_indice(self):
         return self._statistics_subset_indices[0]
@@ -563,8 +357,6 @@ class Loader:
 
 
 class ZarrLoader(Loader):
-    writer = None
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.z = None
@@ -616,17 +408,6 @@ class ZarrLoader(Loader):
         z = zarr.open(self.path, mode=mode)
         return add_zarr_dataset(zarr_root=z, **kwargs)
 
-    def print_info(self):
-        assert self.z is not None
-        try:
-            print(self.z["data"].info)
-        except Exception as e:
-            print(e)
-        print("...")
-        try:
-            print(self.z["data"].info)
-        except Exception as e:
-            print(e)
 
     @classmethod
     def add_total_size(cls, path):
