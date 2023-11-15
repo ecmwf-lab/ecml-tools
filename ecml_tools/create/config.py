@@ -7,23 +7,14 @@
 # nor does it submit to any jurisdiction.
 #
 import datetime
-import itertools
 import logging
-import math
 import os
-import re
-import time
 import warnings
-from collections import defaultdict
-from copy import deepcopy
-from functools import cached_property
 
-import numpy as np
 from climetlab.core.order import build_remapping, normalize_order_by
-from climetlab.utils.humanize import seconds
 
 from .input import InputHandler
-from .utils import load_json_or_yaml, make_list_int, to_datetime, to_datetime_list
+from .utils import load_json_or_yaml
 
 LOG = logging.getLogger(__name__)
 

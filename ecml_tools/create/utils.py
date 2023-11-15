@@ -7,11 +7,12 @@
 # nor does it submit to any jurisdiction.
 #
 
-import datetime
+import json
 import os
 
 import numpy as np
 import yaml
+from climetlab.utils import progress_bar
 
 
 def bytes(n):
@@ -61,11 +62,10 @@ def load_json_or_yaml(path):
 def compute_directory_sizes(path):
     if not os.path.isdir(path):
         return None
-    size = 0
-    n = 0
-    for dirpath, _, filenames in tqdm.tqdm(
-        os.walk(path), desc="Computing size", leave=False
-    ):
+
+    size, n = 0, 0
+    bar = progress_bar(iterable=os.walk(path), desc=f"Computing size of {path}")
+    for dirpath, _, filenames in bar:
         for filename in filenames:
             file_path = os.path.join(dirpath, filename)
             size += os.path.getsize(file_path)

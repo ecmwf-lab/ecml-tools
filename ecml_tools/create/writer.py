@@ -7,18 +7,11 @@
 # nor does it submit to any jurisdiction.
 #
 
-import datetime
 import logging
-import os
-import re
 import time
-import uuid
 import warnings
-from contextlib import contextmanager
-from functools import cached_property
 
 import numpy as np
-import tqdm
 from climetlab.utils import progress_bar
 from climetlab.utils.humanize import seconds
 
@@ -210,7 +203,6 @@ class DataWriter:
 
         self.n_cubes = self.parent.input_handler.n_cubes
         self.path = parent.path
-        self.z = parent.z
         self.output_config = parent.main_config.output
         self.statistics_registry = parent.statistics_registry
         self.registry = parent.registry
@@ -218,8 +210,8 @@ class DataWriter:
 
         import zarr
 
-        z = zarr.open(self.path, mode="r+")
-        self.full_array = z["data"]
+        self.z = zarr.open(self.path, mode="r+")
+        self.full_array = self.z["data"]
 
         total = len(self.registry.get_flags())
         self.filter = CubesFilter(parts=parts, total=total)
