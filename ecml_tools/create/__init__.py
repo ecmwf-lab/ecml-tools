@@ -22,7 +22,7 @@ import numpy as np
 import tqdm
 
 from climetlab.utils import progress_bar
-from .config import LoadersConfig
+from .config import loader_config
 from .utils import (
     _prepare_serialisation,
     normalize_and_check_dates,
@@ -226,7 +226,7 @@ class Loader:
         assert isinstance(config, dict) or isinstance(config, str), config
         assert isinstance(path, str), path
 
-        self.main_config = LoadersConfig(config)
+        self.main_config = loader_config(config)
         self.input_handler = self.main_config.input_handler(partial)
         self.path = path
         self.kwargs = kwargs

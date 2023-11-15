@@ -24,7 +24,7 @@ from climetlab.core.order import build_remapping, normalize_order_by
 from climetlab.utils.humanize import seconds
 from ..utils import load_json_or_yaml
 from ..utils import make_list_int, to_datetime_list, to_datetime
-from .normalise import normalize_config
+from climetlab.core.order import build_remapping, normalize_order_by
 
 LOG = logging.getLogger(__name__)
 
@@ -61,12 +61,141 @@ class Config(DictObj):
 
 
 class LoadersConfig(Config):
+    purpose = "undefined"
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
-        normalize_config(self)
+
+        if "description" not in self:
+            raise ValueError("Must provide a description in the config.")
+
+        # deprecated/obsolete
+        if "order" in self.output:
+            raise ValueError(f"Do not use 'order'. Use order_by in {self}")
+        if "loops" in self:
+            warnings.warn("Should use loop instead of loops in config")
+            assert "loop" not in self
+            self.loop = self.pop("loops")
+
+        self.normalise()
+
+    def normalise(self):
+        if not isinstance(self.input, (tuple, list)):
+            LOG.warning(f"{self.input=} is not a list")
+            self.input = [self.input]
+
+        if not isinstance(self.loop, list):
+            assert isinstance(self.loop, dict), self.loop
+            self.loop = [dict(loop_a=self.loop)]
+
+        if "order_by" in self.output:
+            self.output.order_by = normalize_order_by(self.output.order_by)
+
+        self.output.remapping = self.output.get("remapping", {})
+        self.output.remapping = build_remapping(
+            self.output.remapping, patches={"number": {None: 0}}
+        )
+
+        self.output.chunking = self.output.get("chunking", {})
+        self.output.dtype = self.output.get("dtype", "float32")
+
+        self.reading_chunks = self.get("reading_chunks")
+        assert "flatten_values" not in self.output
+        assert "flatten_grid" in self.output, self.output
+
+        # The axis along which we append new data
+        # TODO: assume grid points can be 2d as well
+        self.output.append_axis = 0
+
+        assert "statistics" in self.output
+        statistics_axis_name = self.output.statistics
+        statistics_axis = -1
+        for i, k in enumerate(self.output.order_by):
+            if k == statistics_axis_name:
+                statistics_axis = i
+
+        assert (
+            statistics_axis >= 0
+        ), f"{self.output.statistics} not in {list(self.output.order_by.keys())}"
+
+        self.statistics_names = self.output.order_by[statistics_axis_name]
+
+        # TODO: consider 2D grid points
+        self.statistics_axis = statistics_axis
 
     def input_handler(self, partial=False):
-        return InputHandler(self.loop, self.input, output=self.output, partial=partial)
+        return InputHandler(
+            self.loop, self.input, output=self.output, partial=partial
+        )
+
+    @classmethod
+    def _get_first_key_if_dict(cls, x):
+        if isinstance(x, str):
+            return x
+        return list(x.keys())[0]
+
+    def check_dict_value_and_set(self, dic, key, value):
+        if key in dic:
+            if dic[key] == value:
+                return
+            raise ValueError(
+                    f"Cannot use {key}={dic[key]} with {self.purpose} purpose. Must use {value}."
+                )
+        print(f"Setting {key}={value} because purpose={self.purpose}")
+        dic[key] = value
+
+    def ensure_element_in_list(self, lst, elt, index):
+        if elt in lst:
+            assert lst[index] == elt
+            return lst
+
+        _lst = [self._get_first_key_if_dict(d) for d in lst]
+        if elt in _lst:
+            assert _lst[index] == elt
+            return lst
+
+        return lst[:index] + [elt] + lst[index:]
+
+
+
+class UnknownPurposeConfig(LoadersConfig):
+    purpose = "unknown"
+    def normalise(self):
+        self.output.flatten_grid = self.output.get("flatten_grid", False)
+        self.output.ensemble_dimension = self.output.get(
+            "ensemble_dimension", False
+        )
+        super().normalise() # must be called last
+
+
+class AifsPurposeConfig(LoadersConfig):
+    purpose = "aifs"
+    def normalise(self):
+        self.check_dict_value_and_set(self.output, "flatten_grid", True)
+        self.check_dict_value_and_set(self.output, "ensemble_dimension", 2)
+
+        assert isinstance(self.output.order_by, (list, tuple)), self.output.order_by
+        self.output.order_by = self.ensure_element_in_list(
+            self.output.order_by, "number", self.output.ensemble_dimension
+        )
+
+        order_by = self.output.order_by
+        assert len(order_by) == 3, order_by
+        assert self._get_first_key_if_dict(order_by[0]) == "valid_datetime", order_by
+        assert self._get_first_key_if_dict(order_by[2]) == "number", order_by
+
+        super().normalise() # must be called last
+
+CONFIGS = {
+    None: UnknownPurposeConfig,
+    "aifs": AifsPurposeConfig,
+}
+
+
+def loader_config(config):
+    config = Config(config)
+    purpose = config.get("purpose")
+    return CONFIGS[purpose](config)
+
 
 class Inputs(list):
     _do_load = None
@@ -147,13 +276,12 @@ class Input:
 
         assert self.inherit is None or isinstance(self.inherit, str), self.inherit
 
-        if self.kwargs['name'] in ["forcing", "constants"]:
+        if self.kwargs["name"] in ["forcing", "constants"]:
             # add $ to source_or_dataset for constants source.
             # TODO: refactor to remove this.
             v = self.kwargs.get("source_or_dataset")
             if isinstance(v, str) and not v.startswith("$"):
                 self.kwargs["source_or_dataset"] = "$" + v
-
 
     def get_datetimes(self):
         name = self.kwargs.get("name", None)
@@ -289,7 +417,6 @@ class Input:
 
         details = ", ".join(f"{k}={repr(v)}" for k, v in self.kwargs.items())
         return f"Input({self.name}, {details})<{self.inherit}"
-
 
 
 def build_datetime(date, time, step):
@@ -790,8 +917,6 @@ class Info:
         )
 
 
-
-
 def substitute(x, vars=None, ignore_missing=False):
     """Recursively substitute environment variables and dict values in a nested list ot dict of string.
     substitution is performed using the environment var (if UPPERCASE) or the input dictionary.
@@ -908,7 +1033,6 @@ def hdates_from_date(date, start_year, end_year):
     start_year = int(start_year)
     end_year = int(end_year)
 
-
     if isinstance(date, (list, tuple)):
         if len(date) != 1:
             raise NotImplementedError(f"{date} should have only one element.")
@@ -934,7 +1058,6 @@ class Expand(list):
         self.parse_config()
 
     def parse_config(self):
-
         self.start = self._config.get("start")
         if self.start is not None:
             self.start = to_datetime(self.start)
