@@ -113,9 +113,6 @@ class LoadersConfig(Config):
         # TODO: consider 2D grid points
         self.statistics_axis = statistics_axis
 
-    def input_handler(self, partial=False):
-        return InputHandler(self, partial=partial)
-
     @classmethod
     def _get_first_key_if_dict(cls, x):
         if isinstance(x, str):

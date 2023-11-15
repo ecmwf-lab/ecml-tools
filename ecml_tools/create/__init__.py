@@ -33,7 +33,7 @@ class EntryPoint:
             raise Exception(f"{path} already exists. Use --force to overwrite.")
 
         with cache_context(cache_dir):
-            obj = cls.from_config(partial=True, path=path, config=config, print=print)
+            obj = cls.from_config(path=path, config=config, print=print)
             obj.initialise(check_name=not no_check_name)
 
     @classmethod
