@@ -329,13 +329,13 @@ class InputHandler:
 
     @property
     def first_cube(self):
-        return self.first_cube_creator.to_cube()
+        return self.first_lazycube.to_cube()
 
     @property
-    def first_cube_creator(self):
+    def first_lazycube(self):
         for loop in self.loops:
-            for cube_creator in loop.iterate():
-                return cube_creator
+            for lazycube in loop.iterate():
+                return lazycube
 
     @cached_property
     def chunking(self):
@@ -521,7 +521,7 @@ class Loop(dict):
 
     def iterate(self):
         for items in itertools.product(*self.values.values()):
-            yield CubeCreator(
+            yield LazyCube(
                 inputs=self.applies_to_inputs,
                 vars=dict(zip(self.values.keys(), items)),
                 loop_config=self.config,
@@ -531,7 +531,7 @@ class Loop(dict):
 
     @property
     def first(self):
-        return CubeCreator(
+        return LazyCube(
             inputs=self.applies_to_inputs,
             vars={k: lst[0] for k, lst in self.values.items() if lst},
             loop_config=self.config,
@@ -557,11 +557,11 @@ class Loop(dict):
         )
 
     def get_datetimes(self):
-        # merge datetimes from all cubecreators and check there are no duplicates
+        # merge datetimes from all lazycubes and check there are no duplicates
         datetimes = set()
 
         for i in self.iterate():
-            assert isinstance(i, CubeCreator), i
+            assert isinstance(i, LazyCube), i
             new = i.get_datetimes()
 
             duplicates = datetimes.intersection(set(new))
@@ -579,7 +579,7 @@ class DuplicateDateTimeError(ValueError):
     pass
 
 
-class CubeCreator:
+class LazyCube:
     def __init__(self, inputs, vars, loop_config, output, partial=False):
         self._loop_config = loop_config
         self._vars = vars
@@ -594,7 +594,7 @@ class CubeCreator:
         return 1
 
     def __repr__(self) -> str:
-        out = f"CubeCreator ({self.length}):\n"
+        out = f"LazyCube ({self.length}):\n"
         out += f" loop_config: {self._loop_config}"
         out += f" vars: {self._vars}\n"
         out += " Inputs:\n"

@@ -217,7 +217,7 @@ class DataWriter:
         self.filter = CubesFilter(parts=parts, total=total)
 
     def write(self):
-        for icube, cubecreator in enumerate(self.parent.input_handler.iter_cubes()):
+        for icube, lazycube in enumerate(self.parent.input_handler.iter_cubes()):
             if not self.filter(icube):
                 continue
             if self.registry.get_flag(icube):
@@ -225,14 +225,14 @@ class DataWriter:
                 continue
 
             self.print(f" -> Processing i={icube} total={self.n_cubes}")
-            self.write_cube(cubecreator, icube)
+            self.write_cube(lazycube, icube)
 
     @property
     def variables_names(self):
         return self.parent.main_config.get_variables_names()
 
-    def write_cube(self, cubecreator, icube):
-        cube = cubecreator.to_cube()
+    def write_cube(self, lazycube, icube):
+        cube = lazycube.to_cube()
 
         shape = cube.extended_user_shape
         chunks = cube.chunking(self.output_config.chunking)
