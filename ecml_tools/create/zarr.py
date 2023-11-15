@@ -6,11 +6,13 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-import numpy as np
 import datetime
 import logging
 
+import numpy as np
+
 LOG = logging.getLogger(__name__)
+
 
 def add_zarr_dataset(
     *,

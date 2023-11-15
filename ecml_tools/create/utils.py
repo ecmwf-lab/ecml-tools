@@ -9,8 +9,10 @@
 
 import datetime
 import os
-import yaml
+
 import numpy as np
+import yaml
+
 
 def bytes(n):
     """
@@ -31,6 +33,7 @@ def bytes(n):
         n /= 1024.0
         i += 1
     return "%s%g%s" % (sign, int(n * 10 + 0.5) / 10.0, u[i])
+
 
 def to_datetime_list(*args, **kwargs):
     from climetlab.utils.dates import to_datetime_list as to_datetime_list_

@@ -7,9 +7,10 @@
 # nor does it submit to any jurisdiction.
 #
 
-import os
-import numpy as np
 import logging
+import os
+
+import numpy as np
 
 LOG = logging.getLogger(__name__)
 

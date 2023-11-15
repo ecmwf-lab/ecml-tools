@@ -15,23 +15,22 @@ import re
 import time
 import uuid
 import warnings
-from functools import cached_property
 from contextlib import contextmanager
+from functools import cached_property
 
 import numpy as np
 import tqdm
-
 from climetlab.utils import progress_bar
+from climetlab.utils.humanize import seconds
+
+from .check import check_data_values
 from .config import loader_config
 from .utils import (
     _prepare_serialisation,
-    normalize_and_check_dates,
-    compute_directory_sizes,
     bytes,
+    compute_directory_sizes,
+    normalize_and_check_dates,
 )
-from climetlab.utils.humanize import seconds
-from .check import check_data_values
-
 
 LOG = logging.getLogger(__name__)
 
@@ -412,8 +411,8 @@ class Loader:
         ###############################################################
         # write data
         ###############################################################
-        # this is backend specific
-        self.initialise_dataset_backend()
+
+        self.initialise_dataset_backend()  # this is backend specific
 
         self.update_metadata(**metadata)
 
@@ -433,22 +432,6 @@ class Loader:
     def iter_loops(self):
         for vars in self.input_handler.iter_loops():
             yield vars
-
-    def _compute_lengths(self, multiply):
-        def squeeze_dict(dic):
-            keys = list(dic.keys())
-            assert len(dic) == 1, keys
-            return dic[keys[0]]
-
-        lengths = []
-        for i, vars in enumerate(self.iter_loops()):
-            lst = squeeze_dict(vars)
-            assert isinstance(lst, (tuple, list)), lst
-            lengths.append(len(lst))
-            print("i vars", i, vars, lengths, lst, f"{multiply=}")
-
-        lengths = [x * multiply for x in lengths]
-        return lengths
 
     @property
     def _variables_names(self):
@@ -472,8 +455,8 @@ class Loader:
 
             cube = cubecreator.to_cube()
             shape = cube.extended_user_shape
-            chunks = cube.chunking(self.input_handler.output.chunking)
-            axis = self.input_handler.output.append_axis
+            chunks = cube.chunking(self.input_handler.main_config.output.chunking)
+            axis = self.input_handler.main_config.output.append_axis
 
             slice = self.registry.get_slice_for(icube)
 
@@ -627,6 +610,7 @@ class ZarrLoader(Loader):
 
     def _add_dataset(self, mode="r+", **kwargs):
         import zarr
+
         from .zarr import add_zarr_dataset
 
         z = zarr.open(self.path, mode=mode)
