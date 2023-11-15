@@ -198,10 +198,12 @@ class OffsetView(ArrayLike):
 
 
 class DataWriter:
-    def __init__(self, parts, parent, print=print):
+    def __init__(self, parts, parent, cubes_provider, print=print):
         self.parent = parent
 
-        self.n_cubes = self.parent.input_handler.n_cubes
+        self.n_cubes = cubes_provider.n_cubes
+        self.iter_cubes = cubes_provider.iter_cubes
+
         self.path = parent.path
         self.output_config = parent.main_config.output
         self.statistics_registry = parent.statistics_registry
@@ -217,7 +219,7 @@ class DataWriter:
         self.filter = CubesFilter(parts=parts, total=total)
 
     def write(self):
-        for icube, lazycube in enumerate(self.parent.input_handler.iter_cubes()):
+        for icube, lazycube in enumerate(self.iter_cubes()):
             if not self.filter(icube):
                 continue
             if self.registry.get_flag(icube):

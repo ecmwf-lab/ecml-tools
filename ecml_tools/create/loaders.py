@@ -226,7 +226,7 @@ class InitialiseCreator(Creator):
 class LoadCreator(Creator):
     def load(self, parts):
         self.registry.add_to_history("loading_data_start", parts=parts)
-        data_writer = DataWriter(parts, parent=self)
+        data_writer = DataWriter(parts, parent=self, cubes_provider=self.input_handler)
         data_writer.write()
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
