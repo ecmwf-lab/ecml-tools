@@ -23,62 +23,13 @@ import tqdm
 from climetlab.utils import progress_bar
 from climetlab.utils.humanize import seconds
 
-from .writer import DataWriter
 from .config import loader_config
-from .utils import (
-    bytes,
-    compute_directory_sizes,
-    normalize_and_check_dates,
-)
+from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
+from .writer import DataWriter
 
 LOG = logging.getLogger(__name__)
 
 VERSION = "0.13"
-
-
-class CubesFilter:
-    def __init__(self, *, loader, parts):
-        self.loader = loader
-
-        if parts is None:
-            self.parts = None
-            return
-
-        if len(parts) == 1:
-            part = parts[0]
-            if part.lower() in ["all", "*"]:
-                self.parts = None
-                return
-
-            if "/" in part:
-                i_chunk, n_chunks = part.split("/")
-                i_chunk, n_chunks = int(i_chunk), int(n_chunks)
-
-                total = len(self.loader.registry.get_flags())
-                assert i_chunk > 0, f"Chunk number {i_chunk} must be positive."
-                if n_chunks > total:
-                    warnings.warn(
-                        f"Number of chunks {n_chunks} is larger than the total number of chunks: {total}+1."
-                    )
-
-                chunk_size = total / n_chunks
-                parts = [
-                    x
-                    for x in range(total)
-                    if x >= (i_chunk - 1) * chunk_size and x < i_chunk * chunk_size
-                ]
-
-        parts = [int(_) for _ in parts]
-        LOG.info(f"Running parts: {parts}")
-        if not parts:
-            warnings.warn(f"Nothing to do for chunk {i_chunk}.")
-
-        self.parts = parts
-
-    def __call__(self, i):
-        if self.parts is None:
-            return True
-        return i in self.parts
 
 
 class Loader:
@@ -158,18 +109,6 @@ class Loader:
                 partial=True, path=path, config=config, print=print
             )
             loader.initialise(check_name=not no_check_name)
-
-    @classmethod
-    def load_dataset(
-        cls,
-        path,
-        parts=None,
-        cache_dir=None,
-        print=print,
-    ):
-        with cls.cache_context(cache_dir):
-            loader = cls.from_dataset(path=path, print=print)
-            loader.load(parts=parts)
 
     def initialise(self, check_name=True):
         """Create empty dataset"""
@@ -298,32 +237,24 @@ class Loader:
         for vars in self.input_handler.iter_loops():
             yield vars
 
+    @classmethod
+    def load_dataset(
+        cls,
+        path,
+        parts=None,
+        cache_dir=None,
+        print=print,
+    ):
+        with cls.cache_context(cache_dir):
+            loader = cls.from_dataset(path=path, print=print)
+            loader.load(parts=parts)
 
     def load(self, parts):
-        import zarr
-
-        self.z = zarr.open(self.path, mode="r+")
         self.registry.add_to_history("loading_data_start", parts=parts)
-
-        filter = CubesFilter(loader=self, parts=parts)
-        ncubes = self.input_handler.n_cubes
-        self.data_writer = DataWriter(self, self.z["data"], ncubes)
-        for icube, cubecreator in enumerate(self.input_handler.iter_cubes()):
-            if not filter(icube):
-                continue
-            if self.registry.get_flag(icube):
-                LOG.info(f" -> Skipping {icube} total={ncubes} (already done)")
-                continue
-            self.print(f" -> Processing i={icube} total={ncubes}")
-
-            cube = cubecreator.to_cube()
-
-            self.data_writer.write_cube(cube, icube)
-
+        data_writer = DataWriter(parts, parent=self)
+        data_writer.write()
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
-
-
 
     def statistics_start_indice(self):
         return self._statistics_subset_indices[0]
@@ -407,7 +338,6 @@ class ZarrLoader(Loader):
 
         z = zarr.open(self.path, mode=mode)
         return add_zarr_dataset(zarr_root=z, **kwargs)
-
 
     @classmethod
     def add_total_size(cls, path):

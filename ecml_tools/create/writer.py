@@ -7,9 +7,6 @@
 # nor does it submit to any jurisdiction.
 #
 
-import logging
-import time
-import numpy as np
 import datetime
 import logging
 import os
@@ -24,9 +21,53 @@ import numpy as np
 import tqdm
 from climetlab.utils import progress_bar
 from climetlab.utils.humanize import seconds
+
 from .check import check_data_values
 
 LOG = logging.getLogger(__name__)
+
+
+class CubesFilter:
+    def __init__(self, *, parts, total):
+        if parts is None:
+            self.parts = None
+            return
+
+        if len(parts) == 1:
+            part = parts[0]
+            if part.lower() in ["all", "*"]:
+                self.parts = None
+                return
+
+            if "/" in part:
+                i_chunk, n_chunks = part.split("/")
+                i_chunk, n_chunks = int(i_chunk), int(n_chunks)
+
+                assert i_chunk > 0, f"Chunk number {i_chunk} must be positive."
+                if n_chunks > total:
+                    warnings.warn(
+                        f"Number of chunks {n_chunks} is larger than the total number of chunks: {total}+1. "
+                        "Some chunks will be empty."
+                    )
+
+                chunk_size = total / n_chunks
+                parts = [
+                    x
+                    for x in range(total)
+                    if x >= (i_chunk - 1) * chunk_size and x < i_chunk * chunk_size
+                ]
+
+        parts = [int(_) for _ in parts]
+        LOG.info(f"Running parts: {parts}")
+        if not parts:
+            warnings.warn(f"Nothing to do for chunk {i_chunk}/{n_chunks}.")
+
+        self.parts = parts
+
+    def __call__(self, i):
+        if self.parts is None:
+            return True
+        return i in self.parts
 
 
 class ArrayLike:
@@ -164,11 +205,10 @@ class OffsetView(ArrayLike):
 
 
 class DataWriter:
-    def __init__(self, parent, array, n_cubes, print=print):
+    def __init__(self, parts, parent, print=print):
         self.parent = parent
-        self.full_array = array
-        self.n_cubes = n_cubes
 
+        self.n_cubes = self.parent.input_handler.n_cubes
         self.path = parent.path
         self.z = parent.z
         self.output_config = parent.main_config.output
@@ -176,11 +216,32 @@ class DataWriter:
         self.registry = parent.registry
         self.print = parent.print
 
+        import zarr
+
+        z = zarr.open(self.path, mode="r+")
+        self.full_array = z["data"]
+
+        total = len(self.registry.get_flags())
+        self.filter = CubesFilter(parts=parts, total=total)
+
+    def write(self):
+        for icube, cubecreator in enumerate(self.parent.input_handler.iter_cubes()):
+            if not self.filter(icube):
+                continue
+            if self.registry.get_flag(icube):
+                LOG.info(f" -> Skipping {icube} total={self.n_cubes} (already done)")
+                continue
+
+            self.print(f" -> Processing i={icube} total={self.n_cubes}")
+            self.write_cube(cubecreator, icube)
+
     @property
     def variables_names(self):
         return self.parent.main_config.get_variables_names()
 
-    def write_cube(self, cube, icube):
+    def write_cube(self, cubecreator, icube):
+        cube = cubecreator.to_cube()
+
         shape = cube.extended_user_shape
         chunks = cube.chunking(self.output_config.chunking)
         axis = self.output_config.append_axis
