@@ -15,11 +15,10 @@ from functools import cached_property
 import numpy as np
 
 from .check import DatasetName, check_stats
-from .config import loader_config
+from .config import OutputSpecs, loader_config
+from .input import FullLoops, InputTemplates, PartialLoops
 from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
 from .writer import DataWriter
-from .input import InputTemplates, PartialLoops, FullLoops
-from .config import OutputSpecs
 
 LOG = logging.getLogger(__name__)
 
@@ -113,7 +112,7 @@ class InitialiseCreator(Creator):
         super().__init__(path=path, config=config, print=print, **kwargs)
         self.statistics_registry.delete()
 
-        self.loops = PartialLoops(self.main_config,parent=self)
+        self.loops = PartialLoops(self.main_config, parent=self)
         self.output_specs = OutputSpecs(self.main_config, parent=self)
 
     def initialise(self, check_name=True):

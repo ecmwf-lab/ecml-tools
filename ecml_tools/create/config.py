@@ -8,15 +8,14 @@
 #
 import datetime
 import logging
+import math
 import os
 import warnings
-import math
 from functools import cached_property
 
 from climetlab.core.order import build_remapping, normalize_order_by
 
 from .utils import load_json_or_yaml
-
 
 LOG = logging.getLogger(__name__)
 
@@ -51,6 +50,7 @@ class Config(DictObj):
             config = load_json_or_yaml(config)
         super().__init__(config)
 
+
 class OutputSpecs:
     def __init__(self, main_config, parent):
         self.config = main_config.output
@@ -66,7 +66,6 @@ class OutputSpecs:
 
         return shape + field_shape
 
-
     @cached_property
     def n_iter_loops(self):
         return sum([loop.n_iter_loops for loop in self.loops])
@@ -74,15 +73,19 @@ class OutputSpecs:
     @property
     def order_by(self):
         return self.config.order_by
+
     @property
     def remapping(self):
         return self.config.remapping
+
     @cached_property
     def chunking(self):
         return self.parent.loops._chunking(self.config.chunking)
+
     @property
     def flatten_grid(self):
         return self.config.flatten_grid
+
     @property
     def statistics(self):
         return self.config.statistics
@@ -106,7 +109,6 @@ class LoadersConfig(Config):
             self.loops = self.pop("loops")
 
         self.normalise()
-
 
     def normalise(self):
         if not isinstance(self.input, (tuple, list)):

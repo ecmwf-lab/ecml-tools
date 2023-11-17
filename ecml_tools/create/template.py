@@ -45,7 +45,7 @@ def substitute(x, vars=None, ignore_missing=False):
     """
     if vars is None:
         vars = {}
-        
+
     assert isinstance(vars, dict), vars
 
     if isinstance(x, (tuple, list)):
@@ -65,7 +65,7 @@ def substitute(x, vars=None, ignore_missing=False):
         for i, bit in enumerate(re.split(r"(\$(\w+)(\([^\)]*\))?)", x)):
             if bit is None:
                 continue
-            assert isinstance(bit, str), (bit, type(bit),x, type(x))
+            assert isinstance(bit, str), (bit, type(bit), x, type(x))
 
             i %= 4
             if i in [2, 3]:

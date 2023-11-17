@@ -11,6 +11,7 @@ import logging
 import os
 import pickle
 import shutil
+import glob
 
 import numpy as np
 
@@ -23,9 +24,11 @@ class StatisticsRegistry:
     # build_names = [ "minimum", "maximum", "sums", "squares", "count", ]
 
     def __init__(self, dirname, history_callback=None, overwrite=False):
-
         if history_callback is None:
-            def dummy(*args, **kwargs): pass
+
+            def dummy(*args, **kwargs):
+                pass
+
             history_callback = dummy
 
         self.dirname = dirname
@@ -53,7 +56,7 @@ class StatisticsRegistry:
                 key_str = f"{key_str}_{key.step}"
         key = str(key)
 
-        path = os.path.join(self.dirname,f"{key_str}.npz")
+        path = os.path.join(self.dirname, f"{key_str}.npz")
 
         if not self.overwrite:
             assert not os.path.exists(path), f"{path} already exists"

@@ -212,7 +212,6 @@ class DataWriter:
         self.n_cubes = parent.loops.n_cubes
         self.iter_cubes = parent.loops.iter_cubes
 
-
     def write(self):
         import zarr
 

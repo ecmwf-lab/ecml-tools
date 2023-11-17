@@ -18,10 +18,10 @@ from functools import cached_property
 import numpy as np
 from climetlab.utils.humanize import seconds
 
+from .config import Config
 from .loops import expand_loops
 from .template import substitute
 from .utils import make_list_int, to_datetime, to_datetime_list
-from .config import Config
 
 LOG = logging.getLogger(__name__)
 
@@ -45,7 +45,6 @@ class InputTemplates:
 
     def filter(self, func):
         return InputTemplates(*[i for i in self if func(i)])
-
 
     def __repr__(self) -> str:
         return "\n".join(str(i) for i in self)
@@ -118,6 +117,7 @@ class InputTemplate:
 
 class Input:
     _do_load = None
+
     def __init__(self, name, kwargs, function=None):
         self.name = name  # for logging purposes only
         self.kwargs = kwargs
@@ -272,6 +272,7 @@ def build_datetime(date, time, step):
 
     return dt
 
+
 class Loops:
     def __init__(self, main_config, parent):
         assert isinstance(main_config, Config), main_config
@@ -310,6 +311,7 @@ class Loops:
             for i in loop.iterate_cubes():
                 n += 1
         return n
+
     @cached_property
     def _datetimes_and_frequency(self):
         # merge datetimes from all loops and check there are no duplicates
@@ -446,9 +448,10 @@ class Loops:
 
 class FullLoops(Loops):
     partial = False
+
+
 class PartialLoops(Loops):
     partial = True
-
 
 
 class Loop:
@@ -537,8 +540,8 @@ class DuplicateDateTimeError(ValueError):
 
 class Inputs:
     _do_load = None
-    def __init__(self, inputs, loop_config, output_specs, partial=False):
 
+    def __init__(self, inputs, loop_config, output_specs, partial=False):
         assert isinstance(inputs, list), inputs
         assert isinstance(inputs[0], Input), inputs[0]
 
@@ -546,7 +549,7 @@ class Inputs:
         self.inputs = inputs
         self.output_specs = output_specs
         self.partial = partial
-    
+
     def __iter__(self):
         for i in self.inputs:
             yield i
@@ -614,7 +617,11 @@ class Inputs:
         data = self.do_load()
 
         start = time.time()
-        LOG.info("Sorting dataset %s %s", self.output_specs.order_by, self.output_specs.remapping)
+        LOG.info(
+            "Sorting dataset %s %s",
+            self.output_specs.order_by,
+            self.output_specs.remapping,
+        )
         cube = data.cube(
             self.output_specs.order_by,
             remapping=self.output_specs.remapping,
@@ -725,29 +732,34 @@ def _format_list(x):
     return str(x)
 
 
-def check_data_specs( first_field, grid_points, resolution, coords, variables, data_request):
-        assert len(set(variables)) == len(variables), (
-            "Duplicate variables",
-            variables,
-        )
+def check_data_specs(
+    first_field, grid_points, resolution, coords, variables, data_request
+):
+    assert len(set(variables)) == len(variables), (
+        "Duplicate variables",
+        variables,
+    )
 
-        assert grid_points[0].shape == grid_points[1].shape, (
-            grid_points[0].shape,
-            grid_points[1].shape,
-            grid_points[0],
-            grid_points[1],
-        )
+    assert grid_points[0].shape == grid_points[1].shape, (
+        grid_points[0].shape,
+        grid_points[1].shape,
+        grid_points[0],
+        grid_points[1],
+    )
 
-        assert len(grid_points) == 2, grid_points
+    assert len(grid_points) == 2, grid_points
 
-        expected = math.prod(first_field.shape)
-        assert len(grid_points[0]) == expected, (len(grid_points[0]), expected)
+    expected = math.prod(first_field.shape)
+    assert len(grid_points[0]) == expected, (len(grid_points[0]), expected)
+
 
 class DataDescription:
     def __init__(
         self, first_field, grid_points, resolution, coords, variables, data_request
     ):
-        check_data_specs( first_field, grid_points, resolution, coords, variables, data_request)
+        check_data_specs(
+            first_field, grid_points, resolution, coords, variables, data_request
+        )
 
         self.first_field = first_field
         self.grid_points = grid_points
