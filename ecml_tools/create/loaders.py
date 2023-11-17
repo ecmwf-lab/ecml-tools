@@ -36,11 +36,11 @@ class Creator:
         assert isinstance(path, str), path
 
         self.main_config = loader_config(config)
-        self.input_handler = InputHandler(self.main_config, partial=self.partial)
 
         self.path = path
         self.kwargs = kwargs
         self.print = print
+
 
     @classmethod
     def from_config(cls, *, config, path, print=print, **kwargs):
@@ -106,6 +106,10 @@ class Creator:
 
 class InitialiseCreator(Creator):
     partial = True
+    def __init__(self, *, path, config, print=print, **kwargs):
+        super().__init__(path=path, config=config, print=print, **kwargs)
+        self.input_handler = InputHandler(self.main_config, partial=self.partial)
+
     def initialise(self, check_name=True):
         """Create empty dataset"""
 
@@ -228,15 +232,23 @@ class InitialiseCreator(Creator):
 
 
 class LoadCreator(Creator):
+    def __init__(self, *, path, config, print=print, **kwargs):
+        super().__init__(path=path, config=config, print=print, **kwargs)
+        self.data_descriptor = DataDescriptor(self.main_config, partial=self.partial)
+        self.cube_provider = CubeProvider(self.main_config, partial=self.partial)
+
     def load(self, parts):
         self.registry.add_to_history("loading_data_start", parts=parts)
-        data_writer = DataWriter(parts, parent=self, cubes_provider=self.input_handler)
+        data_writer = DataWriter(parts, parent=self)
         data_writer.write()
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
 
 
 class StatisticsCreator(Creator):
+    def __init__(self, *, path, config, print=print, **kwargs):
+        super().__init__(path=path, config=config, print=print, **kwargs)
+        self.input_handler = InputHandler(self.main_config, partial=self.partial)
     def statistics_start_indice(self):
         return self._statistics_subset_indices[0]
 
@@ -434,6 +446,9 @@ class StatisticsCreator(Creator):
 
 
 class SizeCreator(Creator):
+    def __init__(self, *, path, config, print=print, **kwargs):
+        super().__init__(path=path, config=config, print=print, **kwargs)
+        self.input_handler = InputHandler(self.main_config, partial=self.partial)
     def add_total_size(self):
         dic = compute_directory_sizes(self.path)
 

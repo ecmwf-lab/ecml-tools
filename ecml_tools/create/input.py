@@ -478,6 +478,12 @@ class InputHandler:
     def __repr__(self):
         return "InputHandler\n  " + "\n  ".join(str(i) for i in self.loops)
 
+class DataDescriptor(InputHandler):
+    pass
+class CubeProvider(InputHandler):
+    pass
+        #self.n_cubes = parent.cubes_provider.n_cubes
+        #self.iter_cubes = parent.cubes_provider.iter_cubes
 
 class Loop(dict):
     def __init__(self, dic, inputs, partial=False, parent=None):

@@ -198,29 +198,32 @@ class OffsetView(ArrayLike):
 
 
 class DataWriter:
-    def __init__(self, parts, parent, cubes_provider, print=print):
+    def __init__(self, parts, parent, print=print):
         self.parent = parent
-
-        self.n_cubes = cubes_provider.n_cubes
-        self.iter_cubes = cubes_provider.iter_cubes
+        self.parts = parts
 
         self.path = parent.path
-        self.output_config = parent.main_config.output
         self.statistics_registry = parent.statistics_registry
         self.registry = parent.registry
         self.print = parent.print
 
-        import zarr
+        self.output_config = parent.main_config.output
 
-        self.z = zarr.open(self.path, mode="r+")
-        self.full_array = self.z["data"]
+        self.n_cubes = parent.cubes_provider.n_cubes
+        self.iter_cubes = parent.cubes_provider.iter_cubes
 
-        total = len(self.registry.get_flags())
-        self.filter = CubesFilter(parts=parts, total=total)
 
     def write(self):
+        import zarr
+
+        z = zarr.open(self.path, mode="r+")
+        self.full_array = z["data"]
+
+        total = len(self.registry.get_flags())
+        filter = CubesFilter(parts=self.parts, total=total)
+
         for icube, lazycube in enumerate(self.iter_cubes()):
-            if not self.filter(icube):
+            if not filter(icube):
                 continue
             if self.registry.get_flag(icube):
                 LOG.info(f" -> Skipping {icube} total={self.n_cubes} (already done)")
@@ -234,6 +237,8 @@ class DataWriter:
         return self.parent.main_config.get_variables_names()
 
     def write_cube(self, lazycube, icube):
+        assert isinstance(icube, int), icube
+
         cube = lazycube.to_cube()
 
         shape = cube.extended_user_shape
