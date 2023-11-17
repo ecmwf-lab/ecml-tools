@@ -209,8 +209,8 @@ class DataWriter:
 
         self.output_config = parent.main_config.output
 
-        self.n_cubes = parent.cubes_provider.n_cubes
-        self.iter_cubes = parent.cubes_provider.iter_cubes
+        self.n_cubes = parent.loops.n_cubes
+        self.iter_cubes = parent.loops.iter_cubes
 
 
     def write(self):

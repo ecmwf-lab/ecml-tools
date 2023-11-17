@@ -21,75 +21,39 @@ from climetlab.utils.humanize import seconds
 from .loops import expand_loops
 from .template import substitute
 from .utils import make_list_int, to_datetime, to_datetime_list
+from .config import Config
 
 LOG = logging.getLogger(__name__)
 
 
-class Inputs(list):
-    _do_load = None
+def assert_is_fieldset(obj):
+    from climetlab.readers.grib.index import FieldSet
 
-    def __init__(self, args):
-        assert isinstance(args[0], (dict, Input)), args[0]
-        args = [c if isinstance(c, Input) else Input(c) for c in args]
-        super().__init__(args)
+    assert isinstance(obj, FieldSet), type(obj)
 
-    def substitute(self, *args, **kwargs):
-        return Inputs([i.substitute(*args, **kwargs) for i in self])
 
-    def get_datetimes(self):
-        # get datetime from each input
-        # and make sure they are the same or None
-        datetimes = None
-        previous_name = None
-        for i in self:
-            new = i.get_datetimes()
-            if new is None:
-                continue
-            new = sorted(list(new))
-            if datetimes is None:
-                datetimes = new
+class InputTemplates:
+    def __init__(self, *args):
+        assert isinstance(args[0], (dict, InputTemplate)), args[0]
+        self._elements = [
+            c if isinstance(c, InputTemplate) else InputTemplate(c) for c in args
+        ]
 
-            if datetimes != new:
-                raise ValueError(
-                    "Mismatch in datetimes", previous_name, datetimes, i.name, new
-                )
-            previous_name = i.name
+    def __iter__(self):
+        for i in self._elements:
+            yield i
 
-        if datetimes is None:
-            raise ValueError(f"No datetimes found in {self}")
+    def filter(self, func):
+        return InputTemplates(*[i for i in self if func(i)])
 
-        return datetimes
-
-    def do_load(self, partial=False):
-        if self._do_load is None or self._do_load[1] != partial:
-            datasets = {}
-            for i in self:
-                i = i.substitute(vars=datasets)
-                ds = i.do_load(partial=partial)
-                datasets[i.name] = ds
-
-            out = None
-            for ds in datasets.values():
-                if out is None:
-                    out = ds
-                else:
-                    out += ds
-
-            from climetlab.readers.grib.index import FieldSet
-
-            assert isinstance(out, FieldSet), type(out)
-            self._do_load = (out, partial)
-
-        return self._do_load[0]
 
     def __repr__(self) -> str:
         return "\n".join(str(i) for i in self)
 
 
-class Input:
+class InputTemplate:
     _inheritance_done = False
     _inheritance_others = None
-    _do_load = None
 
     def __init__(self, dic):
         assert isinstance(dic, dict), dic
@@ -111,7 +75,56 @@ class Input:
             if isinstance(v, str) and not v.startswith("$"):
                 self.kwargs["source_or_dataset"] = "$" + v
 
+    def get_first_field(self):
+        return self.do_load()[0]
+
+    def process_inheritance(self, others):
+        for o in others:
+            if o == self:
+                continue
+            name = o.name
+            if name.startswith("$"):
+                name = name[1:]
+            if name != self.inherit:
+                continue
+            if not o._inheritance_done:
+                o.process_inheritance(others)
+
+            kwargs = {}
+            kwargs.update(o.kwargs)
+            kwargs.update(self.kwargs)  # self.kwargs has priority
+            self.kwargs = kwargs
+
+        self._inheritance_others = others
+        self._inheritance_done = True
+
+    def instanciate(self, *args, **kwargs):
+        new_kwargs = substitute(self.kwargs.copy(), *args, **kwargs)
+        return Input(
+            name=self.name,
+            kwargs=new_kwargs,
+            function=self.function,
+        )
+
+    def __repr__(self) -> str:
+        def repr(v):
+            if isinstance(v, list):
+                return f"{'/'.join(str(x) for x in v)}"
+            return str(v)
+
+        details = ", ".join(f"{k}={repr(v)}" for k, v in self.kwargs.items())
+        return f"InputTemplate({self.name}, {details})<{self.inherit}"
+
+
+class Input:
+    _do_load = None
+    def __init__(self, name, kwargs, function=None):
+        self.name = name  # for logging purposes only
+        self.kwargs = kwargs
+        self.function = function
+
     def get_datetimes(self):
+        # parse the kwargs to get the datetimes
         name = self.kwargs.get("name", None)
 
         assert name in [
@@ -172,7 +185,7 @@ class Input:
 
         raise ValueError(f"{name=} Cannot count number of elements in {self}")
 
-    def do_load(self, partial=False):
+    def do_load(self, partial=False, others=None):
         if not self._do_load or self._do_load[1] != partial:
             from climetlab import load_dataset, load_source
 
@@ -187,6 +200,8 @@ class Input:
             }[self.function]
 
             kwargs = dict(**self.kwargs)
+            if others:
+                kwargs = substitute(self.kwargs.copy(), vars=others)
 
             if partial:
                 if "date" in kwargs and isinstance(kwargs["date"], list):
@@ -198,53 +213,6 @@ class Input:
             LOG.info(f"  Loading {self.name} of len {len(ds)}: {ds}")
             self._do_load = (ds, partial)
         return self._do_load[0]
-
-    def get_first_field(self):
-        return self.do_load()[0]
-
-    def process_inheritance(self, others):
-        for o in others:
-            if o == self:
-                continue
-            name = o.name
-            if name.startswith("$"):
-                name = name[1:]
-            if name != self.inherit:
-                continue
-            if not o._inheritance_done:
-                o.process_inheritance(others)
-
-            kwargs = {}
-            kwargs.update(o.kwargs)
-            kwargs.update(self.kwargs)  # self.kwargs has priority
-            self.kwargs = kwargs
-
-        self._inheritance_others = others
-        self._inheritance_done = True
-
-    def substitute(self, *args, **kwargs):
-        new_kwargs = substitute(self.kwargs.copy(), *args, **kwargs)
-        i = Input(
-            {
-                self.name: dict(
-                    kwargs=new_kwargs,
-                    inherit=self.inherit,
-                    function=self.function,
-                )
-            }
-        )
-        # if self._inheritance_others:
-        #    i.process_inheritance(self._inheritance_others)
-        return i
-
-    def __repr__(self) -> str:
-        def repr(v):
-            if isinstance(v, list):
-                return f"{'/'.join(str(x) for x in v)}"
-            return str(v)
-
-        details = ", ".join(f"{k}={repr(v)}" for k, v in self.kwargs.items())
-        return f"Input({self.name}, {details})<{self.inherit}"
 
 
 def build_datetime(date, time, step):
@@ -304,13 +272,49 @@ def build_datetime(date, time, step):
 
     return dt
 
+class Loops:
+    def __init__(self, main_config, parent):
+        assert isinstance(main_config, Config), main_config
+        self.parent = parent
 
-class DateTimesDataDescriptor:
+        loops_config = main_config.loops
+        if not loops_config:
+            raise NotImplementedError("No loop")
+
+        all_inputs = [InputTemplate(c) for c in main_config.input]
+
+        self._elements = []
+        for loop in loops_config:
+            loop = Loop(loop, all_inputs, parent=self, partial=self.partial)
+            self._elements.append(loop)
+
+    def _chunking(self, config):
+        # to be called by OutputSpecs
+        for loop in self:
+            for inputs in loop.iterate_cubes():
+                cube = inputs.to_cube()
+                return cube.chunking(config)
+
+    def __iter__(self):
+        for i in self._elements:
+            yield i
+
+    def iter_cubes(self):
+        for loop in self:
+            yield from loop.iterate_cubes()
+
+    @cached_property
+    def n_cubes(self):
+        n = 0
+        for loop in self:
+            for i in loop.iterate_cubes():
+                n += 1
+        return n
     @cached_property
     def _datetimes_and_frequency(self):
         # merge datetimes from all loops and check there are no duplicates
         datetimes = set()
-        for i in self.loops:
+        for i in self:
             assert isinstance(i, Loop), i
             new = i.get_datetimes()
             for d in new:
@@ -353,12 +357,10 @@ class DateTimesDataDescriptor:
     def get_datetimes(self):
         return self._datetimes_and_frequency[0]
 
-
-class DataDescriptor:
     @cached_property
     def data_description(self):
         infos = []
-        for loop in self.loops:
+        for loop in self:
             first = loop.first.data_description
             coords = deepcopy(first.coords)
             assert (
@@ -442,85 +444,29 @@ class DataDescriptor:
         return self.data_description.variables
 
 
-class InputHandler(DateTimesDataDescriptor, DataDescriptor):
-    def __init__(self, main_config, partial=False):
-        self.main_config = main_config
-
-        inputs = Inputs(self.main_config.input)
-        self.loops = [
-            c
-            if isinstance(c, Loop) and c.inputs == inputs
-            else Loop(c, inputs, parent=self, partial=partial)
-            for c in self.main_config.loops
-        ]
-        if not self.loops:
-            raise NotImplementedError("No loop")
-
-    def iter_cubes(self):
-        for loop in self.loops:
-            yield from loop.iterate_cubes()
-
-    @cached_property
-    def n_iter_loops(self):
-        return sum([loop.n_iter_loops for loop in self.loops])
-
-    @property
-    def first_cube(self):
-        return self.first_lazycube.to_cube()
-
-    @property
-    def first_lazycube(self):
-        for loop in self.loops:
-            for lazycube in loop.iterate_cubes():
-                return lazycube
-
-    @cached_property
-    def chunking(self):
-        return self.first_cube.chunking(self.main_config.output.chunking)
-
-    @cached_property
-    def n_cubes(self):
-        n = 0
-        for loop in self.loops:
-            for i in loop.iterate_cubes():
-                n += 1
-        return n
-
-    @property
-    def shape(self):
-        shape = [len(c) for c in self.coords.values()]
-
-        field_shape = list(self.first_field.shape)
-        if self.main_config.output.flatten_grid:
-            field_shape = [math.prod(field_shape)]
-
-        return shape + field_shape
-
-    def __repr__(self):
-        return "InputHandler\n  " + "\n  ".join(str(i) for i in self.loops)
+class FullLoops(Loops):
+    partial = False
+class PartialLoops(Loops):
+    partial = True
 
 
-class Loop(dict):
-    def __init__(self, dic, inputs, partial=False, parent=None):
-        assert isinstance(dic, dict), dic
-        assert len(dic) == 1, dic
-        super().__init__(dic)
+
+class Loop:
+    def __init__(self, config, all_inputs, parent, partial=False):
+        assert isinstance(config, dict), config
+        assert len(config) == 1, config
 
         self.parent = parent
-        self.name = list(dic.keys())[0]
-        self.config = deepcopy(dic[self.name])
+        self.name = list(config.keys())[0]
+        self.config = deepcopy(config[self.name])
         self.partial = partial
 
-        if "applies_to" not in self.config:
-            # if applies_to is not specified, apply to all inputs
-            self.config.applies_to = [i.name for i in inputs]
-        assert "applies_to" in self.config, self.config
-        applies_to = self.config.pop("applies_to")
-        self.applies_to_inputs = Inputs(
-            [input for input in inputs if input.name in applies_to]
-        )
-        for i in self.applies_to_inputs:
-            i.process_inheritance(self.applies_to_inputs)
+        # applied to all if unspecified
+        self.applies_to = self.config.get("applies_to", [i.name for i in all_inputs])
+
+        self.templates = [t for t in all_inputs if t.name in self.applies_to]
+        for t in self.templates:
+            t.process_inheritance(self.templates)
 
         self.values = {}
         for k, v in self.config.items():
@@ -538,32 +484,40 @@ class Loop(dict):
         return len(list(itertools.product(*self.values.values())))
 
     def iterate_cubes(self):
-        for items in itertools.product(*self.values.values()):
-            yield LazyCube(
-                inputs=self.applies_to_inputs,
-                vars=dict(zip(self.values.keys(), items)),
+        for values in itertools.product(*self.values.values()):
+            vars = {k: v for k, v in zip(self.values.keys(), values)}
+            assert isinstance(vars, dict), (vars, self.values)
+            instanciated_inputs = [
+                t.instanciate(vars=vars, ignore_missing=True) for t in self.templates
+            ]
+            yield Inputs(
+                inputs=instanciated_inputs,
                 loop_config=self.config,
-                output=self.parent.main_config.output,
+                output_specs=self.parent.parent.output_specs,
                 partial=self.partial,
             )
 
     @property
     def first(self):
-        return LazyCube(
-            inputs=self.applies_to_inputs,
-            vars={k: lst[0] for k, lst in self.values.items() if lst},
+        vars = {k: lst[0] for k, lst in self.values.items() if lst}
+
+        instanciated_inputs = [
+            t.instanciate(vars=vars, ignore_missing=True) for t in self.templates
+        ]
+
+        return Inputs(
+            inputs=instanciated_inputs,
             loop_config=self.config,
-            output=self.parent.main_config.output,
+            output_specs=self.parent.parent.output_specs,
             partial=self.partial,
         )
-
 
     def get_datetimes(self):
         # merge datetimes from all lazycubes and check there are no duplicates
         datetimes = set()
 
         for i in self.iterate_cubes():
-            assert isinstance(i, LazyCube), i
+            assert isinstance(i, Inputs), i
             new = i.get_datetimes()
 
             duplicates = datetimes.intersection(set(new))
@@ -581,35 +535,76 @@ class DuplicateDateTimeError(ValueError):
     pass
 
 
-class LazyCube:
-    def __init__(self, inputs, vars, loop_config, output, partial=False):
-        self._loop_config = loop_config
-        self._vars = vars
-        self._inputs = inputs
-        self.output = output
-        self.partial = partial
+class Inputs:
+    _do_load = None
+    def __init__(self, inputs, loop_config, output_specs, partial=False):
 
-        self.inputs = inputs.substitute(vars=vars, ignore_missing=True)
+        assert isinstance(inputs, list), inputs
+        assert isinstance(inputs[0], Input), inputs[0]
+
+        self._loop_config = loop_config
+        self.inputs = inputs
+        self.output_specs = output_specs
+        self.partial = partial
+    
+    def __iter__(self):
+        for i in self.inputs:
+            yield i
 
     @property
     def length(self):
         return 1
 
     def __repr__(self) -> str:
-        out = f"LazyCube ({self.length}):\n"
+        out = f"Inputs ({self.length}):\n"
         out += f" loop_config: {self._loop_config}"
-        out += f" vars: {self._vars}\n"
         out += " Inputs:\n"
-        for _i, i in zip(self._inputs, self.inputs):
-            out += f"- {_i}\n"
+        for i in self.inputs:
             out += f"  {i}\n"
         return out
 
-    def do_load(self):
-        return self.inputs.do_load(self.partial)
+    def do_load(self, partial=False):
+        if self._do_load is None or self._do_load[1] != partial:
+            datasets = {}
+            for i in self:
+                ds = i.do_load(partial=partial, others=datasets)
+                datasets[i.name] = ds
+
+            out = None
+            for ds in datasets.values():
+                if out is None:
+                    out = ds
+                else:
+                    out += ds
+
+            assert_is_fieldset(out)
+            self._do_load = (out, partial)
+
+        return self._do_load[0]
 
     def get_datetimes(self):
-        return self.inputs.get_datetimes()
+        # get datetime from each input
+        # and make sure they are the same or None
+        datetimes = None
+        previous_name = None
+        for i in self:
+            new = i.get_datetimes()
+            if new is None:
+                continue
+            new = sorted(list(new))
+            if datetimes is None:
+                datetimes = new
+
+            if datetimes != new:
+                raise ValueError(
+                    "Mismatch in datetimes", previous_name, datetimes, i.name, new
+                )
+            previous_name = i.name
+
+        if datetimes is None:
+            raise ValueError(f"No datetimes found in {self}")
+
+        return datetimes
 
     def to_cube(self):
         cube, _ = self._to_data_and_cube()
@@ -619,18 +614,18 @@ class LazyCube:
         data = self.do_load()
 
         start = time.time()
-        LOG.info("Sorting dataset %s %s", self.output.order_by, self.output.remapping)
+        LOG.info("Sorting dataset %s %s", self.output_specs.order_by, self.output_specs.remapping)
         cube = data.cube(
-            self.output.order_by,
-            remapping=self.output.remapping,
+            self.output_specs.order_by,
+            remapping=self.output_specs.remapping,
+            flatten_values=self.output_specs.flatten_grid,
             patches={"number": {None: 0}},
-            flatten_values=self.output.flatten_grid,
         )
         cube = cube.squeeze()
         LOG.info(f"Sorting done in {seconds(time.time()-start)}.")
 
         def check(actual_dic, requested_dic):
-            assert self.output.statistics in actual_dic
+            assert self.output_specs.statistics in actual_dic
 
             for key in set(list(actual_dic.keys()) + list(requested_dic.keys())):
                 actual = actual_dic[key]
@@ -645,7 +640,7 @@ class LazyCube:
                     continue
                 assert actual == requested, f"Requested= {requested} Actual= {actual}"
 
-        check(actual_dic=cube.user_coords, requested_dic=self.output.order_by)
+        check(actual_dic=cube.user_coords, requested_dic=self.output_specs.order_by)
 
         return cube, data
 
@@ -730,10 +725,7 @@ def _format_list(x):
     return str(x)
 
 
-class DataDescription:
-    def __init__(
-        self, first_field, grid_points, resolution, coords, variables, data_request
-    ):
+def check_data_specs( first_field, grid_points, resolution, coords, variables, data_request):
         assert len(set(variables)) == len(variables), (
             "Duplicate variables",
             variables,
@@ -750,6 +742,12 @@ class DataDescription:
 
         expected = math.prod(first_field.shape)
         assert len(grid_points[0]) == expected, (len(grid_points[0]), expected)
+
+class DataDescription:
+    def __init__(
+        self, first_field, grid_points, resolution, coords, variables, data_request
+    ):
+        check_data_specs( first_field, grid_points, resolution, coords, variables, data_request)
 
         self.first_field = first_field
         self.grid_points = grid_points

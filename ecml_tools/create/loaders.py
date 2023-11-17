@@ -18,7 +18,8 @@ from .check import DatasetName, check_stats
 from .config import loader_config
 from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
 from .writer import DataWriter
-from .input import InputHandler
+from .input import InputTemplates, PartialLoops, FullLoops
+from .config import OutputSpecs
 
 LOG = logging.getLogger(__name__)
 
@@ -26,8 +27,6 @@ VERSION = "0.13"
 
 
 class Creator:
-    partial = False
-
     def __init__(self, *, path, config, print=print, **kwargs):
         # Catch all floating point errors, including overflow, sqrt(<0), etc
         np.seterr(all="raise")
@@ -110,13 +109,12 @@ class Creator:
 
 
 class InitialiseCreator(Creator):
-    partial = True
-
     def __init__(self, *, path, config, print=print, **kwargs):
         super().__init__(path=path, config=config, print=print, **kwargs)
         self.statistics_registry.delete()
-        self.data_descriptor = InputHandler(self.main_config, partial=self.partial)
-        self.input_handler = self.data_descriptor
+
+        self.loops = PartialLoops(self.main_config,parent=self)
+        self.output_specs = OutputSpecs(self.main_config, parent=self)
 
     def initialise(self, check_name=True):
         """Create empty dataset"""
@@ -125,26 +123,26 @@ class InitialiseCreator(Creator):
         print(self.main_config)
         print("-------------------------")
 
-        total_shape = self.data_descriptor.shape
+        total_shape = self.output_specs.shape
         self.print(f"total_shape = {total_shape}")
         print("-------------------------")
 
-        grid_points = self.data_descriptor.grid_points
+        grid_points = self.loops.grid_points
         print(f"gridpoints size: {[len(i) for i in grid_points]}")
         print("-------------------------")
 
-        dates = self.data_descriptor.get_datetimes()
+        dates = self.loops.get_datetimes()
         self.print(f"Found {len(dates)} datetimes.")
         print(
-            f"Dates: Found {len(dates)} datetimes, in {self.input_handler.n_cubes} cubes: ",
+            f"Dates: Found {len(dates)} datetimes, in {self.loops.n_cubes} cubes: ",
             end="",
         )
-        lengths = [str(len(c.get_datetimes())) for c in self.input_handler.iter_cubes()]
+        lengths = [str(len(c.get_datetimes())) for c in self.loops.iter_cubes()]
         print("+".join(lengths))
         self.print(f"Found {len(dates)} datetimes {'+'.join(lengths)}.")
         print("-------------------------")
 
-        names = self.input_handler.variables
+        names = self.loops.variables
         self.print(f"Found {len(names)} variables : {','.join(names)}.")
 
         names_from_config = self.main_config.output.order_by[
@@ -154,18 +152,18 @@ class InitialiseCreator(Creator):
             names == names_from_config
         ), f"Requested= {names_from_config} Actual= {names}"
 
-        resolution = self.input_handler.resolution
+        resolution = self.loops.resolution
         print(f"{resolution=}")
 
-        chunks = self.input_handler.chunking
+        chunks = self.output_specs.chunking
         print(f"{chunks=}")
-        dtype = self.main_config.output.dtype
+        dtype = self.output_specs.config.dtype
 
         self.print(
             f"Creating Dataset '{self.path}', with {total_shape=}, {chunks=} and {dtype=}"
         )
 
-        frequency = self.input_handler.frequency
+        frequency = self.loops.frequency
         assert isinstance(frequency, int), frequency
 
         metadata = {}
@@ -178,12 +176,12 @@ class InitialiseCreator(Creator):
         metadata["description"] = self.main_config.description
         metadata["resolution"] = resolution
 
-        metadata["data_request"] = self.input_handler.data_request
+        metadata["data_request"] = self.loops.data_request
 
-        metadata["order_by"] = self.main_config.output.order_by
-        metadata["remapping"] = self.main_config.output.remapping
-        metadata["flatten_grid"] = self.main_config.output.flatten_grid
-        metadata["ensemble_dimension"] = self.main_config.output.ensemble_dimension
+        metadata["order_by"] = self.output_specs.order_by
+        metadata["remapping"] = self.output_specs.remapping
+        metadata["flatten_grid"] = self.output_specs.flatten_grid
+        metadata["ensemble_dimension"] = self.output_specs.config.ensemble_dimension
 
         metadata["variables"] = names
         metadata["version"] = VERSION
@@ -239,8 +237,8 @@ class InitialiseCreator(Creator):
 class LoadCreator(Creator):
     def __init__(self, *, path, config, print=print, **kwargs):
         super().__init__(path=path, config=config, print=print, **kwargs)
-        self.data_descriptor = InputHandler(self.main_config, partial=self.partial)
-        self.cubes_provider = self.data_descriptor
+        self.loops = FullLoops(self.main_config, parent=self)
+        self.output_specs = OutputSpecs(self.main_config, parent=self)
 
     def load(self, parts):
         self.registry.add_to_history("loading_data_start", parts=parts)
@@ -253,7 +251,6 @@ class LoadCreator(Creator):
 class StatisticsCreator(Creator):
     def __init__(self, *, path, config, print=print, **kwargs):
         super().__init__(path=path, config=config, print=print, **kwargs)
-        self.input_handler = InputHandler(self.main_config, partial=self.partial)
 
     def statistics_start_indice(self):
         return self._statistics_subset_indices[0]
