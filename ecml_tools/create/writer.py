@@ -111,11 +111,8 @@ class ArrayLike:
             # print("new_key", new_key, self.array.offset, self.array.axis)
             new_key = (new_key[0], slice(0, nvars))
             statistics_registry[new_key] = stats
-        
+
         return stats
-
-
-
 
 
 class FastWriteArray(ArrayLike):
@@ -147,7 +144,6 @@ class FastWriteArray(ArrayLike):
 
     def flush(self):
         self.array[:] = self.cache[:]
-
 
 
 class OffsetView(ArrayLike):
@@ -256,8 +252,6 @@ class DataWriter:
         array.flush()
 
         self.registry.set_flag(icube)
-
-
 
     def load_datacube(self, cube, array):
         start = time.time()

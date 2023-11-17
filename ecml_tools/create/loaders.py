@@ -6,24 +6,23 @@
 # nor does it submit to any jurisdiction.
 
 import datetime
-import shutil
 import glob
-import pickle
+import json
 import logging
 import os
+import pickle
+import shutil
 import uuid
-import json
 import warnings
 from functools import cached_property
 
 import numpy as np
 
-from .check import DatasetName, check_stats
+from .check import DatasetName, check_data_values, check_stats
 from .config import OutputSpecs, loader_config
-from .input import FullLoops, InputTemplates, PartialLoops
+from .input import FullLoops, PartialLoops
 from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
 from .writer import DataWriter
-from .check import check_data_values
 
 LOG = logging.getLogger(__name__)
 
@@ -320,18 +319,20 @@ class StatisticsCreator(Creator):
                 d = data[name]
                 print(key, d.shape, array.shape)
                 array[key] = d
-        
+
         assert np.all(flags), f"Missing statistics data for {np.where(flags==False)}"
 
-        detailed_stats = {k:v[self.i_start : self.i_end + 1] for k,v in detailed_stats.items()}
+        detailed_stats = {
+            k: v[self.i_start : self.i_end + 1] for k, v in detailed_stats.items()
+        }
 
         stats = compute_aggregated_statistics(
             detailed_stats, self.i_len, self.variables_names
         )
 
-        if self.output_path== '-':
-                print(stats)
-                return
+        if self.output_path == "-":
+            print(stats)
+            return
         if self.output_path:
             print(dict(stats))
             with open(self.output_path, "w") as f:
@@ -432,25 +433,25 @@ class Statistics(dict):
 
 
 def check_variance_is_positive(
-    x, variables_names, _minimum, _maximum, _mean, _count, _sums, _squares
+    x, variables_names, minimum, maximum, mean, count, sums, squares
 ):
     if (x >= 0).all():
         return
     print(x)
     print(variables_names)
-    print(_count)
-    for i, (var, y) in enumerate(zip(variables_namees, x)):
+    print(count)
+    for i, (var, y) in enumerate(zip(variables_names, x)):
         if y >= 0:
             continue
         print(
             var,
             y,
-            _maximum[i],
-            _minimum[i],
-            _mean[i],
-            _count[i],
-            _sums[i],
-            _squares[i],
+            maximum[i],
+            minimum[i],
+            mean[i],
+            count[i],
+            sums[i],
+            squares[i],
         )
 
         print(var, np.min(sums[i]), np.max(sums[i]), np.argmin(sums[i]))
@@ -528,7 +529,9 @@ class Registry:
 
             key_str = str(key)
             if key_str in key_strs:
-                raise Exception(f"Duplicate key {key}, found in {f} and {key_strs[key_str]}")
+                raise Exception(
+                    f"Duplicate key {key}, found in {f} and {key_strs[key_str]}"
+                )
             key_strs[key_str] = f
 
             yield key, data
