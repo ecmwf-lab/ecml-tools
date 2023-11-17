@@ -9,75 +9,11 @@
 import datetime
 import logging
 import os
-import pickle
 import shutil
-import glob
 
 import numpy as np
 
 LOG = logging.getLogger(__name__)
-
-
-class StatisticsRegistry:
-    name = "statistics"
-    # names = [ "mean", "stdev", "minimum", "maximum", "sums", "squares", "count", ]
-    # build_names = [ "minimum", "maximum", "sums", "squares", "count", ]
-
-    def __init__(self, dirname, history_callback=None, overwrite=False):
-        if history_callback is None:
-
-            def dummy(*args, **kwargs):
-                pass
-
-            history_callback = dummy
-
-        self.dirname = dirname
-        self.overwrite = overwrite
-        self.history_callback = history_callback
-
-    def create(self):
-        assert not os.path.exists(self.dirname), self.dirname
-        os.makedirs(self.dirname, exist_ok=True)
-        self.history_callback(
-            f"{self.name}_registry_initialised", **{f"{self.name}_version": 2}
-        )
-
-    def delete(self):
-        try:
-            shutil.rmtree(self.dirname)
-        except FileNotFoundError:
-            pass
-
-    def __setitem__(self, key, data):
-        if isinstance(key, slice):
-            # this is just to make the filenames nicer.
-            key_str = f"{key.start}_{key.stop}"
-            if key.step is not None:
-                key_str = f"{key_str}_{key.step}"
-        key = str(key)
-
-        path = os.path.join(self.dirname, f"{key_str}.npz")
-
-        if not self.overwrite:
-            assert not os.path.exists(path), f"{path} already exists"
-
-        LOG.info(f"Writing {self.name} for {key}")
-        with open(path, "wb") as f:
-            pickle.dump((key, data), f)
-        LOG.info(f"Written {self.name} data for {key} in  {path}")
-
-    def read_all(self, expected_lenghts=None):
-        # use glob to read all pickles
-        files = glob.glob(self.dirname + "/*.npz")
-        LOG.info(
-            f"Reading {self.name} data, found {len(files)} for {self.name} in  {self.dirname}"
-        )
-        dic = {}
-        for f in files:
-            with open(f, "rb") as f:
-                key, data = pickle.load(f)
-            assert key not in dic, f"Duplicate key {key}"
-            yield key, data
 
 
 def add_zarr_dataset(

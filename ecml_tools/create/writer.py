@@ -64,21 +64,58 @@ class CubesFilter:
 
 
 class ArrayLike:
+    def __init__(self, array, shape):
+        self.array = array
+        self.shape = shape
+
     def flush():
         pass
 
-
-class DummyArrayLike(ArrayLike):
-    """"""
-
-    def __init__(self, array, shape):
-        self.array = array
-
-    def __getattribute__(self, __name: str):
-        return super().__getattribute__(__name)
-
     def new_key(self, key, values_shape):
         return key
+
+    def save_statistics(self, statistics_registry):
+        now = time.time()
+        nvars = self.shape[1]
+
+        stats_shape = (self.shape[0], nvars)
+
+        count = np.zeros(stats_shape, dtype=np.int64)
+        sums = np.zeros(stats_shape, dtype=np.float64)
+        squares = np.zeros(stats_shape, dtype=np.float64)
+
+        minimum = np.zeros(stats_shape, dtype=np.float64)
+        maximum = np.zeros(stats_shape, dtype=np.float64)
+
+        for i, chunk in enumerate(self.cache):
+            values = chunk.reshape((nvars, -1))
+            minimum[i] = np.min(values, axis=1)
+            maximum[i] = np.max(values, axis=1)
+            sums[i] = np.sum(values, axis=1)
+            squares[i] = np.sum(values * values, axis=1)
+            count[i] = values.shape[1]
+
+        stats = {
+            "minimum": minimum,
+            "maximum": maximum,
+            "sums": sums,
+            "squares": squares,
+            "count": count,
+        }
+        LOG.info(f"Computed statistics in {seconds(time.time()-now)}.")
+
+        assert self.array.axis == 0, self.array.axis
+
+        if statistics_registry is not None:
+            new_key = self.array.new_key(slice(None, None), self.shape)
+            # print("new_key", new_key, self.array.offset, self.array.axis)
+            new_key = (new_key[0], slice(0, nvars))
+            statistics_registry[new_key] = stats
+        
+        return stats
+
+
+
 
 
 class FastWriteArray(ArrayLike):
@@ -111,47 +148,6 @@ class FastWriteArray(ArrayLike):
     def flush(self):
         self.array[:] = self.cache[:]
 
-    def compute_statistics(self, statistics_registry, names):
-        nvars = self.shape[1]
-
-        stats_shape = (self.shape[0], nvars)
-
-        count = np.zeros(stats_shape, dtype=np.int64)
-        sums = np.zeros(stats_shape, dtype=np.float64)
-        squares = np.zeros(stats_shape, dtype=np.float64)
-
-        minimum = np.zeros(stats_shape, dtype=np.float64)
-        maximum = np.zeros(stats_shape, dtype=np.float64)
-
-        for i, chunk in enumerate(self.cache):
-            values = chunk.reshape((nvars, -1))
-            minimum[i] = np.min(values, axis=1)
-            maximum[i] = np.max(values, axis=1)
-            sums[i] = np.sum(values, axis=1)
-            squares[i] = np.sum(values * values, axis=1)
-            count[i] = values.shape[1]
-
-        stats = {
-            "minimum": minimum,
-            "maximum": maximum,
-            "sums": sums,
-            "squares": squares,
-            "count": count,
-        }
-        new_key = self.array.new_key(slice(None, None), self.shape)
-        assert self.array.axis == 0, self.array.axis
-        # print("new_key", new_key, self.array.offset, self.array.axis)
-        new_key = new_key[0]
-        statistics_registry[new_key] = stats
-        return stats
-
-    def save_statistics(self, icube, statistics_registry, names):
-        now = time.time()
-        self.compute_statistics(statistics_registry, names)
-        LOG.info(f"Computed statistics in {seconds(time.time()-now)}.")
-        # for k, v in stats.items():
-        #     with open(f"stats_{icube}_{k}.npy", "wb") as f:
-        #         np.save(f, v)
 
 
 class OffsetView(ArrayLike):
@@ -255,11 +251,13 @@ class DataWriter:
         array = FastWriteArray(array, shape=shape)
         self.load_datacube(cube, array)
 
-        array.save_statistics(icube, self.statistics_registry, self.variables_names)
+        array.save_statistics(statistics_registry=self.statistics_registry)
 
         array.flush()
 
         self.registry.set_flag(icube)
+
+
 
     def load_datacube(self, cube, array):
         start = time.time()

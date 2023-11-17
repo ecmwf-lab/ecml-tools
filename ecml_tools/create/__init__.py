@@ -51,6 +51,20 @@ class EntryPoint:
             loader.load(parts=parts)
 
     @classmethod
+    def statistics(
+        cls,
+        path,
+        output_path=None,
+        print=print,
+        force=False,
+    ):
+        from .loaders import StatisticsCreator
+
+        loader = StatisticsCreator.from_dataset(path=path, print=print, force=force, output_path=output_path)
+        loader.statistics()
+
+
+    @classmethod
     def add_total_size(cls, path):
         from .loaders import SizeCreator
 
