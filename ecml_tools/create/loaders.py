@@ -27,6 +27,7 @@ VERSION = "0.13"
 
 class Creator:
     partial = False
+
     def __init__(self, *, path, config, print=print, **kwargs):
         # Catch all floating point errors, including overflow, sqrt(<0), etc
         np.seterr(all="raise")
@@ -41,6 +42,7 @@ class Creator:
         self.kwargs = kwargs
         self.print = print
 
+        self.statistics_path = kwargs.get("statistics_path", path + ".statistics")
 
     @classmethod
     def from_config(cls, *, config, path, print=print, **kwargs):
@@ -64,9 +66,12 @@ class Creator:
 
     @cached_property
     def statistics_registry(self):
-        from .zarr import ZarrStatisticsRegistry  # TODO
+        from .zarr import StatisticsRegistry  # TODO
 
-        return ZarrStatisticsRegistry(self.path)
+        return StatisticsRegistry(
+            self.statistics_path,
+            history_callback=self.registry.add_to_history,
+        )
 
     @classmethod
     def from_dataset(cls, *, path, print=print, **kwargs):
@@ -106,9 +111,12 @@ class Creator:
 
 class InitialiseCreator(Creator):
     partial = True
+
     def __init__(self, *, path, config, print=print, **kwargs):
         super().__init__(path=path, config=config, print=print, **kwargs)
-        self.input_handler = InputHandler(self.main_config, partial=self.partial)
+        self.statistics_registry.delete()
+        self.data_descriptor = InputHandler(self.main_config, partial=self.partial)
+        self.input_handler = self.data_descriptor
 
     def initialise(self, check_name=True):
         """Create empty dataset"""
@@ -117,15 +125,15 @@ class InitialiseCreator(Creator):
         print(self.main_config)
         print("-------------------------")
 
-        total_shape = self.input_handler.shape
+        total_shape = self.data_descriptor.shape
         self.print(f"total_shape = {total_shape}")
         print("-------------------------")
 
-        grid_points = self.input_handler.grid_points
+        grid_points = self.data_descriptor.grid_points
         print(f"gridpoints size: {[len(i) for i in grid_points]}")
         print("-------------------------")
 
-        dates = self.input_handler.get_datetimes()
+        dates = self.data_descriptor.get_datetimes()
         self.print(f"Found {len(dates)} datetimes.")
         print(
             f"Dates: Found {len(dates)} datetimes, in {self.input_handler.n_cubes} cubes: ",
@@ -194,9 +202,6 @@ class InitialiseCreator(Creator):
             )
             ds_name.raise_if_not_valid(print=self.print)
 
-        for i, loop in enumerate(self.input_handler.loops):
-            print(f"Loop {i}: ", loop._info)
-
         if len(dates) != total_shape[0]:
             raise ValueError(
                 f"Final date size {len(dates)} (from {dates[0]} to {dates[-1]}, {frequency=}) "
@@ -234,8 +239,8 @@ class InitialiseCreator(Creator):
 class LoadCreator(Creator):
     def __init__(self, *, path, config, print=print, **kwargs):
         super().__init__(path=path, config=config, print=print, **kwargs)
-        self.data_descriptor = DataDescriptor(self.main_config, partial=self.partial)
-        self.cube_provider = CubeProvider(self.main_config, partial=self.partial)
+        self.data_descriptor = InputHandler(self.main_config, partial=self.partial)
+        self.cubes_provider = self.data_descriptor
 
     def load(self, parts):
         self.registry.add_to_history("loading_data_start", parts=parts)
@@ -249,6 +254,7 @@ class StatisticsCreator(Creator):
     def __init__(self, *, path, config, print=print, **kwargs):
         super().__init__(path=path, config=config, print=print, **kwargs)
         self.input_handler = InputHandler(self.main_config, partial=self.partial)
+
     def statistics_start_indice(self):
         return self._statistics_subset_indices[0]
 
@@ -446,9 +452,6 @@ class StatisticsCreator(Creator):
 
 
 class SizeCreator(Creator):
-    def __init__(self, *, path, config, print=print, **kwargs):
-        super().__init__(path=path, config=config, print=print, **kwargs)
-        self.input_handler = InputHandler(self.main_config, partial=self.partial)
     def add_total_size(self):
         dic = compute_directory_sizes(self.path)
 

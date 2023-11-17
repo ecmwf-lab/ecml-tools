@@ -305,129 +305,7 @@ def build_datetime(date, time, step):
     return dt
 
 
-class InputHandler:
-    def __init__(self, main_config, partial=False):
-        self.main_config = main_config
-
-        inputs = Inputs(self.main_config.input)
-        self.loops = [
-            c
-            if isinstance(c, Loop) and c.inputs == inputs
-            else Loop(c, inputs, parent=self, partial=partial)
-            for c in self.main_config.loops
-        ]
-        if not self.loops:
-            raise NotImplementedError("No loop")
-
-    def iter_cubes(self):
-        for loop in self.loops:
-            yield from loop.iterate()
-
-    @cached_property
-    def n_iter_loops(self):
-        return sum([loop.n_iter_loops for loop in self.loops])
-
-    @property
-    def first_cube(self):
-        return self.first_lazycube.to_cube()
-
-    @property
-    def first_lazycube(self):
-        for loop in self.loops:
-            for lazycube in loop.iterate():
-                return lazycube
-
-    @cached_property
-    def chunking(self):
-        return self.first_cube.chunking(self.main_config.output.chunking)
-
-    @cached_property
-    def n_cubes(self):
-        n = 0
-        for loop in self.loops:
-            for i in loop.iterate():
-                n += 1
-        return n
-
-    @cached_property
-    def _info(self):
-        infos = [loop._info for loop in self.loops]
-
-        # check all are the same
-        ref = infos[0]
-        for c in infos:
-            assert (np.array(ref.grid_points) == np.array(c.grid_points)).all(), (
-                "grid_points mismatch",
-                c.grid_points,
-                ref.grid_points,
-                type(ref.grid_points),
-            )
-            assert ref.resolution == c.resolution, (
-                "resolution mismatch",
-                c.resolution,
-                ref.resolution,
-            )
-            assert ref.variables == c.variables, (
-                "variables mismatch",
-                c.variables,
-                ref.variables,
-            )
-
-        coords = deepcopy(ref.coords)
-        assert (
-            "valid_datetime" in coords
-        ), f"valid_datetime not found in coords {coords}"
-        coords["valid_datetime"] = self.get_datetimes()
-
-        for info in infos:
-            for name, values in info.coords.items():
-                if name == "valid_datetime":
-                    continue
-                assert values == ref.coords[name], (values, ref.coords[name])
-
-        return Info(
-            ref.first_field,
-            ref.grid_points,
-            ref.resolution,
-            coords,
-            ref.variables,
-            ref.data_request,
-        )
-
-    @property
-    def first_field(self):
-        return self._info.first_field
-
-    @property
-    def grid_points(self):
-        return self._info.grid_points
-
-    @property
-    def resolution(self):
-        return self._info.resolution
-
-    @property
-    def data_request(self):
-        return self._info.data_request
-
-    @property
-    def coords(self):
-        return self._info.coords
-
-    @property
-    def variables(self):
-        return self._info.variables
-
-    @property
-    def shape(self):
-        shape = [len(c) for c in self.coords.values()]
-
-        field_shape = list(self.first_field.shape)
-        if self.main_config.output.flatten_grid:
-            field_shape = [math.prod(field_shape)]
-
-        return shape + field_shape
-
+class DateTimesDataDescriptor:
     @cached_property
     def _datetimes_and_frequency(self):
         # merge datetimes from all loops and check there are no duplicates
@@ -475,15 +353,152 @@ class InputHandler:
     def get_datetimes(self):
         return self._datetimes_and_frequency[0]
 
+
+class DataDescriptor:
+    @cached_property
+    def data_description(self):
+        infos = []
+        for loop in self.loops:
+            first = loop.first.data_description
+            coords = deepcopy(first.coords)
+            assert (
+                "valid_datetime" in coords
+            ), f"valid_datetime not found in coords {coords}"
+            coords["valid_datetime"] = loop.get_datetimes()
+
+            loop_data_description = DataDescription(
+                first_field=first.first_field,
+                grid_points=first.grid_points,
+                resolution=first.resolution,
+                variables=first.variables,
+                data_request=first.data_request,
+                coords=coords,
+            )
+            infos.append(loop_data_description)
+
+        # check all are the same
+        ref = infos[0]
+        for c in infos:
+            assert (np.array(ref.grid_points) == np.array(c.grid_points)).all(), (
+                "grid_points mismatch",
+                c.grid_points,
+                ref.grid_points,
+                type(ref.grid_points),
+            )
+            assert ref.resolution == c.resolution, (
+                "resolution mismatch",
+                c.resolution,
+                ref.resolution,
+            )
+            assert ref.variables == c.variables, (
+                "variables mismatch",
+                c.variables,
+                ref.variables,
+            )
+
+        coords = deepcopy(ref.coords)
+        assert (
+            "valid_datetime" in coords
+        ), f"valid_datetime not found in coords {coords}"
+        coords["valid_datetime"] = self.get_datetimes()
+
+        for info in infos:
+            for name, values in info.coords.items():
+                if name == "valid_datetime":
+                    continue
+                assert values == ref.coords[name], (values, ref.coords[name])
+
+        return DataDescription(
+            ref.first_field,
+            ref.grid_points,
+            ref.resolution,
+            coords,
+            ref.variables,
+            ref.data_request,
+        )
+
+    @property
+    def first_field(self):
+        return self.data_description.first_field
+
+    @property
+    def grid_points(self):
+        return self.data_description.grid_points
+
+    @property
+    def resolution(self):
+        return self.data_description.resolution
+
+    @property
+    def data_request(self):
+        return self.data_description.data_request
+
+    @property
+    def coords(self):
+        return self.data_description.coords
+
+    @property
+    def variables(self):
+        return self.data_description.variables
+
+
+class InputHandler(DateTimesDataDescriptor, DataDescriptor):
+    def __init__(self, main_config, partial=False):
+        self.main_config = main_config
+
+        inputs = Inputs(self.main_config.input)
+        self.loops = [
+            c
+            if isinstance(c, Loop) and c.inputs == inputs
+            else Loop(c, inputs, parent=self, partial=partial)
+            for c in self.main_config.loops
+        ]
+        if not self.loops:
+            raise NotImplementedError("No loop")
+
+    def iter_cubes(self):
+        for loop in self.loops:
+            yield from loop.iterate_cubes()
+
+    @cached_property
+    def n_iter_loops(self):
+        return sum([loop.n_iter_loops for loop in self.loops])
+
+    @property
+    def first_cube(self):
+        return self.first_lazycube.to_cube()
+
+    @property
+    def first_lazycube(self):
+        for loop in self.loops:
+            for lazycube in loop.iterate_cubes():
+                return lazycube
+
+    @cached_property
+    def chunking(self):
+        return self.first_cube.chunking(self.main_config.output.chunking)
+
+    @cached_property
+    def n_cubes(self):
+        n = 0
+        for loop in self.loops:
+            for i in loop.iterate_cubes():
+                n += 1
+        return n
+
+    @property
+    def shape(self):
+        shape = [len(c) for c in self.coords.values()]
+
+        field_shape = list(self.first_field.shape)
+        if self.main_config.output.flatten_grid:
+            field_shape = [math.prod(field_shape)]
+
+        return shape + field_shape
+
     def __repr__(self):
         return "InputHandler\n  " + "\n  ".join(str(i) for i in self.loops)
 
-class DataDescriptor(InputHandler):
-    pass
-class CubeProvider(InputHandler):
-    pass
-        #self.n_cubes = parent.cubes_provider.n_cubes
-        #self.iter_cubes = parent.cubes_provider.iter_cubes
 
 class Loop(dict):
     def __init__(self, dic, inputs, partial=False, parent=None):
@@ -522,7 +537,7 @@ class Loop(dict):
     def n_iter_loops(self):
         return len(list(itertools.product(*self.values.values())))
 
-    def iterate(self):
+    def iterate_cubes(self):
         for items in itertools.product(*self.values.values()):
             yield LazyCube(
                 inputs=self.applies_to_inputs,
@@ -542,28 +557,12 @@ class Loop(dict):
             partial=self.partial,
         )
 
-    @cached_property
-    def _info(self):
-        first_info = self.first._info
-        coords = deepcopy(first_info.coords)
-        assert (
-            "valid_datetime" in coords
-        ), f"valid_datetime not found in coords {coords}"
-        coords["valid_datetime"] = self.get_datetimes()
-        return Info(
-            first_field=first_info.first_field,
-            grid_points=first_info.grid_points,
-            resolution=first_info.resolution,
-            coords=coords,
-            variables=first_info.variables,
-            data_request=first_info.data_request,
-        )
 
     def get_datetimes(self):
         # merge datetimes from all lazycubes and check there are no duplicates
         datetimes = set()
 
-        for i in self.iterate():
+        for i in self.iterate_cubes():
             assert isinstance(i, LazyCube), i
             new = i.get_datetimes()
 
@@ -651,7 +650,7 @@ class LazyCube:
         return cube, data
 
     @property
-    def _info(self):
+    def data_description(self):
         cube, data = self._to_data_and_cube()
 
         first_field = data[0]
@@ -661,7 +660,7 @@ class LazyCube:
         coords = cube.user_coords
         variables = list(coords[list(coords.keys())[1]])
 
-        return Info(
+        return DataDescription(
             first_field, grid_points, resolution, coords, variables, data_request
         )
 
@@ -731,7 +730,7 @@ def _format_list(x):
     return str(x)
 
 
-class Info:
+class DataDescription:
     def __init__(
         self, first_field, grid_points, resolution, coords, variables, data_request
     ):
@@ -766,7 +765,7 @@ class Info:
         )
         shape = shape.rjust(20)
         return (
-            f"Info(first_field={self.first_field}, "
+            f"DataDescription(first_field={self.first_field}, "
             f"resolution={self.resolution}, "
             f"variables={'/'.join(self.variables)})"
             f" coords={', '.join([k + ':' + _format_list(v) for k, v in self.coords.items()])}"

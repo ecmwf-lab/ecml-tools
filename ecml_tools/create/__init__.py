@@ -17,7 +17,7 @@ class EntryPoint:
         cls,
         path,
         config,
-        force=False,
+        overwrite=False,
         no_check_name=True,
         cache_dir=None,
         print=print,
@@ -29,8 +29,8 @@ class EntryPoint:
 
         cls = InitialiseCreator
 
-        if cls.already_exists(path) and not force:
-            raise Exception(f"{path} already exists. Use --force to overwrite.")
+        if cls.already_exists(path) and not overwrite:
+            raise Exception(f"{path} already exists. Use --overwrite to overwrite.")
 
         with cache_context(cache_dir):
             obj = cls.from_config(path=path, config=config, print=print)
