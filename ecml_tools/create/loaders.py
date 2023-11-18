@@ -18,6 +18,7 @@ from functools import cached_property
 
 import numpy as np
 
+from ecml_tools.data import open_dataset
 from .check import DatasetName, check_data_values, check_stats
 from .config import OutputSpecs, loader_config
 from .input import FullLoops, PartialLoops
@@ -27,7 +28,6 @@ from .writer import DataWriter
 LOG = logging.getLogger(__name__)
 
 VERSION = "0.13"
-
 
 
 class Creator:
@@ -45,7 +45,15 @@ class Creator:
         self.kwargs = kwargs
         self.print = print
 
-        self.statistics_path = kwargs.get("statistics_path", path + ".statistics")
+        if "statistics_tmp" in kwargs:
+            statistics_tmp = kwargs["statistics_tmp"]
+            if statistics_tmp is None:
+                statistics_tmp = path + ".statistics"
+
+            self.statistics_registry = StatisticsRegistry(
+                statistics_tmp,
+                history_callback=self.registry.add_to_history,
+            )
 
     @classmethod
     def from_config(cls, *, config, path, print=print, **kwargs):
@@ -66,13 +74,6 @@ class Creator:
         from .zarr import ZarrBuiltRegistry  # TODO
 
         return ZarrBuiltRegistry(self.path)
-
-    @cached_property
-    def statistics_registry(self):
-        return StatisticsRegistry(
-            self.statistics_path,
-            history_callback=self.registry.add_to_history,
-        )
 
     @classmethod
     def from_dataset(cls, *, path, print=print, **kwargs):
@@ -251,8 +252,15 @@ class LoadCreator(Creator):
 
 
 class StatisticsCreator(Creator):
-    def __init__(self, output_path=None, force=False, **kwargs):
+    def __init__(
+        self,
+        statistics_from=None,
+        statistics_output=None,
+        force=False,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
+        self.statistics_output = statistics_output
 
         incomplete = not all(self.registry.get_flags(sync=False))
         if incomplete and not force:
@@ -260,84 +268,48 @@ class StatisticsCreator(Creator):
                 f"Zarr {self.path} is not fully built, not writting statistics."
             )
 
-        self.output_path = output_path
+        ds = open_dataset(self.path)
+        self.dataset_shape = ds.shape
+        self.variables_names = ds.variables
 
         statistics_start = self.main_config.output.get("statistics_start")
         statistics_end = self.main_config.output.get("statistics_end")
-        if statistics_end is None:
-            warnings.warn(
-                "No statistics_end specified, using last date of the dataset."
-            )
 
-        from ecml_tools.data import open_dataset
-
-        ds = open_dataset(self.path)
         subset = ds.dates_interval_to_indices(statistics_start, statistics_end)
-
-        self.variables_names = ds.variables  # for logging purposes
         self.i_start = subset[0]
         self.i_end = subset[-1]
         self.date_start = ds.dates[subset[0]]
         self.date_end = ds.dates[subset[-1]]
 
-        self.i_len = self.i_end + 1 - self.i_start
-
-        self.print(
-            f"Statistics computed on {self.i_len}/{len(ds.dates)} samples "
-            f"first={self.date_start} "
-            f"last={self.date_end}"
-        )
-        if self.i_end < self.i_start:
-            raise ValueError(
-                f"Cannot compute statistics on an empty interval."
-                f" Requested : from {self.date_start} to {self.date_end}."
-                f" Available: from {ds.dates[0]} to {ds.dates[-1]}."
-            )
+        i_len = self.i_end + 1 - self.i_start
+        self.print(f"Statistics computed on {i_len}/{len(ds.dates)} samples ")
+        print(f"Requested ({i_len}): from {self.date_start} to {self.date_end}.")
+        print(f"Available ({len(ds.dates)}): from {ds.dates[0]} to {ds.dates[-1]}.")
+        if i_len < 1:
+            raise ValueError(f"Cannot compute statistics on an empty interval.")
 
     def statistics(self):
-        from ecml_tools.data import open_dataset
+        expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
 
-        ds = open_dataset(self.path)
-
-        shape = (ds.shape[0], ds.shape[1])
-        shape_ = (len(ds.dates), len(ds.variables))
-        assert shape == shape_, (shape, shape_)
-
-        detailed_stats = dict(
-            minimum=np.full(shape, np.nan, dtype=np.float64),
-            maximum=np.full(shape, np.nan, dtype=np.float64),
-            sums=np.full(shape, np.nan, dtype=np.float64),
-            squares=np.full(shape, np.nan, dtype=np.float64),
-            count=np.full(shape, -1, dtype=np.int64),
-        )
-        flags = np.full(shape, False, dtype=np.bool)
-
-        for key, data in self.statistics_registry.read_all():
-            assert isinstance(data, dict), data
-            assert not np.any(flags[key]), f"Overlapping value for {key} {flags}"
-            flags[key] = True
-            for name, array in detailed_stats.items():
-                d = data[name]
-                print(key, d.shape, array.shape)
-                array[key] = d
-
-        assert np.all(flags), f"Missing statistics data for {np.where(flags==False)}"
+        detailed_stats = self.statistics_registry.read_detailed_stats(expected_shape)
 
         detailed_stats = {
             k: v[self.i_start : self.i_end + 1] for k, v in detailed_stats.items()
         }
 
-        stats = compute_aggregated_statistics(
-            detailed_stats, self.i_len, self.variables_names
-        )
+        stats = compute_aggregated_statistics(detailed_stats, self.variables_names)
 
-        if self.output_path == "-":
+        self.write_aggregated_statistics(stats)
+
+    def write_aggregated_statistics(self, stats):
+        if self.statistics_output == "-":
             print(stats)
             return
-        if self.output_path:
+
+        if self.statistics_output:
             print(dict(stats))
-            with open(self.output_path, "w") as f:
-                json.dump(stats, f)
+            stats.save(self.statistics_output)
+            print(f"Wrote {self.statistics_output}")
             return
 
         for k in [
@@ -368,11 +340,11 @@ class StatisticsCreator(Creator):
         )
 
 
-def compute_aggregated_statistics(data, i_len, variables_names):
-    if variables_names is None:
-        variables_names = [str(i) for i in range(0, i_len)]
-
+def compute_aggregated_statistics(data, variables_names):
+    i_len = None
     for name, array in data.items():
+        if i_len is None:
+            i_len = len(array)
         assert len(array) == i_len, (name, len(array), i_len)
 
     for name, array in data.items():
@@ -405,32 +377,71 @@ def compute_aggregated_statistics(data, i_len, variables_names):
         sums=_sums,
         squares=_squares,
         stdev=_stdev,
+        variables_names=variables_names,
     )
-    stats.check(variables_names)
 
     return stats
 
 
 class Statistics(dict):
-    def check(self, variables_names):
-        self.variables_names = variables_names
-        for v in self.values():
-            assert v.shape == self["mean"].shape
+    def __init__(self, dic):
+        super().__init__(dic)
+        self.check()
 
-        for i, name in enumerate(variables_names):
+    @property
+    def size(self):
+        return len(self["variables_names"])
+
+    def check(self):
+        for k, v in self.items():
+            if k == "variables_names":
+                assert len(v) == self.size
+                continue
+            assert v.shape == (self.size,)
+            if k == "count":
+                assert (v >= 0).all(), (k, v)
+                assert v.dtype == np.int64, (k, v)
+                continue
+            if k == "stdev":
+                assert (v >= 0).all(), (k, v)
+            assert v.dtype == np.float64, (k, v)
+
+        for i, name in enumerate(self["variables_names"]):
             check_stats(**{k: v[i] for k, v in self.items()}, msg=f"{i} {name}")
             check_data_values(self["minimum"][i], name=name)
 
     def __str__(self):
         return "\n".join(
             (
-                f"{v.rjust(10)}: "
+                f"{self['variables_names'][j].rjust(10)}: "
                 f"min/max = {self['minimum'][j]:.6g} {self['maximum'][j]:.6g}"
                 "   \t:   "
                 f"mean/stdev = {self['mean'][j]:.6g} {self['stdev'][j]:.6g}"
             )
-            for j, v in enumerate(self.variables_names)
+            for j in range(self.size)
         )
+
+    def save(self, filename):
+        assert filename.endswith(".json"), filename
+        dic = {k: v.tolist() for k, v in self.items()}
+        with open(filename, "w") as f:
+            json.dump(dic, f)
+
+    def load(self, filename):
+        assert filename.endswith(".json"), filename
+        with open(filename, "r") as f:
+            dic = json.load(f)
+
+        dic_ = {}
+        for k, v in dic.items():
+            if k == "count":
+                dic_[k] = np.array(v, dtype=np.int64)
+                continue
+            if k == "variables":
+                dic_[k] = v
+                continue
+            dic_[k] = np.array(v, dtype=np.float64)
+        return Statistics(dic_)
 
 
 def check_variance_is_positive(
@@ -500,7 +511,16 @@ class Registry:
         # else:
         #     key_str = str(key_str)
 
-        key_str = str(key)
+        key_str = (
+            str(key)
+            .replace("(", "")
+            .replace(")", "")
+            .replace(" ", "_")
+            .replace(",", "_")
+            .replace("None", "x")
+            .replace("__", "_")
+            .lower()
+        )
         path = os.path.join(self.dirname, f"{key_str}.npz")
 
         if not self.overwrite:
@@ -511,7 +531,7 @@ class Registry:
             pickle.dump((key, data), f)
         LOG.info(f"Written {self.name} data for {key} in  {path}")
 
-    def read_all(self, expected_lenghts=None):
+    def __iter__(self):
         # use glob to read all pickles
         files = glob.glob(self.dirname + "/*.npz")
 
@@ -520,8 +540,6 @@ class Registry:
         )
 
         assert len(files) > 0, f"No files found in {self.dirname}"
-        if expected_lenghts:
-            assert len(files) == expected_lenghts, (len(files), expected_lenghts)
 
         key_strs = dict()
         for f in files:
@@ -540,6 +558,27 @@ class Registry:
 
 class StatisticsRegistry(Registry):
     name = "statistics"
+
+    def read_detailed_stats(self, shape):
+        detailed_stats = dict(
+            minimum=np.full(shape, np.nan, dtype=np.float64),
+            maximum=np.full(shape, np.nan, dtype=np.float64),
+            sums=np.full(shape, np.nan, dtype=np.float64),
+            squares=np.full(shape, np.nan, dtype=np.float64),
+            count=np.full(shape, -1, dtype=np.int64),
+        )
+
+        flags = np.full(shape, False, dtype=np.bool)
+        for key, data in self:
+            assert isinstance(data, dict), data
+            assert not np.any(flags[key]), f"Overlapping values for {key} {flags}"
+            flags[key] = True
+            for name, array in detailed_stats.items():
+                d = data[name]
+                array[key] = d
+        assert np.all(flags), f"Missing statistics data for {np.where(flags==False)}"
+
+        return detailed_stats
 
 
 class SizeCreator(Creator):

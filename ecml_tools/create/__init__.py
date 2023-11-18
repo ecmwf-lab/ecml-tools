@@ -20,6 +20,7 @@ class EntryPoint:
         overwrite=False,
         no_check_name=True,
         cache_dir=None,
+        statistics_tmp=None,
         print=print,
     ):
         # check path
@@ -33,7 +34,9 @@ class EntryPoint:
             raise Exception(f"{path} already exists. Use --overwrite to overwrite.")
 
         with cache_context(cache_dir):
-            obj = cls.from_config(path=path, config=config, print=print)
+            obj = cls.from_config(
+                path=path, config=config, statistics_tmp=statistics_tmp, print=print
+            )
             obj.initialise(check_name=not no_check_name)
 
     @classmethod
@@ -42,28 +45,39 @@ class EntryPoint:
         path,
         parts=None,
         cache_dir=None,
+        statistics_tmp=None,
         print=print,
     ):
         from .loaders import LoadCreator
 
         with cache_context(cache_dir):
-            loader = LoadCreator.from_dataset(path=path, print=print)
+            loader = LoadCreator.from_dataset(
+                path=path, statistics_tmp=statistics_tmp, print=print
+            )
             loader.load(parts=parts)
 
     @classmethod
     def statistics(
         cls,
         path,
-        output_path=None,
+        statistics_tmp=None,
+        statistics_output=None,
+        statistics_from=None,
         print=print,
         force=False,
     ):
         from .loaders import StatisticsCreator
 
         loader = StatisticsCreator.from_dataset(
-            path=path, print=print, force=force, output_path=output_path
+            path=path,
+            print=print,
+            force=force,
+            statistics_from=statistics_from,
+            statistics_tmp=statistics_tmp,
+            statistics_output=statistics_output,
         )
         loader.statistics()
+
 
     @classmethod
     def add_total_size(cls, path):
