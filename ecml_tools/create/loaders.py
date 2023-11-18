@@ -17,13 +17,16 @@ import warnings
 from functools import cached_property
 
 import numpy as np
+import zarr
 
 from ecml_tools.data import open_dataset
+
 from .check import DatasetName, check_data_values, check_stats
 from .config import OutputSpecs, loader_config
 from .input import FullLoops, PartialLoops
 from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
 from .writer import DataWriter
+from .zarr import add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
@@ -291,7 +294,14 @@ class StatisticsCreator(Creator):
     def statistics(self):
         expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
 
+        assert statistics_from is None, "not implemented"
+
         detailed_stats = self.statistics_registry.read_detailed_stats(expected_shape)
+
+        if self.statistics_output:
+            print("Not writing detailed statistics because statistics_output is set")
+        else:
+            self.write_detailed_statistics(detailed_stats)
 
         detailed_stats = {
             k: v[self.i_start : self.i_end + 1] for k, v in detailed_stats.items()
@@ -300,6 +310,14 @@ class StatisticsCreator(Creator):
         stats = compute_aggregated_statistics(detailed_stats, self.variables_names)
 
         self.write_aggregated_statistics(stats)
+
+    def write_detailed_statistics(self, detailed_stats):
+        z = zarr.open(self.path)["_build"]
+
+        for k, v in detailed_stats.items():
+            if k == "variables_names":
+                continue
+            add_zarr_dataset(zarr_root=z, name=k, array=v)
 
     def write_aggregated_statistics(self, stats):
         if self.statistics_output == "-":
@@ -331,13 +349,13 @@ class StatisticsCreator(Creator):
         self.registry.add_provenance(name="provenance_statistics")
 
         self.registry.add_to_history(
-            "aggregate_statistics_end",
-            # "compute_statistics_end",
+            "compute_statistics_end",
             start=str(self.date_start),
             end=str(self.date_end),
             i_start=self.i_start,
             i_end=self.i_end,
         )
+        print(f"Wrote statistics in {self.path}")
 
 
 def compute_aggregated_statistics(data, variables_names):
@@ -384,8 +402,8 @@ def compute_aggregated_statistics(data, variables_names):
 
 
 class Statistics(dict):
-    def __init__(self, dic):
-        super().__init__(dic)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.check()
 
     @property

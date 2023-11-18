@@ -78,7 +78,6 @@ class EntryPoint:
         )
         loader.statistics()
 
-
     @classmethod
     def add_total_size(cls, path):
         from .loaders import SizeCreator
