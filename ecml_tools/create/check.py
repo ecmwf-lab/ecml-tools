@@ -172,6 +172,10 @@ class DatasetName:
             )
 
 
+class StatisticsValueError(ValueError):
+    pass
+
+
 def check_data_values(arr, *, name: str, log=[]):
     min, max = arr.min(), arr.max()
     assert not (np.isnan(arr).any()), (name, min, max, *log)
@@ -181,18 +185,33 @@ def check_data_values(arr, *, name: str, log=[]):
     if max == 9999.0:
         warnings.warn(f"Max value 9999 for {name}")
 
-    if name == ["lsm", "insolation"]:  # 0. to 1.
-        assert max <= 1, (name, min, max, *log)
-        assert min >= 0, (name, min, max, *log)
+    in_0_1 = dict(minimum=0, maximum=1)
+    limits = {
+        "lsm": in_0_1,
+        "insolation": in_0_1,
+        "2t": dict(minimum=173.15, maximum=373.15),
+    }
 
-    if name == "2t":  # surface temp between -100 celcius and +100 celcius
-        assert max <= 373.15, (name, min, max, *log)
-        assert min >= 173.15, (name, min, max, *log)
+    if name in limits:
+        if min < limits[name]["minimum"]:
+            raise StatisticsValueError(
+                (
+                    f"For {name}: minimum value in the data is {min}. "
+                    "Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
+                )
+            )
+        if max > limits[name]["maximum"]:
+            raise StatisticsValueError(
+                (
+                    f"For {name}: maximum value in the data is {max}. "
+                    "Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
+                )
+            )
 
 
 def check_stats(minimum, maximum, mean, msg, **kwargs):
     tolerance = (abs(minimum) + abs(maximum)) * 0.01
     if (mean - minimum < -tolerance) or (mean - minimum < -tolerance):
-        raise ValueError(
+        raise StatisticsValueError(
             f"Mean is not in min/max interval{msg} : we should have {minimum} <= {mean} <= {maximum}"
         )

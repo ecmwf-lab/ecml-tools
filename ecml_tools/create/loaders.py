@@ -75,7 +75,7 @@ class Loader:
 
     @cached_property
     def registry(self):
-        from .zarr import ZarrBuiltRegistry  # TODO
+        from .zarr import ZarrBuiltRegistry
 
         return ZarrBuiltRegistry(self.path)
 
@@ -108,8 +108,6 @@ class Loader:
 
     def _add_dataset(self, mode="r+", **kwargs):
         import zarr
-
-        from .zarr import add_zarr_dataset
 
         z = zarr.open(self.path, mode=mode)
         return add_zarr_dataset(zarr_root=z, **kwargs)
@@ -237,7 +235,7 @@ class InitialiseLoader(Loader):
 
         self.registry.create(lengths=lengths)
         self.statistics_registry.create(exist_ok=False)
-        self.add_to_history(
+        self.registry.add_to_history(
             "statistics_registry_initialised", version=self.statistics_registry.version
         )
 
@@ -256,7 +254,9 @@ class ContentLoader(Loader):
         data_writer.write()
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
-        self.statistics_registry.add_provenance(name="provenance_load")
+        self.statistics_registry.add_provenance(
+            name="provenance_load", config=self.main_config
+        )
 
 
 class StatisticsLoader(Loader):
@@ -282,6 +282,8 @@ class StatisticsLoader(Loader):
             self._write_to_dataset = False
 
         if not statistics_from_data and (statistics_start or statistics_end):
+            # The period is already defined in the config
+            # and changing this should be written in the provenance
             raise NotImplementedError("Not implemented yet.")
 
         self.statistics_output = statistics_output
@@ -377,13 +379,15 @@ class StatisticsLoader(Loader):
         ):
             i_ = i - self.i_start
             data = ds[slice(i, i + 1), :]
-            one = compute_statistics(data)
+            one = compute_statistics(data, self.variables_names)
             for k, v in one.items():
                 detailed_stats[k][i_] = v
 
         print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
         self.statistics_registry[key] = detailed_stats
-        self.statistics_registry.add_provenance(name="provenance_recompute_statistics")
+        self.statistics_registry.add_provenance(
+            name="provenance_recompute_statistics", config=self.main_config
+        )
         exit()
 
     def write_detailed_statistics(self, detailed_stats):
@@ -404,9 +408,8 @@ class StatisticsLoader(Loader):
             return
 
         if self.statistics_output:
-            print(dict(stats))
-            stats.save(self.statistics_output)
-            print(f"Wrote {self.statistics_output}")
+            stats.save(self.statistics_output, provenance=dict(config=self.main_config))
+            print(f"✅ Statistics written in {self.statistics_output}")
             return
 
         if not self._write_to_dataset:
@@ -427,8 +430,6 @@ class StatisticsLoader(Loader):
             statistics_start_date=str(self.date_start),
             statistics_end_date=str(self.date_end),
         )
-
-        self.registry.add_provenance(name="provenance_statistics")
 
         self.registry.add_to_history(
             "compute_statistics_end",

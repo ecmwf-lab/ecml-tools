@@ -105,11 +105,11 @@ class FastWriteArray(ArrayLike):
     def flush(self):
         self.array[:] = self.cache[:]
 
-    def compute_statistics_and_key(self):
+    def compute_statistics_and_key(self, variables_names):
         from .statistics import compute_statistics
 
         now = time.time()
-        stats = compute_statistics(self.cache)
+        stats = compute_statistics(self.cache, variables_names)
         LOG.info(f"Computed statistics in {seconds(time.time()-now)}.")
 
         new_key = self.new_key(slice(None, None), self.shape)
@@ -224,7 +224,7 @@ class DataWriter:
         array = FastWriteArray(array, shape=shape)
         self.load_datacube(cube, array)
 
-        new_key, stats = array.compute_statistics_and_key()
+        new_key, stats = array.compute_statistics_and_key(self.variables_names)
         self.statistics_registry[new_key] = stats
 
         array.flush()

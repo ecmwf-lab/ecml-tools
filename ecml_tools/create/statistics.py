@@ -12,13 +12,14 @@ import logging
 import os
 import pickle
 import shutil
+from collections import defaultdict
 
 import numpy as np
 from prepml.utils.text import table
 
 from ecml_tools.provenance import gather_provenance_info
 
-from .check import check_data_values, check_stats
+from .check import StatisticsValueError, check_data_values, check_stats
 
 LOG = logging.getLogger(__name__)
 
@@ -43,9 +44,10 @@ class Registry:
     def create(self, exist_ok):
         os.makedirs(self.dirname, exist_ok=exist_ok)
 
-    def add_provenance(self, name="provenance"):
+    def add_provenance(self, name="provenance", **kwargs):
+        out = dict(provenance=gather_provenance_info(), **kwargs)
         with open(os.path.join(self.dirname, f"{name}.json"), "w") as f:
-            json.dump(gather_provenance_info(), f)
+            json.dump(out, f)
 
     def delete(self):
         try:
@@ -154,6 +156,16 @@ def compute_aggregated_statistics(data, variables_names):
             continue
         assert not np.isnan(array).any(), (name, array)
 
+    # for i in range(0, i_len):
+    #    for j in range(len(variables_names)):
+    #        stats = Statistics(
+    #            minimum=data["minimum"][i,:],
+    #            maximum=data["maximum"][i,:],
+    #            mean=data["mean"][i,:],
+    #            stdev=data["stdev"][i,:],
+    #            variables_names=variables_names,
+    #        )
+
     _minimum = np.amin(data["minimum"], axis=0)
     _maximum = np.amax(data["maximum"], axis=0)
     _count = np.sum(data["count"], axis=0)
@@ -185,7 +197,7 @@ def compute_aggregated_statistics(data, variables_names):
     return stats
 
 
-def compute_statistics(array):
+def compute_statistics(array, check_variables_names=None):
     nvars = array.shape[1]
     stats_shape = (array.shape[0], nvars)
 
@@ -203,7 +215,8 @@ def compute_statistics(array):
         squares[i] = np.sum(values * values, axis=1)
         count[i] = values.shape[1]
 
-        # Statistics(minimum=minimum[i], maximum= maximum[i], count=count[i]).check()
+        for j, name in enumerate(check_variables_names):
+            check_data_values(values[j, :], name=name)
 
     return {
         "minimum": minimum,
@@ -215,9 +228,12 @@ def compute_statistics(array):
 
 
 class Statistics(dict):
-    def __init__(self, *args, **kwargs):
+    STATS_NAMES = ["minimum", "maximum", "mean", "stdev"]  # order matter for __str__.
+
+    def __init__(self, *args, check=True, **kwargs):
         super().__init__(*args, **kwargs)
-        self.check()
+        if check:
+            self.check()
 
     @property
     def size(self):
@@ -238,16 +254,17 @@ class Statistics(dict):
             assert v.dtype == np.float64, (k, v)
 
         for i, name in enumerate(self["variables_names"]):
-            check_stats(**{k: v[i] for k, v in self.items()}, msg=f"{i} {name}")
-            check_data_values(self["minimum"][i], name=name)
+            try:
+                check_stats(**{k: v[i] for k, v in self.items()}, msg=f"{i} {name}")
+                check_data_values(self["minimum"][i], name=name)
+                check_data_values(self["maximum"][i], name=name)
+                check_data_values(self["mean"][i], name=name)
+            except StatisticsValueError as e:
+                e.args += (i, name)
+                raise
 
     def __str__(self):
-        stats = [
-            self["minimum"],
-            self["maximum"],
-            self["mean"],
-            self["stdev"],
-        ]
+        stats = [self[name] for name in self.STATS_NAMES]
 
         rows = []
 
@@ -261,11 +278,21 @@ class Statistics(dict):
             margin=3,
         )
 
-    def save(self, filename):
+    def save(self, filename, provenance=None):
         assert filename.endswith(".json"), filename
-        dic = {k: v.tolist() for k, v in self.items()}
+        dic = {}
+        for k in self.STATS_NAMES:
+            dic[k] = list(self[k])
+
+        out = dict(data=defaultdict(dict))
+        for i, name in enumerate(self["variables_names"]):
+            for k in self.STATS_NAMES:
+                out["data"][name][k] = dic[k][i]
+
+        out["provenance"] = provenance
+
         with open(filename, "w") as f:
-            json.dump(dic, f)
+            json.dump(out, f, indent=2)
 
     def load(self, filename):
         assert filename.endswith(".json"), filename
