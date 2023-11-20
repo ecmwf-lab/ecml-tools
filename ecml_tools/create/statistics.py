@@ -25,6 +25,7 @@ LOG = logging.getLogger(__name__)
 class Registry:
     # names = [ "mean", "stdev", "minimum", "maximum", "sums", "squares", "count", ]
     # build_names = [ "minimum", "maximum", "sums", "squares", "count", ]
+    version = 2
 
     def __init__(self, dirname, history_callback=None, overwrite=False):
         if history_callback is None:
@@ -37,12 +38,10 @@ class Registry:
         self.dirname = dirname
         self.overwrite = overwrite
         self.history_callback = history_callback
+    
 
     def create(self, exist_ok):
         os.makedirs(self.dirname, exist_ok=exist_ok)
-        self.history_callback(
-            f"{self.name}_registry_initialised", **{f"{self.name}_version": 2}
-        )
 
         with open(os.path.join(self.dirname, "provenance.json"), "w") as f:
             json.dump(gather_provenance_info(), f)

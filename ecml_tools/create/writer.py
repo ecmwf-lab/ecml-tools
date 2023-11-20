@@ -12,10 +12,10 @@ import time
 import warnings
 
 import numpy as np
-from climetlab.utils import progress_bar
 from climetlab.utils.humanize import seconds
 
 from .check import check_data_values
+from .utils import progress_bar
 
 LOG = logging.getLogger(__name__)
 
@@ -138,7 +138,6 @@ class OffsetView(ArrayLike):
     def new_key(self, key, values_shape):
         if isinstance(key, slice):
             # Ensure that the slice covers the entire view along the axis.
-            print(self.shape)
             assert key.start is None and key.stop is None, key
 
             # Create a new key for indexing the large array.
@@ -226,7 +225,6 @@ class DataWriter:
         self.load_datacube(cube, array)
 
         new_key, stats = array.compute_statistics_and_key()
-        print("****", new_key, stats)
         self.statistics_registry[new_key] = stats
 
         array.flush()

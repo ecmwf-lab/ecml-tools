@@ -116,7 +116,6 @@ class ZarrBuiltRegistry:
 
     def get_flags(self, **kwargs):
         z = self._open_read(**kwargs)
-        LOG.info(list(z["_build"][self.name_flags][:]))
         return list(z["_build"][self.name_flags][:])
 
     def get_flag(self, i):

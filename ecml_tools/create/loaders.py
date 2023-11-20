@@ -23,6 +23,7 @@ from .statistics import StatisticsRegistry, compute_aggregated_statistics
 from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
 from .writer import DataWriter
 from .zarr import add_zarr_dataset
+from .utils import progress_bar
 
 LOG = logging.getLogger(__name__)
 
@@ -232,6 +233,9 @@ class InitialiseLoader(Loader):
 
         self.registry.create(lengths=lengths)
         self.statistics_registry.create(exist_ok=False)
+        self.add_to_history(
+            f"statistics_registry_initialised", version=self.statistics_registry.version
+        )
 
         self.registry.add_to_history("init finished")
 
@@ -348,7 +352,9 @@ class StatisticsLoader(Loader):
             count=np.full(shape, -1, dtype=np.int64),
         )
 
-        for i in range(self.i_start, self.i_end + 1):
+        for i in progress_bar(
+            desc="Computing Statistics", iterable=range(self.i_start, self.i_end + 1)
+        ):
             data = ds[slice(i, i + 1), :]
             one = compute_statistics(data)
             for k, v in one.items():
