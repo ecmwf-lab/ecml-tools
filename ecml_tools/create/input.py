@@ -32,11 +32,11 @@ def assert_is_fieldset(obj):
     assert isinstance(obj, FieldSet), type(obj)
 
 
-class InputTemplates:
+class SourceTemplates:
     def __init__(self, *args):
-        assert isinstance(args[0], (dict, InputTemplate)), args[0]
+        assert isinstance(args[0], (dict, SourceTemplate)), args[0]
         self._elements = [
-            c if isinstance(c, InputTemplate) else InputTemplate(c) for c in args
+            c if isinstance(c, SourceTemplate) else SourceTemplate(c) for c in args
         ]
 
     def __iter__(self):
@@ -44,13 +44,13 @@ class InputTemplates:
             yield i
 
     def filter(self, func):
-        return InputTemplates(*[i for i in self if func(i)])
+        return SourceTemplates(*[i for i in self if func(i)])
 
     def __repr__(self) -> str:
         return "\n".join(str(i) for i in self)
 
 
-class InputTemplate:
+class SourceTemplate:
     _inheritance_done = False
     _inheritance_others = None
 
@@ -99,7 +99,7 @@ class InputTemplate:
 
     def instanciate(self, *args, **kwargs):
         new_kwargs = substitute(self.kwargs.copy(), *args, **kwargs)
-        return Input(
+        return WrappedSource(
             name=self.name,
             kwargs=new_kwargs,
             function=self.function,
@@ -112,10 +112,10 @@ class InputTemplate:
             return str(v)
 
         details = ", ".join(f"{k}={repr(v)}" for k, v in self.kwargs.items())
-        return f"InputTemplate({self.name}, {details})<{self.inherit}"
+        return f"SourceTemplate({self.name}, {details})<{self.inherit}"
 
 
-class Input:
+class WrappedSource:
     _do_load = None
 
     def __init__(self, name, kwargs, function=None):
@@ -185,7 +185,7 @@ class Input:
 
         raise ValueError(f"{name=} Cannot count number of elements in {self}")
 
-    def do_load(self, partial=False, others=None):
+    def do_load(self, partial, others=None):
         if not self._do_load or self._do_load[1] != partial:
             from climetlab import load_dataset, load_source
 
@@ -276,6 +276,9 @@ def build_datetime(date, time, step):
 
 class Loops:
     def __init__(self, main_config, parent):
+        # instanciated by subclasses
+        assert self.partial in [True, False], self.partial
+
         assert isinstance(main_config, Config), main_config
         self.parent = parent
 
@@ -283,15 +286,16 @@ class Loops:
         if not loops_config:
             raise NotImplementedError("No loop")
 
-        all_inputs = [InputTemplate(c) for c in main_config.input]
+        all_templates = [SourceTemplate(c) for c in main_config.input]
 
         self._elements = []
         for loop in loops_config:
-            loop = Loop(loop, all_inputs, parent=self, partial=self.partial)
+            loop = Loop(loop, all_templates, parent=self, partial=self.partial)
             self._elements.append(loop)
 
     def _chunking(self, config):
         # to be called by OutputSpecs
+        # we may want to check each loop.
         for loop in self:
             for inputs in loop.iterate_cubes():
                 cube = inputs.to_cube()
@@ -456,7 +460,7 @@ class PartialLoops(Loops):
 
 
 class Loop:
-    def __init__(self, config, all_inputs, parent, partial=False):
+    def __init__(self, config, all_templates, parent, partial):
         assert isinstance(config, dict), config
         assert len(config) == 1, config
 
@@ -466,9 +470,9 @@ class Loop:
         self.partial = partial
 
         # applied to all if unspecified
-        self.applies_to = self.config.get("applies_to", [i.name for i in all_inputs])
+        self.applies_to = self.config.get("applies_to", [i.name for i in all_templates])
 
-        self.templates = [t for t in all_inputs if t.name in self.applies_to]
+        self.templates = [t for t in all_templates if t.name in self.applies_to]
         for t in self.templates:
             t.process_inheritance(self.templates)
 
@@ -542,9 +546,9 @@ class DuplicateDateTimeError(ValueError):
 class Inputs:
     _do_load = None
 
-    def __init__(self, inputs, loop_config, output_specs, partial=False):
+    def __init__(self, inputs, loop_config, output_specs, partial):
         assert isinstance(inputs, list), inputs
-        assert isinstance(inputs[0], Input), inputs[0]
+        assert isinstance(inputs[0], WrappedSource), inputs[0]
 
         self._loop_config = loop_config
         self.inputs = inputs
@@ -567,7 +571,8 @@ class Inputs:
             out += f"  {i}\n"
         return out
 
-    def do_load(self, partial=False):
+    def do_load(self):
+        partial = self.partial
         if self._do_load is None or self._do_load[1] != partial:
             datasets = {}
             for i in self:
@@ -587,7 +592,7 @@ class Inputs:
         return self._do_load[0]
 
     def get_datetimes(self):
-        # get datetime from each input
+        # get datetime from each wrapped source
         # and make sure they are the same or None
         datetimes = None
         previous_name = None
