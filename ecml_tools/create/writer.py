@@ -74,51 +74,6 @@ class ArrayLike:
     def new_key(self, key, values_shape):
         return key
 
-    def save_statistics(self, statistics_registry):
-        now = time.time()
-        array = self.cache
-        stats = compute_statistics(array)
-        LOG.info(f"Computed statistics in {seconds(time.time()-now)}.")
-
-        assert self.array.axis == 0, self.array.axis
-
-        if statistics_registry is not None:
-            new_key = self.array.new_key(slice(None, None), self.shape)
-            # print("new_key", new_key, self.array.offset, self.array.axis)
-            new_key = (new_key[0], slice(None, None))
-            statistics_registry[new_key] = stats
-
-        return stats
-
-
-def compute_statistics(array):
-    nvars = array.shape[1]
-    stats_shape = (array.shape[0], nvars)
-
-    count = np.zeros(stats_shape, dtype=np.int64)
-    sums = np.zeros(stats_shape, dtype=np.float64)
-    squares = np.zeros(stats_shape, dtype=np.float64)
-    minimum = np.zeros(stats_shape, dtype=np.float64)
-    maximum = np.zeros(stats_shape, dtype=np.float64)
-
-    for i, chunk in enumerate(array):
-        values = chunk.reshape((nvars, -1))
-        minimum[i] = np.min(values, axis=1)
-        maximum[i] = np.max(values, axis=1)
-        sums[i] = np.sum(values, axis=1)
-        squares[i] = np.sum(values * values, axis=1)
-        count[i] = values.shape[1]
-
-        # Statistics(minimum=minimum[i], maximum= maximum[i], count=count[i]).check()
-
-    return {
-        "minimum": minimum,
-        "maximum": maximum,
-        "sums": sums,
-        "squares": squares,
-        "count": count,
-    }
-
 
 class FastWriteArray(ArrayLike):
     """
@@ -149,6 +104,21 @@ class FastWriteArray(ArrayLike):
 
     def flush(self):
         self.array[:] = self.cache[:]
+
+    def compute_statistics_and_key(self):
+        from .statistics import compute_statistics
+
+        now = time.time()
+        stats = compute_statistics(self.cache)
+        LOG.info(f"Computed statistics in {seconds(time.time()-now)}.")
+
+        new_key = self.new_key(slice(None, None), self.shape)
+
+        assert isinstance(self.array, OffsetView)
+        assert self.array.axis == 0, self.array.axis
+        new_key = (new_key[0], slice(None, None))
+
+        return new_key, stats
 
 
 class OffsetView(ArrayLike):
@@ -243,7 +213,10 @@ class DataWriter:
 
         slice = self.registry.get_slice_for(icube)
         LOG.info(
-            f"Building dataset '{self.path}' i={icube} total={self.n_cubes} (total shape ={shape}) at {slice}, {chunks=}"
+            (
+                f"Building dataset '{self.path}' i={icube} total={self.n_cubes} "
+                "(total shape ={shape}) at {slice}, {chunks=}"
+            )
         )
         self.print(f"Building dataset (total shape ={shape}) at {slice}, {chunks=}")
 
@@ -252,7 +225,9 @@ class DataWriter:
         array = FastWriteArray(array, shape=shape)
         self.load_datacube(cube, array)
 
-        array.save_statistics(statistics_registry=self.statistics_registry)
+        new_key, stats = array.compute_statistics_and_key()
+        print("****", new_key, stats)
+        self.statistics_registry[new_key] = stats
 
         array.flush()
 

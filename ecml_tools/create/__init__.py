@@ -26,9 +26,9 @@ class EntryPoint:
         # check path
         _, ext = os.path.splitext(path)
         assert ext != "zarr", f"Unsupported extension={ext}"
-        from .loaders import InitialiseCreator
+        from .loaders import InitialiseLoader
 
-        cls = InitialiseCreator
+        cls = InitialiseLoader
 
         if cls.already_exists(path) and not overwrite:
             raise Exception(f"{path} already exists. Use --overwrite to overwrite.")
@@ -48,10 +48,10 @@ class EntryPoint:
         statistics_tmp=None,
         print=print,
     ):
-        from .loaders import LoadCreator
+        from .loaders import ContentLoader
 
         with cache_context(cache_dir):
-            loader = LoadCreator.from_dataset(
+            loader = ContentLoader.from_dataset(
                 path=path, statistics_tmp=statistics_tmp, print=print
             )
             loader.load(parts=parts)
@@ -63,26 +63,30 @@ class EntryPoint:
         statistics_tmp=None,
         statistics_output=None,
         statistics_from_data=None,
+        statistics_start=None,
+        statistics_end=None,
         print=print,
         force=False,
     ):
-        from .loaders import StatisticsCreator
+        from .loaders import StatisticsLoader
 
-        loader = StatisticsCreator.from_dataset(
+        loader = StatisticsLoader.from_dataset(
             path=path,
             print=print,
             force=force,
             statistics_from_data=statistics_from_data,
             statistics_tmp=statistics_tmp,
             statistics_output=statistics_output,
+            statistics_start=statistics_start,
+            statistics_end=statistics_end,
         )
         loader.statistics()
 
     @classmethod
     def add_total_size(cls, path):
-        from .loaders import SizeCreator
+        from .loaders import SizeLoader
 
-        loader = SizeCreator.from_dataset(path=path, print=print)
+        loader = SizeLoader.from_dataset(path=path, print=print)
         loader.add_total_size()
 
 

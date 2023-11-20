@@ -221,7 +221,8 @@ def build_datetime(date, time, step):
 
     Args:
         date (str or datetime.datetime): The date to use. If a string, it will be converted to a datetime object.
-        time (int or str): The time to use. If an integer, it will be converted to a string in the format HHMM or HH. If a string, it must be in the format HHMM.
+        time (int or str): The time to use. If an integer, it will be converted to a string in the format HHMM or HH.
+        If a string, it must be in the format HHMM.
         step (int): The number of hours to add to the resulting datetime object.
 
     Returns:
