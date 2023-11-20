@@ -256,6 +256,7 @@ class ContentLoader(Loader):
         data_writer.write()
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
+        self.statistics_registry.add_provenance(name="provenance_load")
 
 
 class StatisticsLoader(Loader):
@@ -288,10 +289,10 @@ class StatisticsLoader(Loader):
 
         incomplete = not all(self.registry.get_flags(sync=False))
         if incomplete and not force:
-            self._write_to_dataset = False
             print(
-                f"Zarr {self.path} is not fully built, not writting statistics into dataset."
+                f"❗Zarr {self.path} is not fully built, not writting statistics into dataset."
             )
+            self._write_to_dataset = False
 
         ds = open_dataset(self.path)
         self.dataset_shape = ds.shape
@@ -330,13 +331,26 @@ class StatisticsLoader(Loader):
 
     def get_detailed_stats(self):
         if self.statistics_from_data:
-            self.build_temporary_statistics(self.path, self.statistics_registry)
+            self.build_temporary_statistics()
 
         expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
-        return self.statistics_registry.as_detailed_stats(expected_shape)
+        try:
+            return self.statistics_registry.as_detailed_stats(expected_shape)
+        except self.statistics_registry.MissingDataException as e:
+            missing_index = e.args[1]
+            dates = open_dataset(self.path).dates
+            missing_dates = dates[missing_index[0]]
+            print(
+                (
+                    f"Missing dates: "
+                    f"{missing_dates[0]} ... {missing_dates[len(missing_dates)-1]} "
+                    f"({missing_dates.shape[0]} missing)"
+                )
+            )
+            raise
 
-    def build_temporary_statistics(self, path, statistics_registry):
-        statistics_registry.create(exist_ok=True)
+    def build_temporary_statistics(self):
+        self.statistics_registry.create(exist_ok=True)
         from .statistics import compute_statistics
 
         self.print(
@@ -368,7 +382,8 @@ class StatisticsLoader(Loader):
                 detailed_stats[k][i_] = v
 
         print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
-        statistics_registry[key] = detailed_stats
+        self.statistics_registry[key] = detailed_stats
+        self.statistics_registry.add_provenance(name="provenance_recompute_statistics")
         exit()
 
     def write_detailed_statistics(self, detailed_stats):

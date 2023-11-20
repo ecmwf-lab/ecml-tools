@@ -14,6 +14,7 @@ import pickle
 import shutil
 
 import numpy as np
+from prepml.utils.text import table
 
 from ecml_tools.provenance import gather_provenance_info
 
@@ -42,7 +43,8 @@ class Registry:
     def create(self, exist_ok):
         os.makedirs(self.dirname, exist_ok=exist_ok)
 
-        with open(os.path.join(self.dirname, "provenance.json"), "w") as f:
+    def add_provenance(self, name="provenance"):
+        with open(os.path.join(self.dirname, f"{name}.json"), "w") as f:
             json.dump(gather_provenance_info(), f)
 
     def delete(self):
@@ -105,8 +107,14 @@ class Registry:
             yield key, data
 
 
+class MissingDataException(Exception):
+    pass
+
+
 class StatisticsRegistry(Registry):
     name = "statistics"
+
+    MissingDataException = MissingDataException
 
     def as_detailed_stats(self, shape):
         detailed_stats = dict(
@@ -125,7 +133,11 @@ class StatisticsRegistry(Registry):
             for name, array in detailed_stats.items():
                 d = data[name]
                 array[key] = d
-        assert np.all(flags), f"Missing statistics data for {np.where(flags==False)}"
+        if not np.all(flags):
+            missing_indexes = np.where(flags == False)  # noqa: E712
+            raise self.MissingDataException(
+                f"Missing statistics data for {missing_indexes}", missing_indexes
+            )
 
         return detailed_stats
 
@@ -230,14 +242,23 @@ class Statistics(dict):
             check_data_values(self["minimum"][i], name=name)
 
     def __str__(self):
-        return "\n".join(
-            (
-                f"{self['variables_names'][j].rjust(10)}: "
-                f"min/max = {self['minimum'][j]:.6g} {self['maximum'][j]:.6g}"
-                "   \t:   "
-                f"mean/stdev = {self['mean'][j]:.6g} {self['stdev'][j]:.6g}"
-            )
-            for j in range(self.size)
+        stats = [
+            self["minimum"],
+            self["maximum"],
+            self["mean"],
+            self["stdev"],
+        ]
+
+        rows = []
+
+        for i, v in enumerate(self["variables_names"]):
+            rows.append([i, v] + [x[i] for x in stats])
+
+        return table(
+            rows,
+            header=["Index", "Variable", "Min", "Max", "Mean", "Stdev"],
+            align=[">", "<", ">", ">", ">", ">"],
+            margin=3,
         )
 
     def save(self, filename):
