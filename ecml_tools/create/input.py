@@ -279,7 +279,7 @@ class Loops:
         assert isinstance(main_config, Config), main_config
         self.parent = parent
 
-        loops_config = main_config.loops
+        loops_config = main_config.loop
         if not loops_config:
             raise NotImplementedError("No loop")
 

@@ -106,7 +106,7 @@ class LoadersConfig(Config):
         if "loops" in self:
             warnings.warn("Should use loop instead of loops in config")
             assert "loop" not in self
-            self.loops = self.pop("loops")
+            self.loop = self.pop("loops")
 
         self.normalise()
 
@@ -115,9 +115,9 @@ class LoadersConfig(Config):
             LOG.warning(f"{self.input=} is not a list")
             self.input = [self.input]
 
-        if not isinstance(self.loops, list):
-            assert isinstance(self.loops, dict), self.loops
-            self.loops = [dict(loop_a=self.loops)]
+        if not isinstance(self.loop, list):
+            assert isinstance(self.loop, dict), self.loop
+            self.loop = [dict(loop_a=self.loop)]
 
         if "order_by" in self.output:
             self.output.order_by = normalize_order_by(self.output.order_by)
