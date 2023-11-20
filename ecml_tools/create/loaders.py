@@ -31,7 +31,7 @@ from .zarr import add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
-VERSION = "0.13"
+VERSION = "0.14"
 
 
 class Loader:
