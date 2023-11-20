@@ -62,7 +62,7 @@ class EntryPoint:
         path,
         statistics_tmp=None,
         statistics_output=None,
-        statistics_from=None,
+        statistics_from_data=None,
         print=print,
         force=False,
     ):
@@ -72,7 +72,7 @@ class EntryPoint:
             path=path,
             print=print,
             force=force,
-            statistics_from=statistics_from,
+            statistics_from_data=statistics_from_data,
             statistics_tmp=statistics_tmp,
             statistics_output=statistics_output,
         )

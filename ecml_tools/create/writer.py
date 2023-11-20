@@ -76,32 +76,8 @@ class ArrayLike:
 
     def save_statistics(self, statistics_registry):
         now = time.time()
-        nvars = self.shape[1]
-
-        stats_shape = (self.shape[0], nvars)
-
-        count = np.zeros(stats_shape, dtype=np.int64)
-        sums = np.zeros(stats_shape, dtype=np.float64)
-        squares = np.zeros(stats_shape, dtype=np.float64)
-
-        minimum = np.zeros(stats_shape, dtype=np.float64)
-        maximum = np.zeros(stats_shape, dtype=np.float64)
-
-        for i, chunk in enumerate(self.cache):
-            values = chunk.reshape((nvars, -1))
-            minimum[i] = np.min(values, axis=1)
-            maximum[i] = np.max(values, axis=1)
-            sums[i] = np.sum(values, axis=1)
-            squares[i] = np.sum(values * values, axis=1)
-            count[i] = values.shape[1]
-
-        stats = {
-            "minimum": minimum,
-            "maximum": maximum,
-            "sums": sums,
-            "squares": squares,
-            "count": count,
-        }
+        array = self.cache
+        stats = compute_statistics(array)
         LOG.info(f"Computed statistics in {seconds(time.time()-now)}.")
 
         assert self.array.axis == 0, self.array.axis
@@ -109,10 +85,39 @@ class ArrayLike:
         if statistics_registry is not None:
             new_key = self.array.new_key(slice(None, None), self.shape)
             # print("new_key", new_key, self.array.offset, self.array.axis)
-            new_key = (new_key[0], slice(0, nvars))
+            new_key = (new_key[0], slice(None, None))
             statistics_registry[new_key] = stats
 
         return stats
+
+
+def compute_statistics(array):
+    nvars = array.shape[1]
+    stats_shape = (array.shape[0], nvars)
+
+    count = np.zeros(stats_shape, dtype=np.int64)
+    sums = np.zeros(stats_shape, dtype=np.float64)
+    squares = np.zeros(stats_shape, dtype=np.float64)
+    minimum = np.zeros(stats_shape, dtype=np.float64)
+    maximum = np.zeros(stats_shape, dtype=np.float64)
+
+    for i, chunk in enumerate(array):
+        values = chunk.reshape((nvars, -1))
+        minimum[i] = np.min(values, axis=1)
+        maximum[i] = np.max(values, axis=1)
+        sums[i] = np.sum(values, axis=1)
+        squares[i] = np.sum(values * values, axis=1)
+        count[i] = values.shape[1]
+
+        # Statistics(minimum=minimum[i], maximum= maximum[i], count=count[i]).check()
+
+    return {
+        "minimum": minimum,
+        "maximum": maximum,
+        "sums": sums,
+        "squares": squares,
+        "count": count,
+    }
 
 
 class FastWriteArray(ArrayLike):

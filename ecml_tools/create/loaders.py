@@ -20,6 +20,7 @@ import numpy as np
 import zarr
 
 from ecml_tools.data import open_dataset
+from ecml_tools.provenance import gather_provenance_info
 
 from .check import DatasetName, check_data_values, check_stats
 from .config import OutputSpecs, loader_config
@@ -257,13 +258,14 @@ class LoadCreator(Creator):
 class StatisticsCreator(Creator):
     def __init__(
         self,
-        statistics_from=None,
+        statistics_from_data=None,
         statistics_output=None,
         force=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.statistics_output = statistics_output
+        self.statistics_from_data = statistics_from_data
 
         incomplete = not all(self.registry.get_flags(sync=False))
         if incomplete and not force:
@@ -292,11 +294,7 @@ class StatisticsCreator(Creator):
             raise ValueError(f"Cannot compute statistics on an empty interval.")
 
     def statistics(self):
-        expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
-
-        assert statistics_from is None, "not implemented"
-
-        detailed_stats = self.statistics_registry.read_detailed_stats(expected_shape)
+        detailed_stats =self.get_detailed_stats()
 
         if self.statistics_output:
             print("Not writing detailed statistics because statistics_output is set")
@@ -311,7 +309,15 @@ class StatisticsCreator(Creator):
 
         self.write_aggregated_statistics(stats)
 
+    def get_detailed_stats(self):
+        if self.statistics_from_data:
+            build_temporary_statistics()
+
+        expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
+        return self.statistics_registry.as_detailed_stats(expected_shape)
+
     def write_detailed_statistics(self, detailed_stats):
+
         z = zarr.open(self.path)["_build"]
 
         for k, v in detailed_stats.items():
@@ -514,6 +520,9 @@ class Registry:
             f"{self.name}_registry_initialised", **{f"{self.name}_version": 2}
         )
 
+        with open(os.path.join(self.dirname, 'proveance.json'), 'w') as f:
+            json.dumps(gather_provenance_info(),f)
+
     def delete(self):
         try:
             shutil.rmtree(self.dirname)
@@ -544,9 +553,9 @@ class Registry:
         if not self.overwrite:
             assert not os.path.exists(path), f"{path} already exists"
 
-        LOG.info(f"Writing {self.name} for {key}")
-        with open(path, "wb") as f:
+        with open(path + '.tmp', "wb") as f:
             pickle.dump((key, data), f)
+        shutil.move(path + '.tmp', path)
         LOG.info(f"Written {self.name} data for {key} in  {path}")
 
     def __iter__(self):
@@ -577,7 +586,7 @@ class Registry:
 class StatisticsRegistry(Registry):
     name = "statistics"
 
-    def read_detailed_stats(self, shape):
+    def as_detailed_stats(self, shape):
         detailed_stats = dict(
             minimum=np.full(shape, np.nan, dtype=np.float64),
             maximum=np.full(shape, np.nan, dtype=np.float64),
