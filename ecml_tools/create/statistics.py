@@ -38,7 +38,6 @@ class Registry:
         self.dirname = dirname
         self.overwrite = overwrite
         self.history_callback = history_callback
-    
 
     def create(self, exist_ok):
         os.makedirs(self.dirname, exist_ok=exist_ok)
