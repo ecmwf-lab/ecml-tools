@@ -19,7 +19,7 @@ def add_zarr_dataset(
     *,
     name,
     dtype=None,
-    fill_value=np.nan,
+    fill_value=None,
     zarr_root,
     shape=None,
     array=None,
@@ -27,33 +27,50 @@ def add_zarr_dataset(
     **kwargs,
 ):
     if dtype is None:
-        assert array is not None, (name, shape, array, dtype, zarr_root, fill_value)
+        assert array is not None, (name, shape, array, dtype, zarr_root)
         dtype = array.dtype
 
     if shape is None:
-        assert array is not None, (name, shape, array, dtype, zarr_root, fill_value)
+        assert array is not None, (name, shape, array, dtype, zarr_root)
         shape = array.shape
-    else:
-        assert array is None, (name, shape, array, dtype, zarr_root, fill_value)
-        assert fill_value is not None, (
+
+    if array is not None:
+        assert array.shape == shape, (array.shape, shape)
+        a = zarr_root.create_dataset(
             name,
-            shape,
-            array,
-            dtype,
-            zarr_root,
-            fill_value,
+            shape=shape,
+            dtype=dtype,
+            overwrite=overwrite,
+            **kwargs,
         )
+        a[...] = array
+        return a
+
+    if "fill_value" not in kwargs:
+        if str(dtype).startswith("float") or str(dtype).startswith("numpy.float"):
+            kwargs["fill_value"] = np.nan
+        elif str(dtype).startswith("datetime64") or str(dtype).startswith(
+            "numpy.datetime64"
+        ):
+            kwargs["fill_value"] = np.datetime64("NaT")
+        #elif str(dtype).startswith("timedelta64") or str(dtype).startswith(
+        #    "numpy.timedelta64"
+        #):
+        #    kwargs["fill_value"] = np.timedelta64("NaT")
+        elif str(dtype).startswith("int") or str(dtype).startswith("numpy.int"):
+            kwargs["fill_value"] = 0
+        elif str(dtype).startswith("bool") or str(dtype).startswith("numpy.bool"):
+            kwargs["fill_value"] = False
+        else:
+            raise ValueError(f"No fill_value for dtype={dtype}")
 
     a = zarr_root.create_dataset(
         name,
         shape=shape,
         dtype=dtype,
         overwrite=overwrite,
-        fill_value=fill_value,
         **kwargs,
     )
-    if array:
-        a[...] = array
     return a
 
 
