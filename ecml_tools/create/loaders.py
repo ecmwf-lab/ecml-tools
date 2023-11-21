@@ -19,7 +19,11 @@ from ecml_tools.data import open_dataset
 from .check import DatasetName
 from .config import OutputSpecs, loader_config
 from .input import FullLoops, PartialLoops
-from .statistics import StatisticsRegistry, compute_aggregated_statistics
+from .statistics import (
+    StatisticsRegistry,
+    compute_aggregated_statistics,
+    compute_statistics,
+)
 from .utils import (
     bytes,
     compute_directory_sizes,
@@ -62,16 +66,6 @@ class Loader:
     @classmethod
     def from_config(cls, *, config, path, print=print, **kwargs):
         return cls(config=config, path=path, print=print, **kwargs)
-
-    @classmethod
-    def already_exists(self, path):
-        import zarr
-
-        try:
-            zarr.open(path, "r")
-            return True
-        except zarr.errors.PathNotFoundError:
-            return False
 
     @cached_property
     def registry(self):
@@ -259,10 +253,9 @@ class ContentLoader(Loader):
         )
 
 
-class StatisticsLoader(Loader):
+class GenericStatisticsLoader(Loader):
     def __init__(
         self,
-        statistics_from_data=None,
         statistics_output=None,
         statistics_start=None,
         statistics_end=None,
@@ -271,39 +264,14 @@ class StatisticsLoader(Loader):
     ):
         super().__init__(**kwargs)
 
-        self._write_to_dataset = True
+    @property
+    def _incomplete(self):
+        return not all(self.registry.get_flags(sync=False))
 
-        if statistics_from_data:
-            print(
-                "Recomputing temporary statistics, not writting statistics into dataset."
-            )
-            self._write_to_dataset = False
-        if statistics_output:
-            self._write_to_dataset = False
-
-        if not statistics_from_data and (statistics_start or statistics_end):
-            # The period is already defined in the config
-            # and changing this should be written in the provenance
-            raise NotImplementedError("Not implemented yet.")
-
-        self.statistics_output = statistics_output
-        self.statistics_from_data = statistics_from_data
-
-        incomplete = not all(self.registry.get_flags(sync=False))
-        if incomplete and not force:
-            print(
-                f"❗Zarr {self.path} is not fully built, not writting statistics into dataset."
-            )
-            self._write_to_dataset = False
-
+    def read_dataset_metadata(self, statistics_start, statistics_end):
         ds = open_dataset(self.path)
         self.dataset_shape = ds.shape
         self.variables_names = ds.variables
-
-        statistics_start = statistics_start or self.main_config.output.get(
-            "statistics_start"
-        )
-        statistics_end = statistics_end or self.main_config.output.get("statistics_end")
 
         subset = ds.dates_interval_to_indices(statistics_start, statistics_end)
         self.i_start = subset[0]
@@ -311,30 +279,25 @@ class StatisticsLoader(Loader):
         self.date_start = ds.dates[subset[0]]
         self.date_end = ds.dates[subset[-1]]
 
-        i_len = self.i_end + 1 - self.i_start
-        self.print(f"Statistics computed on {i_len}/{len(ds.dates)} samples ")
-        print(f"Requested ({i_len}): from {self.date_start} to {self.date_end}.")
-        print(f"Available ({len(ds.dates)}): from {ds.dates[0]} to {ds.dates[-1]}.")
-        if i_len < 1:
-            raise ValueError("Cannot compute statistics on an empty interval.")
+        def check():
+            i_len = self.i_end + 1 - self.i_start
+            self.print(f"Statistics computed on {i_len}/{len(ds.dates)} samples ")
+            print(f"Requested ({i_len}): from {self.date_start} to {self.date_end}.")
+            print(f"Available ({len(ds.dates)}): from {ds.dates[0]} to {ds.dates[-1]}.")
+            if i_len < 1:
+                raise ValueError("Cannot compute statistics on an empty interval.")
 
-    def statistics(self):
-        detailed_stats = self.get_detailed_stats()
+        check()
 
-        self.write_detailed_statistics(detailed_stats)
+    def run(self):
+        detailed = self.get_detailed_stats()
+        self.write_detailed_statistics(detailed)
 
-        detailed_stats = {
-            k: v[self.i_start : self.i_end + 1] for k, v in detailed_stats.items()
-        }
-
-        stats = compute_aggregated_statistics(detailed_stats, self.variables_names)
-
+        selected = {k: v[self.i_start : self.i_end + 1] for k, v in detailed.items()}
+        stats = compute_aggregated_statistics(selected, self.variables_names)
         self.write_aggregated_statistics(stats)
 
     def get_detailed_stats(self):
-        if self.statistics_from_data:
-            self.build_temporary_statistics()
-
         expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
         try:
             return self.statistics_registry.as_detailed_stats(expected_shape)
@@ -351,56 +314,13 @@ class StatisticsLoader(Loader):
             )
             raise
 
-    def build_temporary_statistics(self):
-        self.statistics_registry.create(exist_ok=True)
-        from .statistics import compute_statistics
-
-        self.print(
-            (
-                f"Building temporary statistics from data {self.path}. "
-                f"From {self.date_start} to {self.date_end}"
-            )
-        )
-        ds = open_dataset(self.path)
-
-        shape = (self.i_end + 1 - self.i_start, len(ds.variables))
-        detailed_stats = dict(
-            minimum=np.full(shape, np.nan, dtype=np.float64),
-            maximum=np.full(shape, np.nan, dtype=np.float64),
-            sums=np.full(shape, np.nan, dtype=np.float64),
-            squares=np.full(shape, np.nan, dtype=np.float64),
-            count=np.full(shape, -1, dtype=np.int64),
-        )
-
-        key = (slice(self.i_start, self.i_end + 1), slice(None, None))
-        for i in progress_bar(
-            desc="Computing Statistics",
-            iterable=range(self.i_start, self.i_end + 1),
-        ):
-            i_ = i - self.i_start
-            data = ds[slice(i, i + 1), :]
-            one = compute_statistics(data, self.variables_names)
-            for k, v in one.items():
-                detailed_stats[k][i_] = v
-
-        print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
-        self.statistics_registry[key] = detailed_stats
-        self.statistics_registry.add_provenance(
-            name="provenance_recompute_statistics", config=self.main_config
-        )
-        exit()
-
     def write_detailed_statistics(self, detailed_stats):
-        if not self._write_to_dataset:
-            print("Not writing detailed statistics to zarr.")
-            return
-
         z = zarr.open(self.path)["_build"]
-
         for k, v in detailed_stats.items():
             if k == "variables_names":
                 continue
             add_zarr_dataset(zarr_root=z, name=k, array=v)
+        print("Wrote detailed statistics to zarr.")
 
     def write_aggregated_statistics(self, stats):
         if self.statistics_output == "-":
@@ -439,6 +359,103 @@ class StatisticsLoader(Loader):
             i_end=self.i_end,
         )
         print(f"Wrote statistics in {self.path}")
+
+
+class RecomputeStatisticsLoader(GenericStatisticsLoader):
+    def __init__(
+        self,
+        statistics_start=None,
+        statistics_end=None,
+        force=False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        print(f"Recomputing temporary statistics from {self.statistics_registry}")
+        print("not writting statistics into dataset.")
+        self._write_to_dataset = False
+
+        if self._incomplete:
+            msg = f"❗Zarr {self.path} is not fully built"
+            if force:
+                print(msg)
+            else:
+                raise Exception(msg)
+
+        start = statistics_start or self.main_config.output.get("statistics_start")
+        end = statistics_end or self.main_config.output.get("statistics_end")
+        self.read_dataset_metadata(start, end)
+
+    def get_detailed_stats(self):
+        self._build_temporary_statistics()
+        return super().get_detailed_stats()
+
+    def _build_temporary_statistics(self):
+        self.statistics_registry.create(exist_ok=True)
+
+        self.print(
+            (
+                f"Building temporary statistics from data {self.path}. "
+                f"From {self.date_start} to {self.date_end}"
+            )
+        )
+
+        shape = (self.i_end + 1 - self.i_start, len(self.variables_names))
+        detailed_stats = dict(
+            minimum=np.full(shape, np.nan, dtype=np.float64),
+            maximum=np.full(shape, np.nan, dtype=np.float64),
+            sums=np.full(shape, np.nan, dtype=np.float64),
+            squares=np.full(shape, np.nan, dtype=np.float64),
+            count=np.full(shape, -1, dtype=np.int64),
+        )
+
+        ds = open_dataset(self.path)
+        key = (slice(self.i_start, self.i_end + 1), slice(None, None))
+        for i in progress_bar(
+            desc="Computing Statistics",
+            iterable=range(self.i_start, self.i_end + 1),
+        ):
+            i_ = i - self.i_start
+            data = ds[slice(i, i + 1), :]
+            one = compute_statistics(data, self.variables_names)
+            for k, v in one.items():
+                detailed_stats[k][i_] = v
+
+        print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
+        self.statistics_registry[key] = detailed_stats
+        self.statistics_registry.add_provenance(
+            name="provenance_recompute_statistics", config=self.main_config
+        )
+        exit()
+
+
+class StatisticsLoader(GenericStatisticsLoader):
+    def __init__(
+        self,
+        statistics_output=None,
+        force=False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self._write_to_dataset = True
+
+        self.statistics_output = statistics_output
+
+        if self.statistics_output:
+            self._write_to_dataset = False
+
+        if self._incomplete:
+            msg = f"❗Zarr {self.path} is not fully built"
+            if force:
+                print(msg)
+                print("Not writting statistics into dataset.")
+                self._write_to_dataset = False
+            else:
+                raise Exception(msg)
+
+        start = self.main_config.output.get("statistics_start")
+        end = self.main_config.output.get("statistics_end")
+        self.read_dataset_metadata(start, end)
 
 
 class SizeLoader(Loader):

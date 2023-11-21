@@ -11,94 +11,115 @@ import os
 from contextlib import contextmanager
 
 
-class EntryPoint:
-    @classmethod
-    def initialise(
-        cls,
+class Creator:
+    def __init__(
+        self,
         path,
-        config,
-        overwrite=False,
-        no_check_name=True,
-        cache_dir=None,
-        statistics_tmp=None,
+        config=None,
+        cache=None,
         print=print,
+        statistics_tmp=None,
+        overwrite=False,
+        **kwargs,
     ):
+        self.path = path
+        self.config = config
+        self.cache = cache
+        self.print = print
+        self.statistics_tmp = statistics_tmp
+        self.overwrite = overwrite
+        # if kwargs:
+        #    raise ValueError(f"Unknown arguments {kwargs}")
+
+    def init(self, check_name=False):
         # check path
-        _, ext = os.path.splitext(path)
+        _, ext = os.path.splitext(self.path)
         assert ext != "zarr", f"Unsupported extension={ext}"
         from .loaders import InitialiseLoader
 
+        if self._path_readable() and not self.overwrite:
+            raise Exception(
+                f"{self.path} already exists. Use overwrite=True to overwrite."
+            )
+
         cls = InitialiseLoader
 
-        if cls.already_exists(path) and not overwrite:
-            raise Exception(f"{path} already exists. Use --overwrite to overwrite.")
-
-        with cache_context(cache_dir):
+        with self._cache_context():
             obj = cls.from_config(
-                path=path, config=config, statistics_tmp=statistics_tmp, print=print
+                path=self.path,
+                config=self.config,
+                statistics_tmp=self.statistics_tmp,
+                print=self.print,
             )
-            obj.initialise(check_name=not no_check_name)
+            obj.initialise(check_name=check_name)
 
-    @classmethod
-    def load(
-        cls,
-        path,
-        parts=None,
-        cache_dir=None,
-        statistics_tmp=None,
-        print=print,
-    ):
+    def load(self, parts=None):
         from .loaders import ContentLoader
 
-        with cache_context(cache_dir):
+        with self._cache_context():
             loader = ContentLoader.from_dataset(
-                path=path, statistics_tmp=statistics_tmp, print=print
+                path=self.path, statistics_tmp=self.statistics_tmp, print=self.print
             )
             loader.load(parts=parts)
 
-    @classmethod
     def statistics(
-        cls,
-        path,
-        statistics_tmp=None,
-        statistics_output=None,
-        statistics_from_data=None,
-        statistics_start=None,
-        statistics_end=None,
-        print=print,
+        self,
         force=False,
+        output=None,
     ):
         from .loaders import StatisticsLoader
 
         loader = StatisticsLoader.from_dataset(
-            path=path,
-            print=print,
+            path=self.path,
+            print=self.print,
             force=force,
-            statistics_from_data=statistics_from_data,
-            statistics_tmp=statistics_tmp,
-            statistics_output=statistics_output,
-            statistics_start=statistics_start,
-            statistics_end=statistics_end,
+            statistics_tmp=self.statistics_tmp,
+            statistics_output=output,
         )
-        loader.statistics()
+        loader.run()
 
-    @classmethod
-    def add_total_size(cls, path):
+    def recompute_statistics(
+        self,
+        start=None,
+        end=None,
+        force=False,
+    ):
+        from .loaders import RecomputeStatisticsLoader
+
+        loader = RecomputeStatisticsLoader.from_dataset(
+            path=self.path,
+            print=self.print,
+            force=force,
+            statistics_tmp=self.statistics_tmp,
+            statistics_start=start,
+            statistics_end=end,
+        )
+        loader.run()
+
+    def size(self):
         from .loaders import SizeLoader
 
-        loader = SizeLoader.from_dataset(path=path, print=print)
+        loader = SizeLoader.from_dataset(path=self.path, print=self.print)
         loader.add_total_size()
 
+    def _cache_context(self):
+        @contextmanager
+        def no_cache_context():
+            yield
 
-def cache_context(cache_dir):
-    @contextmanager
-    def no_cache_context():
-        yield
+        if self.cache is None:
+            return no_cache_context()
 
-    if cache_dir is None:
-        return no_cache_context()
+        from climetlab import settings
 
-    from climetlab import settings
+        os.makedirs(self.cache, exist_ok=True)
+        return settings.temporary("cache-directory", self.cache)
 
-    os.makedirs(cache_dir, exist_ok=True)
-    return settings.temporary("cache-directory", cache_dir)
+    def _path_readable(self):
+        import zarr
+
+        try:
+            zarr.open(self.path, "r")
+            return True
+        except zarr.errors.PathNotFoundError:
+            return False

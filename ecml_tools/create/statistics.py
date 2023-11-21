@@ -12,6 +12,7 @@ import logging
 import os
 import pickle
 import shutil
+import socket
 from collections import defaultdict
 
 import numpy as np
@@ -79,9 +80,11 @@ class Registry:
         if not self.overwrite:
             assert not os.path.exists(path), f"{path} already exists"
 
-        with open(path + ".tmp", "wb") as f:
+        tmp_path = path + f".tmp-{os.getpid()}-on-{socket.gethostname()}"
+        with open(tmp_path, "wb") as f:
             pickle.dump((key, data), f)
-        shutil.move(path + ".tmp", path)
+        shutil.move(tmp_path, path)
+
         LOG.info(f"Written {self.name} data for {key} in  {path}")
 
     def __iter__(self):
@@ -107,6 +110,9 @@ class Registry:
             key_strs[key_str] = f
 
             yield key, data
+
+    def __str__(self):
+        return f"Registry({self.dirname})"
 
 
 class MissingDataException(Exception):
