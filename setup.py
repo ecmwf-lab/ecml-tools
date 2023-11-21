@@ -41,7 +41,16 @@ provenance_requires = [
     "nvsmi",
 ]
 
-all_requires = data_requires + provenance_requires
+create_requires = [
+    "zarr",
+    "numpy",
+    "tqdm",
+    "climetlab",
+    # "earthkit-data"
+]
+
+
+all_requires = data_requires + provenance_requires + create_requires
 
 setuptools.setup(
     name="ecml-tools",
@@ -59,6 +68,7 @@ setuptools.setup(
     extras_require={
         "data": data_requires,
         "provenance": provenance_requires,
+        "create": create_requires,
         "all": all_requires,
     },
     zip_safe=True,
