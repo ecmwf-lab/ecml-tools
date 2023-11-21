@@ -293,6 +293,10 @@ class Loops:
             loop = Loop(loop, all_templates, parent=self, partial=self.partial)
             self._elements.append(loop)
 
+    @cached_property
+    def n_iter_loops(self):
+        return sum([loop.n_iter_loops for loop in self])
+
     def _chunking(self, config):
         # to be called by OutputSpecs
         # we may want to check each loop.

@@ -66,10 +66,6 @@ class OutputSpecs:
 
         return shape + field_shape
 
-    @cached_property
-    def n_iter_loops(self):
-        return sum([loop.n_iter_loops for loop in self.loops])
-
     @property
     def order_by(self):
         return self.config.order_by
