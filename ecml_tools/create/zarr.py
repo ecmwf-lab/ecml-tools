@@ -35,16 +35,25 @@ def add_zarr_dataset(
         shape = array.shape
     else:
         assert array is None, (name, shape, array, dtype, zarr_root, fill_value)
-        array = np.full(shape, fill_value, dtype=dtype)
+        assert fill_value is not None, (
+            name,
+            shape,
+            array,
+            dtype,
+            zarr_root,
+            fill_value,
+        )
 
     a = zarr_root.create_dataset(
         name,
         shape=shape,
         dtype=dtype,
         overwrite=overwrite,
+        fill_value=fill_value,
         **kwargs,
     )
-    a[...] = array
+    if array:
+        a[...] = array
     return a
 
 
