@@ -45,8 +45,8 @@ create_requires = [
     "zarr",
     "numpy",
     "tqdm",
-    "climetlab",
-    # "earthkit-data"
+    "climetlab",  # "earthkit-data"
+    "earthkit-meteo",
 ]
 
 
