@@ -53,9 +53,9 @@ def add_zarr_dataset(
             "numpy.datetime64"
         ):
             kwargs["fill_value"] = np.datetime64("NaT")
-        #elif str(dtype).startswith("timedelta64") or str(dtype).startswith(
+        # elif str(dtype).startswith("timedelta64") or str(dtype).startswith(
         #    "numpy.timedelta64"
-        #):
+        # ):
         #    kwargs["fill_value"] = np.timedelta64("NaT")
         elif str(dtype).startswith("int") or str(dtype).startswith("numpy.int"):
             kwargs["fill_value"] = 0

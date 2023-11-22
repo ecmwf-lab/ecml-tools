@@ -133,7 +133,7 @@ class StatisticsRegistry(Registry):
             count=np.full(shape, -1, dtype=np.int64),
         )
 
-        flags = np.full(shape, False, dtype=np.bool)
+        flags = np.full(shape, False, dtype=np.bool_)
         for key, data in self:
             assert isinstance(data, dict), data
             assert not np.any(flags[key]), f"Overlapping values for {key} {flags}"
