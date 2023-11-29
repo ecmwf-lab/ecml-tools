@@ -164,11 +164,7 @@ class Dataset:
         return {}
 
 
-class _DebugStore(zarr.storage.BaseStore):
-    def __init__(self, store):
-        self.store = store
-        self.counters = {}
-
+class ReadOnlyStore(zarr.storage.BaseStore):
     def __delitem__(self, key):
         raise NotImplementedError()
 
@@ -176,21 +172,31 @@ class _DebugStore(zarr.storage.BaseStore):
         raise NotImplementedError()
 
     def __len__(self):
-        return len(self.store)
-
-    def __getitem__(self, key):
-        if key not in self.counters:
-            self.counters[key] = 0
-        else:
-            if self.counters[key] > 20:
-                raise RuntimeError(f"Too many reads of {key}")
-
-        self.counters[key] += 1
-
-        return self.store[key]
+        raise NotImplementedError()
 
     def __iter__(self):
-        return self
+        raise NotImplementedError()
+
+
+class HTTPStore(ReadOnlyStore):
+    """
+    We write our own HTTPStore because the one used by zarr (fsspec)
+    does not play well with fork() and multiprocessing.
+    """
+
+    def __init__(self, url):
+        self.url = url
+
+    def __getitem__(self, key):
+        import requests
+
+        r = requests.get(self.url + "/" + key)
+
+        if r.status_code == 404:
+            raise KeyError(key)
+
+        r.raise_for_status()
+        return r.content
 
 
 class Zarr(Dataset):
@@ -198,23 +204,21 @@ class Zarr(Dataset):
         if isinstance(path, zarr.hierarchy.Group):
             self.path = str(id(path))
             self.z = path
+            self.from_path = False
         else:
             self.path = str(path)
-            if DEBUG:
-                if self.path.startswith("/"):
-                    store = zarr.storage.DirectoryStore(self.path)
-                else:
-                    store = zarr.storage.FSStore(self.path)
-                store = _DebugStore(store)
-                self.path = zarr.convenience.open(store, "r")
+            store = self.path
+            if store.startswith("http://") or store.startswith("https://"):
+                store = HTTPStore(store)
+            self.z = zarr.convenience.open(store, "r")
+            self.from_path = True
 
-            self.z = zarr.convenience.open(self.path, "r")
+        self.data = self.z.data
 
-    @cached_property
-    def data(self):
-        # This seems to speed up the reading of the data
-        return self.z.data
-
+    # @cached_property
+    # def data(self):
+    #     # This seems to speed up the reading of the data
+    #     return self.z.data
     def __len__(self):
         return self.data.shape[0]
 
