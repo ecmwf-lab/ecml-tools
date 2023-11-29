@@ -239,12 +239,8 @@ class Zarr(Dataset):
             self.path = str(path)
             self.z = open_zarr(self.path)
 
+        # This seems to speed up the reading of the data a lot
         self.data = self.z.data
-
-    # @cached_property
-    # def data(self):
-    #     # This seems to speed up the reading of the data
-    #     return self.z.data
 
     def __len__(self):
         return self.data.shape[0]
