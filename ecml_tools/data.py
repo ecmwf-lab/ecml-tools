@@ -200,7 +200,7 @@ class HTTPStore(ReadOnlyStore):
 
 class S3Store(ReadOnlyStore):
     """
-    We write our own HTTPStore because the one used by zarr (fsspec)
+    We write our own S3Store because the one used by zarr (fsspec)
     does not play well with fork() and multiprocessing.
     """
 
