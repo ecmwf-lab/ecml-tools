@@ -20,9 +20,8 @@ import yaml
 import zarr
 
 LOG = logging.getLogger(__name__)
-DEBUG = int(os.environ.get("ECML_TOOLS_DEBUG", 0))
 
-__all__ = ["open_dataset"]
+__all__ = ["open_dataset", "open_zarr"]
 
 
 class Dataset:
@@ -199,19 +198,46 @@ class HTTPStore(ReadOnlyStore):
         return r.content
 
 
+class S3Store(ReadOnlyStore):
+    """
+    We write our own HTTPStore because the one used by zarr (fsspec)
+    does not play well with fork() and multiprocessing.
+    """
+
+    def __init__(self, url):
+        import boto3
+
+        self.s3 = boto3.client("s3")  # Check how to pass profile name
+        self.bucket, self.key = url[5:].split("/", 1)
+
+    def __getitem__(self, key):
+        try:
+            response = self.s3.get_object(Bucket=self.bucket, Key=self.key + "/" + key)
+        except self.s3.exceptions.NoSuchKey:
+            raise KeyError(key)
+
+        return response["Body"].read()
+
+
+def open_zarr(path):
+    store = path
+    if store.startswith("http://") or store.startswith("https://"):
+        store = HTTPStore(store)
+
+    elif store.startswith("s3://"):
+        store = S3Store(store)
+
+    return zarr.convenience.open(store, "r")
+
+
 class Zarr(Dataset):
     def __init__(self, path):
         if isinstance(path, zarr.hierarchy.Group):
             self.path = str(id(path))
             self.z = path
-            self.from_path = False
         else:
             self.path = str(path)
-            store = self.path
-            if store.startswith("http://") or store.startswith("https://"):
-                store = HTTPStore(store)
-            self.z = zarr.convenience.open(store, "r")
-            self.from_path = True
+            self.z = open_zarr(self.path)
 
         self.data = self.z.data
 
@@ -219,6 +245,7 @@ class Zarr(Dataset):
     # def data(self):
     #     # This seems to speed up the reading of the data
     #     return self.z.data
+
     def __len__(self):
         return self.data.shape[0]
 
