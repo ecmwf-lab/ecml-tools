@@ -207,8 +207,10 @@ class S3Store(ReadOnlyStore):
     def __init__(self, url):
         import boto3
 
-        self.s3 = boto3.client("s3")  # Check how to pass profile name
         self.bucket, self.key = url[5:].split("/", 1)
+
+        # TODO: get the profile name from the url
+        self.s3 = boto3.Session(profile_name=None).client("s3")
 
     def __getitem__(self, key):
         try:
