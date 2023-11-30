@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import random
 
 from tqdm import tqdm
 
@@ -13,12 +14,23 @@ def main():
         "path",
         help="Path to the dataset, use s3:// for S3 storage, http:// for HTTP storage, and /path/to/dataset for local storage",
     )
+    parser.add_argument(
+        "--shuffle",
+        action="store_true",
+        help="Whether to shuffle the dataset",
+    )
     
     args = parser.parse_args()
 
     ds = open_dataset(args.path)
 
-    for i in tqdm(ds, total=len(ds), smoothing=0):
+    indexes = list(range(len(ds)))
+
+    if args.shuffle:
+        random.shuffle(indexes)
+
+    for i in tqdm(indexes, total=len(indexes), smoothing=0):
+        ds[i]
         pass
 
 
