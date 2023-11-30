@@ -12,14 +12,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "path",
-        help="Path to the dataset, use s3:// for S3 storage, http:// for HTTP storage, and /path/to/dataset for local storage",
+        help=(
+            "Path to the dataset, use s3:// for S3 storage, "
+            "http:// for HTTP storage, and /path/to/dataset for local storage"
+        ),
     )
     parser.add_argument(
         "--shuffle",
         action="store_true",
         help="Whether to shuffle the dataset",
     )
-    
+
     args = parser.parse_args()
 
     ds = open_dataset(args.path)
