@@ -16,12 +16,11 @@ from copy import deepcopy
 from functools import cached_property
 
 import numpy as np
-from climetlab.utils.humanize import seconds
 
 from .config import Config
 from .loops import expand_loops
 from .template import substitute
-from .utils import make_list_int, to_datetime, to_datetime_list
+from .utils import make_list_int, seconds, to_datetime, to_datetime_list
 
 LOG = logging.getLogger(__name__)
 

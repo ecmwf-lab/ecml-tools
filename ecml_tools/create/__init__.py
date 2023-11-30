@@ -8,7 +8,6 @@
 #
 
 import os
-from contextlib import contextmanager
 
 
 class Creator:
@@ -103,17 +102,9 @@ class Creator:
         loader.add_total_size()
 
     def _cache_context(self):
-        @contextmanager
-        def no_cache_context():
-            yield
+        from .utils import cache_context
 
-        if self.cache is None:
-            return no_cache_context()
-
-        from climetlab import settings
-
-        os.makedirs(self.cache, exist_ok=True)
-        return settings.temporary("cache-directory", self.cache)
+        return cache_context(self.cache)
 
     def _path_readable(self):
         import zarr

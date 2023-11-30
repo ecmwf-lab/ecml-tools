@@ -9,10 +9,25 @@
 
 import json
 import os
+from contextlib import contextmanager
 
 import numpy as np
 import yaml
-from climetlab.utils import progress_bar
+from climetlab import settings
+from climetlab.utils.humanize import seconds  # noqa: F401
+from tqdm.auto import tqdm
+
+
+def cache_context(dirname):
+    @contextmanager
+    def no_cache_context():
+        yield
+
+    if dirname is None:
+        return no_cache_context()
+
+    os.makedirs(dirname, exist_ok=True)
+    return settings.temporary("cache-directory", dirname)
 
 
 def bytes(n):
@@ -118,3 +133,18 @@ def normalize_and_check_dates(dates, start, end, frequency, dtype="datetime64[s]
         assert d1 == d2, (i, d1, d2)
 
     return dates_
+
+
+def progress_bar(*, iterable=None, total=None, initial=0, desc=None):
+    return tqdm(
+        iterable=iterable,
+        total=total,
+        initial=initial,
+        unit_scale=True,
+        unit_divisor=1024,
+        unit="B",
+        disable=False,
+        leave=False,
+        desc=desc,
+        # dynamic_ncols=True, # make this the default?
+    )

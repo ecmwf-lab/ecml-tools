@@ -12,10 +12,9 @@ import time
 import warnings
 
 import numpy as np
-from climetlab.utils.humanize import seconds
 
 from .check import check_data_values
-from .utils import progress_bar
+from .utils import progress_bar, seconds
 
 LOG = logging.getLogger(__name__)
 
