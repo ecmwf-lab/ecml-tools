@@ -317,7 +317,7 @@ class GenericStatisticsLoader(Loader):
     def write_detailed_statistics(self, detailed_stats):
         if self.statistics_output:
             print(
-                "Not writting detailed statistics into dataset because option 'output' is set'."
+                "Not writting detailed statistics into dataset because option 'output' is set."
             )
             return
         z = zarr.open(self.path)["_build"]
