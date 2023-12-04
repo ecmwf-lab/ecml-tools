@@ -22,19 +22,28 @@ def main():
         action="store_true",
         help="Whether to shuffle the dataset",
     )
+    parser.add_argument(
+        "--partial",
+        help="Stop after downloading a fraction of the data (ex: 0.05 for 5%)",
+    )
 
     args = parser.parse_args()
 
     ds = open_dataset(args.path)
 
     indexes = list(range(len(ds)))
+    total = len(indexes)
 
     if args.shuffle:
         random.shuffle(indexes)
 
-    for i in tqdm(indexes, total=len(indexes), smoothing=0):
+    count = 0
+    for i in tqdm(indexes, total=total, smoothing=0):
         ds[i]
-        pass
+        count += 1
+        if count/total > float(args.partial):
+            print(f"Tested {args.partial} of the data.")
+            return
 
 
 if __name__ == "__main__":
