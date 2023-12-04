@@ -41,7 +41,7 @@ def main():
     for i in tqdm(indexes, total=total, smoothing=0):
         ds[i]
         count += 1
-        if count/total > float(args.partial):
+        if partial is not None and count/total > float(args.partial):
             print(f"Tested {args.partial} of the data.")
             return
 
