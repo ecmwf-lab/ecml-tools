@@ -81,7 +81,7 @@ def main():
             bytes = bytes / (end - start)
             bytes = "(" + to_human_readable_bytes(bytes) + "/second)"
         print(
-            f"Opening {count} items took {to_human_readable(end - start)} ({(end - start) / count:.4f} seconds per item) {bytes}"
+            f"Opening {count} items took {to_human_readable(end - start)} ({count / (end - start) :.2f} items per second) {bytes}"
         )
 
     start = time.time()
