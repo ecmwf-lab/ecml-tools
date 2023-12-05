@@ -8,6 +8,8 @@ import concurrent.futures
 
 from ecml_tools.data import open_dataset
 
+VERSION = 1
+
 
 def main():
     """Speed test for opening a dataset"""
@@ -79,9 +81,9 @@ def main():
         end = time.time()
         if bytes:
             bytes = bytes / (end - start)
-            bytes = "(" + to_human_readable_bytes(bytes) + "/second)"
+            bytes = "(" + to_human_readable_bytes(bytes) + "/s)"
         print(
-            f"Opening {count} items took {to_human_readable(end - start)} ({count / (end - start) :.2f} items per second) {bytes}"
+            f"Opening {count} items took {to_human_readable(end - start)}. Items per seconds: {count / (end - start) :.2f} {bytes}"
         )
 
     start = time.time()
@@ -107,6 +109,7 @@ def main():
     print(
         f"Each item has shape {shape} and dtype {dtype}, total {size} values, total {to_human_readable_bytes(size_bytes)}"
     )
+    print("Speed test version:", VERSION)
     show(start, args.count, bytes=size_bytes * args.count)
 
 
