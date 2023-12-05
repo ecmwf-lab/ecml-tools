@@ -4,6 +4,7 @@ import argparse
 import random
 
 from tqdm import tqdm
+import concurrent.futures
 
 from ecml_tools.data import open_dataset
 
@@ -22,7 +23,7 @@ def main():
         "-c",
         "--count",
         help="How many item to open",
-        default=100,
+        default=1000,
         type=int,
     )
     parser.add_argument(
@@ -32,16 +33,26 @@ def main():
         default=True,
     )
     parser.add_argument("--no-shuffle", dest="shuffle", action="store_false")
+    parser.add_argument(
+        "--parallel",
+        "-p",
+        type=int,
+        default=8,
+        help="Number of parallel threads to use (default: 8)",
+    )
 
     args = parser.parse_args()
+    nthreads = args.parallel
 
     ds = open_dataset(args.path)
 
     total = len(ds)
-    print(f"Dataset has {total} items. Opening {args.count} items.")
+    print(
+        f"Dataset has {total} items. Opening {args.count} items using {nthreads} threads."
+    )
 
     if args.shuffle:
-        # take items at random
+        # take items at random to avoid hitting the caches and use hot data
         indexes = random.sample(range(total), args.count)
     else:
         indexes = range(args.count)
@@ -54,23 +65,49 @@ def main():
         else:
             return f"{seconds / 60 / 60:.2f} hours"
 
-    def show(start, count):
+    def to_human_readable_bytes(size_bytes):
+        if size_bytes < 1024:
+            return f"{size_bytes} bytes"
+        elif size_bytes < 1024**2:
+            return f"{size_bytes / 1024:.2f} KB"
+        elif size_bytes < 1024**3:
+            return f"{size_bytes / 1024 ** 2:.2f} MB"
+        else:
+            return f"{size_bytes / 1024 ** 3:.2f} GB"
+
+    def show(start, count, bytes=""):
         end = time.time()
+        if bytes:
+            bytes = bytes / (end - start)
+            bytes = "(" + to_human_readable_bytes(bytes) + "/second)"
         print(
-            f"Opening {count} items took {to_human_readable(end - start)} ({(end - start) / count:.4f} seconds per item)"
+            f"Opening {count} items took {to_human_readable(end - start)} ({(end - start) / count:.4f} seconds per item) {bytes}"
         )
 
     start = time.time()
-    for i, ind in enumerate(indexes):
-        ds[ind]
-        if i == (args.count // 10):
-            show(start, i)
 
-        if i % 10 == 0:
-            print(".", end="", flush=True)
+    def process_item(ind):
+        ds[ind]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=nthreads) as executor:
+        futures = [executor.submit(process_item, ind) for ind in indexes]
+
+        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+            if i > 0 and (10 * i) % args.count == 0:
+                show(start, i)
+
+            if i % 10 == 0:
+                print(".", end="", flush=True)
+
+    first = ds[0]
+    shape, dtype, size = first.shape, first.dtype, first.size
+    size_bytes = size * dtype.itemsize
 
     print()
-    show(start, args.count)
+    print(
+        f"Each item has shape {shape} and dtype {dtype}, total {size} values, total {to_human_readable_bytes(size_bytes)}"
+    )
+    show(start, args.count, bytes=size_bytes * args.count)
 
 
 if __name__ == "__main__":
