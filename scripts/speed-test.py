@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import time
 import argparse
 import random
 
@@ -18,32 +19,58 @@ def main():
         ),
     )
     parser.add_argument(
-        "--shuffle",
-        action="store_true",
-        help="Whether to shuffle the dataset",
+        "-c",
+        "--count",
+        help="How many item to open",
+        default=100,
+        type=int,
     )
     parser.add_argument(
-        "--partial",
-        help="Stop after downloading a fraction of the data (ex: 0.05 for 5%)",
+        "--shuffle",
+        action="store_true",
+        help="Whether to shuffle the dataset (default is to shuffle)",
+        default=True,
     )
+    parser.add_argument("--no-shuffle", dest="shuffle", action="store_false")
 
     args = parser.parse_args()
 
     ds = open_dataset(args.path)
 
-    indexes = list(range(len(ds)))
-    total = len(indexes)
+    total = len(ds)
+    print(f"Dataset has {total} items. Opening {args.count} items.")
 
     if args.shuffle:
-        random.shuffle(indexes)
+        # take items at random
+        indexes = random.sample(range(total), args.count)
+    else:
+        indexes = range(args.count)
 
-    count = 0
-    for i in tqdm(indexes, total=total, smoothing=0):
-        ds[i]
-        count += 1
-        if partial is not None and count/total > float(args.partial):
-            print(f"Tested {args.partial} of the data.")
-            return
+    def to_human_readable(seconds):
+        if seconds < 60:
+            return f"{seconds:.2f} seconds"
+        elif seconds < 60 * 60:
+            return f"{seconds / 60:.2f} minutes"
+        else:
+            return f"{seconds / 60 / 60:.2f} hours"
+
+    def show(start, count):
+        end = time.time()
+        print(
+            f"Opening {count} items took {to_human_readable(end - start)} ({(end - start) / count:.4f} seconds per item)"
+        )
+
+    start = time.time()
+    for i, ind in enumerate(indexes):
+        ds[ind]
+        if i == (args.count // 10):
+            show(start, i)
+
+        if i % 10 == 0:
+            print(".", end="", flush=True)
+
+    print()
+    show(start, args.count)
 
 
 if __name__ == "__main__":
