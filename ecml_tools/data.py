@@ -710,6 +710,8 @@ class Rename(Forwards):
 def _name_to_path(name, zarr_root):
     if name.endswith(".zarr"):
         return name
+    if name.endswith(".zarr.zip"):
+        return name
 
     if zarr_root is None:
         with open(os.path.expanduser("~/.ecml-tools")) as f:
