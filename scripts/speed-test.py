@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-import time
 import argparse
+import concurrent.futures
 import random
+import time
 
 from tqdm import tqdm
-import concurrent.futures
 
 from ecml_tools.data import open_dataset
 
