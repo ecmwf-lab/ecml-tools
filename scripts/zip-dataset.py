@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-import zipfile
-import time
-import shutil
-from tqdm import tqdm
-import json
-import glob
-import datetime
-import os
-import signal
-from signal import Signals
-import sys
-
 import argparse
+import datetime
+import json
+import os
+import shutil
+import signal
+import sys
+import time
+import zipfile
+from signal import Signals
+
+from tqdm import tqdm
 
 from ecml_tools import __version__
 
