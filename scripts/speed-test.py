@@ -4,8 +4,6 @@ import concurrent.futures
 import random
 import time
 
-from tqdm import tqdm
-
 from ecml_tools.data import open_dataset
 
 VERSION = 1
@@ -83,7 +81,10 @@ def main():
             bytes = bytes / (end - start)
             bytes = "(" + to_human_readable_bytes(bytes) + "/s)"
         print(
-            f"Opening {count} items took {to_human_readable(end - start)}. Items per seconds: {count / (end - start) :.2f} {bytes}"
+            (
+                f"Opening {count} items took {to_human_readable(end - start)}."
+                "Items per seconds: {count / (end - start) :.2f} {bytes}"
+            )
         )
 
     start = time.time()
@@ -107,7 +108,10 @@ def main():
 
     print()
     print(
-        f"Each item has shape {shape} and dtype {dtype}, total {size} values, total {to_human_readable_bytes(size_bytes)}"
+        (
+            f"Each item has shape {shape} and dtype {dtype}, total {size} values,"
+            "total {to_human_readable_bytes(size_bytes)}"
+        )
     )
     print("Speed test version:", VERSION)
     show(start, args.count, bytes=size_bytes * args.count)
