@@ -1233,5 +1233,6 @@ def test_statistics():
     assert len(ds) == 365 * 1 * 4
     assert len([row for row in ds]) == len(ds)
 
+
 if __name__ == "__main__":
     test_statistics()
