@@ -19,6 +19,7 @@ from ecml_tools.data import (
     Join,
     Rename,
     Select,
+    Statistics,
     Subset,
     _as_first_date,
     _as_last_date,
@@ -1220,5 +1221,17 @@ def test_grids():
     same_stats(ds, ds1, "abcd")
 
 
+def test_statistics():
+    ds = open_dataset(
+        "test-2021-2021-6h-o96-abcd",
+        statistics="test-2000-2010-6h-o96-abcd",
+    )
+
+    assert isinstance(ds, Statistics)
+    same_stats(ds, open_dataset("test-2000-2010-6h-o96-abcd"), "abcd")
+
+    assert len(ds) == 365 * 1 * 4
+    assert len([row for row in ds]) == len(ds)
+
 if __name__ == "__main__":
-    test_grids()
+    test_statistics()

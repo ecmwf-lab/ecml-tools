@@ -7,7 +7,6 @@
 
 import calendar
 import datetime
-import json
 import logging
 import os
 import re
@@ -15,7 +14,6 @@ from functools import cached_property
 from pathlib import PurePath
 
 import numpy as np
-import tqdm
 import yaml
 import zarr
 
@@ -61,6 +59,10 @@ class Dataset:
         if "rename" in kwargs:
             rename = kwargs.pop("rename")
             return Rename(self, rename)._subset(**kwargs)
+
+        if "statistics" in kwargs:
+            statistics = kwargs.pop("statistics")
+            return Statistics(self, statistics)._subset(**kwargs)
 
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 
@@ -118,46 +120,6 @@ class Dataset:
 
     def metadata(self):
         raise NotImplementedError()
-
-    def save(self, path, chunks=None, buffer_size=10):
-        z = zarr.convenience.open(path, "w")
-
-        z.attrs["version"] = "0.4"
-        z.attrs["versions"] = {
-            "ecml-tools": "0.1.0",  # TODO.....
-        }
-
-        # z.attrs["date"] = self.arguments
-        z.attrs["arguments"] = self.arguments
-        z.attrs["provenance"] = self.provenance()
-
-        # print(json.dumps(self.arguments, indent=4))
-        print(json.dumps(self.provenance(), indent=4))
-
-        if chunks is None:
-            chunks = (1,) + self.shape[1:]
-
-        z.create_dataset(
-            "data",
-            shape=self.shape,
-            chunks=chunks,
-            dtype=self.dtype,
-        )
-
-        z.create_dataset("dates", data=self.dates)
-        z.create_dataset("latitudes", data=self.latitudes)
-        z.create_dataset("longitudes", data=self.longitudes)
-
-        for k, v in self.statistics.items():
-            z.create_dataset(k, data=v)
-
-        z.attrs["resolution"] = self.resolution
-        z.attrs["frequency"] = self.frequency
-        z.attrs["variables"] = self.variables
-
-        for i in tqdm.tqdm(range(0, self._len, buffer_size)):
-            j = min(i + buffer_size, self._len)
-            z.data[i:j] = self[i:j]
 
     def provenance(self):
         return {}
@@ -583,6 +545,11 @@ class Ensemble(GivenAxis):
 
 
 class Grids(GivenAxis):
+    def __init__(self, datasets, axis):
+        super().__init__(datasets, axis)
+        # Shape: (dates, variables, ensemble, 1d-values)
+        assert len(datasets[0].shape) == 4, "Grids must be 1D for now"
+
     # TODO: select the statistics of the most global grid?
     @property
     def latitudes(self):
@@ -766,6 +733,16 @@ class Rename(Forwards):
     @cached_property
     def name_to_index(self):
         return {k: i for i, k in enumerate(self.variables)}
+
+
+class Statistics(Forwards):
+    def __init__(self, dataset, statistic):
+        super().__init__(dataset)
+        self._statistic = statistic
+
+    @cached_property
+    def statistics(self):
+        return open_dataset(self._statistic).statistics
 
 
 def _name_to_path(name, zarr_root):
