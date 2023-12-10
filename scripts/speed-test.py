@@ -57,7 +57,6 @@ def main():
     )
     parser.add_argument("--no-shuffle", dest="shuffle", action="store_false")
 
-
     parser.add_argument(
         "--workers",
         type=int,

@@ -162,6 +162,12 @@ class Dataset:
     def provenance(self):
         return {}
 
+    def sub_shape(self, drop_axis):
+        shape = self.shape
+        shape = list(shape)
+        shape.pop(drop_axis)
+        return tuple(shape)
+
 
 class ReadOnlyStore(zarr.storage.BaseStore):
     def __delitem__(self, key):
@@ -396,21 +402,76 @@ class Combined(Forwards):
         # Forward most properties to the first dataset
         super().__init__(datasets[0])
 
-    def check_compatibility(self, d1, d2):
+    def check_same_resolution(self, d1, d2):
         if d1.resolution != d2.resolution:
             raise ValueError(
                 f"Incompatible resolutions: {d1.resolution} and {d2.resolution} ({d1} {d2})"
             )
 
+    def check_same_frequency(self, d1, d2):
         if d1.frequency != d2.frequency:
             raise ValueError(
                 f"Incompatible frequencies: {d1.frequency} and {d2.frequency} ({d1} {d2})"
             )
 
+    def check_same_grid(self, d1, d2):
         if (d1.latitudes != d2.latitudes).any() or (
             d1.longitudes != d2.longitudes
         ).any():
             raise ValueError(f"Incompatible grid ({d1} {d2})")
+
+    def check_same_shape(self, d1, d2):
+        if d1.shape[1:] != d2.shape[1:]:
+            raise ValueError(
+                f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
+            )
+
+        if d1.variables != d2.variables:
+            raise ValueError(
+                f"Incompatible variables: {d1.variables} and {d2.variables} ({d1} {d2})"
+            )
+
+    def check_same_sub_shapes(self, d1, d2, drop_axis):
+        shape1 = d1.sub_shape(drop_axis)
+        shape2 = d2.sub_shape(drop_axis)
+
+        if shape1 != shape2:
+            raise ValueError(
+                f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
+            )
+
+    def check_same_variables(self, d1, d2):
+        if d1.variables != d2.variables:
+            raise ValueError(
+                f"Incompatible variables: {d1.variables} and {d2.variables} ({d1} {d2})"
+            )
+
+    def check_same_lengths(self, d1, d2):
+        if d1._len != d2._len:
+            raise ValueError(f"Incompatible lengths: {d1._len} and {d2._len}")
+
+    def check_same_dates(self, d1, d2):
+        self.check_same_frequency(d1, d2)
+
+        if d1.dates[0] != d2.dates[0]:
+            raise ValueError(
+                f"Incompatible start dates: {d1.dates[0]} and {d2.dates[0]} ({d1} {d2})"
+            )
+
+        if d1.dates[-1] != d2.dates[-1]:
+            raise ValueError(
+                f"Incompatible end dates: {d1.dates[-1]} and {d2.dates[-1]} ({d1} {d2})"
+            )
+
+    def check_compatibility(self, d1, d2):
+        # These are the default checks
+        # Derived classes should turn individual checks off if they are not needed
+        self.check_same_resolution(d1, d2)
+        self.check_same_frequency(d1, d2)
+        self.check_same_grid(d1, d2)
+        self.check_same_lengths(d1, d2)
+        self.check_same_variables(d1, d2)
+        self.check_same_dates(d1, d2)
 
     def provenance(self):
         result = {}
@@ -461,16 +522,15 @@ class Concat(Combined):
 
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)
+        self.check_same_sub_shapes(d1, d2, drop_axis=0)
 
-        if d1.shape[1:] != d2.shape[1:]:
-            raise ValueError(
-                f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
-            )
+    def check_same_lengths(self, d1, d2):
+        # Turned off because we are concatenating along the first axis
+        pass
 
-        if d1.variables != d2.variables:
-            raise ValueError(
-                f"Incompatible variables: {d1.variables} and {d2.variables} ({d1} {d2})"
-            )
+    def check_same_dates(self, d1, d2):
+        # Turned off because we are concatenating along the dates axis
+        pass
 
     @property
     def dates(self):
@@ -481,42 +541,21 @@ class Concat(Combined):
         return (len(self),) + self.datasets[0].shape[1:]
 
 
-class Ensemble(Combined):
+class GivenAxis(Combined):
+    """Given a given axis, combine the datasets along that axis"""
+
     def __init__(self, datasets, axis):
         self.axis = axis
         super().__init__(datasets)
 
-        assert axis > 0 and axis < len(self.datasets[0].shape) - 1, (
+        assert axis > 0 and axis < len(self.datasets[0].shape), (
             axis,
             self.datasets[0].shape,
         )
 
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)
-
-        s1 = d1.shape[: self.axis] + (None,) + d1.shape[self.axis + 1 :]
-        s2 = d2.shape[: self.axis] + (None,) + d2.shape[self.axis + 1 :]
-        if s1 != s2:
-            raise ValueError(f"Incompatible shapes: {s1} and {s2} ({d1} {d2})")
-
-        if d1._len != d2._len:
-            raise ValueError(f"Incompatible lengths: {d1._len} and {d2._len}")
-
-        if d1.variables != d2.variables:
-            raise ValueError(
-                f"Incompatible variables: {d1.variables} and {d2.variables} ({d1} {d2})"
-            )
-
-        # Frequency and resolution are checked in the super class
-        if d1.dates[0] != d2.dates[0]:
-            raise ValueError(
-                f"Incompatible start dates: {d1.dates[0]} and {d2.dates[0]} ({d1} {d2})"
-            )
-
-        if d1.dates[-1] != d2.dates[-1]:
-            raise ValueError(
-                f"Incompatible end dates: {d1.dates[-1]} and {d2.dates[-1]} ({d1} {d2})"
-            )
+        self.check_same_sub_shapes(d1, d2, drop_axis=self.axis)
 
     def metadata(self):
         raise NotImplementedError()
@@ -526,7 +565,9 @@ class Ensemble(Combined):
         shapes = [d.shape for d in self.datasets]
         before = shapes[0][: self.axis]
         after = shapes[0][self.axis + 1 :]
-        return before + (sum(s[self.axis] for s in shapes),) + after
+        result = before + (sum(s[self.axis] for s in shapes),) + after
+        assert False not in result, result
+        return result
 
     def _get_slice(self, s):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
@@ -537,13 +578,33 @@ class Ensemble(Combined):
         return np.concatenate([d[n] for d in self.datasets], axis=self.axis - 1)
 
 
+class Ensemble(GivenAxis):
+    pass
+
+
+class Grids(GivenAxis):
+    # TODO: select the statistics of the most global grid?
+    @property
+    def latitudes(self):
+        return np.concatenate([d.latitudes for d in self.datasets])
+
+    @property
+    def longitudes(self):
+        return np.concatenate([d.longitudes for d in self.datasets])
+
+    def check_same_grid(self, d1, d2):
+        # We don't check the grid, because we want to be able to combine
+        pass
+
+
 class Join(Combined):
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)
-        if (d1.shape[0],) + d1.shape[2:] != (d2.shape[0],) + d2.shape[2:]:
-            raise ValueError(
-                f"Incompatible shapes: {d1.shape} and {d2.shape} ({d1} {d2})"
-            )
+        self.check_same_sub_shapes(d1, d2, drop_axis=1)
+
+    def check_same_variables(self, d1, d2):
+        # Turned off because we are joining along the variables axis
+        pass
 
     def __len__(self):
         return len(self.datasets[0])
@@ -708,9 +769,9 @@ class Rename(Forwards):
 
 
 def _name_to_path(name, zarr_root):
-    if name.endswith(".zarr"):
-        return name
-    if name.endswith(".zarr.zip"):
+    _, ext = os.path.splitext(name)
+
+    if ext in (".zarr", ".zip"):
         return name
 
     if zarr_root is None:
@@ -862,6 +923,8 @@ def _open_dataset(*args, zarr_root, **kwargs):
         sets.append(_open(a, zarr_root))
 
     if "ensemble" in kwargs:
+        if "grids" in kwargs:
+            raise NotImplementedError("Cannot use both 'ensemble' and 'grids'")
         ensemble = kwargs.pop("ensemble")
         axis = kwargs.pop("axis", 2)
         assert len(args) == 0
@@ -869,6 +932,15 @@ def _open_dataset(*args, zarr_root, **kwargs):
         return Ensemble([_open(e, zarr_root) for e in ensemble], axis=axis)._subset(
             **kwargs
         )
+
+    if "grids" in kwargs:
+        if "ensemble" in kwargs:
+            raise NotImplementedError("Cannot use both 'ensemble' and 'grids'")
+        grids = kwargs.pop("grids")
+        axis = kwargs.pop("axis", 3)
+        assert len(args) == 0
+        assert isinstance(grids, (list, tuple))
+        return Grids([_open(e, zarr_root) for e in grids], axis=axis)._subset(**kwargs)
 
     for name in ("datasets", "dataset"):
         if name in kwargs:

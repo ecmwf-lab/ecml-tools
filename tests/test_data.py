@@ -15,6 +15,7 @@ import ecml_tools.data
 from ecml_tools.data import (
     Concat,
     Ensemble,
+    Grids,
     Join,
     Rename,
     Select,
@@ -29,14 +30,14 @@ VALUES = 10
 
 
 @cache
-def _(date, var, k=0, e=0):
+def _(date, var, k=0, e=0, values=VALUES):
     d = date.year * 10000 + date.month * 100 + date.day
     v = ord(var) - ord("a") + 1
     assert 0 <= k <= 9
     assert 0 <= e <= 9
 
     return np.array(
-        [d * 100 + v + k / 10.0 + w / 100.0 + e / 1000.0 for w in range(VALUES)]
+        [d * 100 + v + k / 10.0 + w / 100.0 + e / 1000.0 for w in range(values)]
     )
 
 
@@ -48,6 +49,7 @@ def create_zarr(
     resolution="o96",
     k=0,
     ensemble=None,
+    grids=None,
 ):
     root = zarr.group()
 
@@ -59,22 +61,21 @@ def create_zarr(
 
     dates = np.array(dates, dtype="datetime64")
 
-    if ensemble is not None:
-        data = np.zeros((len(dates), len(vars), ensemble, VALUES))
-        for i, date in enumerate(dates):
-            for j, var in enumerate(vars):
-                for e in range(ensemble):
-                    data[i, j, e] = _(date.astype(object), var, k, e)
-    else:
-        data = np.zeros((len(dates), len(vars), VALUES))
-        for i, date in enumerate(dates):
-            for j, var in enumerate(vars):
-                data[i, j] = _(date.astype(object), var, k)
+    ensembles = ensemble if ensemble is not None else 1
+    values = grids if grids is not None else VALUES
+
+    data = np.zeros((len(dates), len(vars), ensembles, values))
+
+    for i, date in enumerate(dates):
+        for j, var in enumerate(vars):
+            for e in range(ensembles):
+                data[i, j, e] = _(date.astype(object), var, k, e, values)
 
     root.data = data
     root.dates = dates
-    root.latitudes = np.array([0, 1, 2, 3])
-    root.longitudes = np.array([0, 1, 2, 3])
+    root.latitudes = np.array([x + values for x in range(values)])
+    root.longitudes = np.array([x + values for x in range(values)])
+
     root.attrs["frequency"] = frequency
     root.attrs["resolution"] = resolution
     root.attrs["name_to_index"] = {k: i for i, k in enumerate(vars)}
@@ -99,10 +100,13 @@ def zarr_from_str(name, mode):
         vars="abcd",
         k=0,
         ensemble=None,
+        grids=None,
     )
 
     for name, bit in zip(args, name.split("-")):
         args[name] = bit
+
+    print(args)
 
     return create_zarr(
         start=int(args["start"]),
@@ -112,6 +116,7 @@ def zarr_from_str(name, mode):
         vars=[x for x in args["vars"]],
         k=int(args["k"]),
         ensemble=int(args["ensemble"]) if args["ensemble"] is not None else None,
+        grids=int(args["grids"]) if args["grids"] is not None else None,
     )
 
 
@@ -159,14 +164,29 @@ def slices(ds, start=None, end=None, step=None):
         assert (s[i] == ds[n]).all()
 
 
+def make_row(args, ensemble=False, grid=False):
+    if grid:
+
+        def _(x):
+            return np.concatenate([np.array(p) for p in x])
+
+        args = [_(a) for a in args]
+
+    if ensemble:
+        args = [np.array(a) for a in args]
+    else:
+        args = [np.array(a).reshape(1, -1) for a in args]  # Add ensemble dimension
+    return np.array(args)
+
+
 def test_concat():
     ds = open_dataset(
-        "test-2021-2021-6h-o96-abcd",
-        "test-2022-2022-6h-o96-abcd",
+        "test-2021-2022-6h-o96-abcd",
+        "test-2023-2023-6h-o96-abcd",
     )
 
     assert isinstance(ds, Concat)
-    assert len(ds) == 365 * 2 * 4
+    assert len(ds) == 365 * 3 * 4
 
     assert len([row for row in ds]) == len(ds)
 
@@ -174,7 +194,8 @@ def test_concat():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
+        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
+
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -183,9 +204,9 @@ def test_concat():
 
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-    assert ds.shape == (365 * 2 * 4, 4, VALUES)
+    assert ds.shape == (365 * 3 * 4, 4, 1, VALUES)
 
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    same_stats(ds, open_dataset("test-2021-2022-6h-o96-abcd"), "abcd")
     slices(ds)
 
 
@@ -203,16 +224,18 @@ def test_join_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-            _(date, "e"),
-            _(date, "f"),
-            _(date, "g"),
-            _(date, "h"),
-        ]
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+                _(date, "e"),
+                _(date, "f"),
+                _(date, "g"),
+                _(date, "h"),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -231,7 +254,7 @@ def test_join_1():
         "h": 7,
     }
 
-    assert ds.shape == (365 * 4, 8, VALUES)
+    assert ds.shape == (365 * 4, 8, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
@@ -251,14 +274,16 @@ def test_join_2():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a", 1),
-            _(date, "b", 2),
-            _(date, "c", 1),
-            _(date, "d", 2),
-            _(date, "e", 2),
-            _(date, "f", 2),
-        ]
+        expect = make_row(
+            [
+                _(date, "a", 1),
+                _(date, "b", 2),
+                _(date, "c", 1),
+                _(date, "d", 2),
+                _(date, "e", 2),
+                _(date, "f", 2),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -268,7 +293,7 @@ def test_join_2():
     assert ds.variables == ["a", "b", "c", "d", "e", "f"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5}
 
-    assert ds.shape == (365 * 4, 6, VALUES)
+    assert ds.shape == (365 * 4, 6, 1, VALUES)
 
     same_stats(
         ds,
@@ -297,12 +322,14 @@ def test_join_3():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a", 2),
-            _(date, "b", 2),
-            _(date, "c", 2),
-            _(date, "d", 2),
-        ]
+        expect = make_row(
+            [
+                _(date, "a", 2),
+                _(date, "b", 2),
+                _(date, "c", 2),
+                _(date, "d", 2),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -312,7 +339,7 @@ def test_join_3():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 4, 4, VALUES)
+    assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abcd")
     slices(ds)
 
@@ -328,12 +355,14 @@ def test_subset_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        ]
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=12)
@@ -343,7 +372,7 @@ def test_subset_1():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 3 * 2, 4, VALUES)
+    assert ds.shape == (365 * 3 * 2, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -359,12 +388,14 @@ def test_subset_2():
     date = datetime.datetime(2022, 1, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        ]
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=1)
@@ -374,7 +405,7 @@ def test_subset_2():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 24, 4, VALUES)
+    assert ds.shape == (365 * 24, 4, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -397,12 +428,14 @@ def test_subset_3():
     date = datetime.datetime(2022, 1, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        ]
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=12)
@@ -412,7 +445,7 @@ def test_subset_3():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2, 4, VALUES)
+    assert ds.shape == (365 * 2, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -428,12 +461,14 @@ def test_subset_4():
     date = datetime.datetime(2022, 6, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        ]
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=1)
@@ -443,7 +478,7 @@ def test_subset_4():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, VALUES)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -460,12 +495,14 @@ def test_subset_5():
     date = datetime.datetime(2022, 6, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        ]
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=1)
@@ -475,7 +512,7 @@ def test_subset_5():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, VALUES)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -496,12 +533,14 @@ def test_subset_6():
     date = datetime.datetime(2022, 6, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        ]
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=1)
@@ -511,7 +550,7 @@ def test_subset_6():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, VALUES)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -528,12 +567,14 @@ def test_subset_7():
     date = datetime.datetime(2022, 6, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        ]
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=1)
@@ -543,7 +584,7 @@ def test_subset_7():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, VALUES)
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
@@ -560,7 +601,7 @@ def test_select_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "b"), _(date, "d")]
+        expect = make_row([_(date, "b"), _(date, "d")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -570,7 +611,7 @@ def test_select_1():
     assert ds.variables == ["b", "d"]
     assert ds.name_to_index == {"b": 0, "d": 1}
 
-    assert ds.shape == (365 * 4, 2, VALUES)
+    assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bd")
     slices(ds)
 
@@ -585,7 +626,7 @@ def test_select_2():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "c"), _(date, "a")]
+        expect = make_row([_(date, "c"), _(date, "a")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -595,7 +636,7 @@ def test_select_2():
     assert ds.variables == ["c", "a"]
     assert ds.name_to_index == {"c": 0, "a": 1}
 
-    assert ds.shape == (365 * 4, 2, VALUES)
+    assert ds.shape == (365 * 4, 2, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
     slices(ds)
@@ -612,7 +653,7 @@ def test_select_3():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "a"), _(date, "c")]
+        expect = make_row([_(date, "a"), _(date, "c")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -622,7 +663,7 @@ def test_select_3():
     assert ds.variables == ["a", "c"]
     assert ds.name_to_index == {"a": 0, "c": 1}
 
-    assert ds.shape == (365 * 4, 2, VALUES)
+    assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
     slices(ds)
 
@@ -638,7 +679,7 @@ def test_rename():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
+        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -648,7 +689,7 @@ def test_rename():
     assert ds.variables == ["x", "b", "y", "d"]
     assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3}
 
-    assert ds.shape == (365 * 4, 4, VALUES)
+    assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
     slices(ds)
 
@@ -663,7 +704,7 @@ def test_drop():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "b"), _(date, "c"), _(date, "d")]
+        expect = make_row([_(date, "b"), _(date, "c"), _(date, "d")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -673,7 +714,7 @@ def test_drop():
     assert ds.variables == ["b", "c", "d"]
     assert ds.name_to_index == {"b": 0, "c": 1, "d": 2}
 
-    assert ds.shape == (365 * 4, 3, VALUES)
+    assert ds.shape == (365 * 4, 3, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
     slices(ds)
 
@@ -689,7 +730,7 @@ def test_reorder_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")]
+        expect = make_row([_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -699,7 +740,7 @@ def test_reorder_1():
     assert ds.variables == ["d", "c", "b", "a"]
     assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
 
-    assert ds.shape == (365 * 4, 4, VALUES)
+    assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -715,7 +756,7 @@ def test_reorder_2():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")]
+        expect = make_row([_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -725,7 +766,7 @@ def test_reorder_2():
     assert ds.variables == ["d", "c", "b", "a"]
     assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
 
-    assert ds.shape == (365 * 4, 4, VALUES)
+    assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -745,7 +786,7 @@ def test_constructor_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
+        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -755,7 +796,7 @@ def test_constructor_1():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2 * 4, 4, VALUES)
+    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -773,7 +814,7 @@ def test_constructor_2():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
+        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -783,7 +824,7 @@ def test_constructor_2():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2 * 4, 4, VALUES)
+    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -801,7 +842,7 @@ def test_constructor_3():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
+        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -811,7 +852,7 @@ def test_constructor_3():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2 * 4, 4, VALUES)
+    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -830,7 +871,7 @@ def test_constructor_4():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")]
+        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -840,7 +881,7 @@ def test_constructor_4():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == (365 * 2 * 4, 4, VALUES)
+    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
 
@@ -861,15 +902,17 @@ def test_constructor_5():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [
-            _(date, "a", 1),
-            _(date, "b", 2),
-            _(date, "c", 1),
-            _(date, "d", 1),
-            _(date, "a", 2),
-            _(date, "c", 2),
-            _(date, "d", 2),
-        ]
+        expect = make_row(
+            [
+                _(date, "a", 1),
+                _(date, "b", 2),
+                _(date, "c", 1),
+                _(date, "d", 1),
+                _(date, "a", 2),
+                _(date, "c", 2),
+                _(date, "d", 2),
+            ]
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -879,7 +922,7 @@ def test_constructor_5():
     assert ds.variables == ["x", "b", "y", "d", "a", "z", "t"]
     assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3, "a": 4, "z": 5, "t": 6}
 
-    assert ds.shape == (365 * 4, 7, VALUES)
+    assert ds.shape == (365 * 4, 7, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
     slices(ds)
@@ -1043,12 +1086,16 @@ def test_ensemble_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [
-            [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)],
-            [_(date, "b", 1, i) for i in range(10)] + [_(date, "b", 2, 0)],
-            [_(date, "c", 1, i) for i in range(10)] + [_(date, "c", 2, 0)],
-            [_(date, "d", 1, i) for i in range(10)] + [_(date, "d", 2, 0)],
-        ]
+        expect = make_row(
+            [
+                [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)],
+                [_(date, "b", 1, i) for i in range(10)] + [_(date, "b", 2, 0)],
+                [_(date, "c", 1, i) for i in range(10)] + [_(date, "c", 2, 0)],
+                [_(date, "d", 1, i) for i in range(10)] + [_(date, "d", 2, 0)],
+            ],
+            ensemble=True,
+        )
+        # print(row.shape, expect.shape)
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -1080,20 +1127,23 @@ def test_ensemble_2():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = [
-            [_(date, "a", 1, i) for i in range(10)]
-            + [_(date, "a", 2, 0)]
-            + [_(date, "a", 3, i) for i in range(5)],
-            [_(date, "b", 1, i) for i in range(10)]
-            + [_(date, "b", 2, 0)]
-            + [_(date, "b", 3, i) for i in range(5)],
-            [_(date, "c", 1, i) for i in range(10)]
-            + [_(date, "c", 2, 0)]
-            + [_(date, "c", 3, i) for i in range(5)],
-            [_(date, "d", 1, i) for i in range(10)]
-            + [_(date, "d", 2, 0)]
-            + [_(date, "d", 3, i) for i in range(5)],
-        ]
+        expect = make_row(
+            [
+                [_(date, "a", 1, i) for i in range(10)]
+                + [_(date, "a", 2, 0)]
+                + [_(date, "a", 3, i) for i in range(5)],
+                [_(date, "b", 1, i) for i in range(10)]
+                + [_(date, "b", 2, 0)]
+                + [_(date, "b", 3, i) for i in range(5)],
+                [_(date, "c", 1, i) for i in range(10)]
+                + [_(date, "c", 2, 0)]
+                + [_(date, "c", 3, i) for i in range(5)],
+                [_(date, "d", 1, i) for i in range(10)]
+                + [_(date, "d", 2, 0)]
+                + [_(date, "d", 3, i) for i in range(5)],
+            ],
+            ensemble=True,
+        )
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -1108,5 +1158,67 @@ def test_ensemble_2():
     slices(ds)
 
 
+def test_grids():
+    ds = open_dataset(
+        grids=[
+            "test-2021-2021-6h-o96-abcd-1-1",  # Default is 10 gridpoints
+            "test-2021-2021-6h-o96-abcd-2-1-25",  # 25 gridpoints
+        ]
+    )
+
+    # ds = open_dataset("test-2021-2021-6h-o96-abcd-2-1-10")
+
+    assert isinstance(ds, Grids)
+    assert len(ds) == 365 * 1 * 4
+    assert len([row for row in ds]) == len(ds)
+
+    dates = []
+    date = datetime.datetime(2021, 1, 1)
+
+    for row in ds:
+        expect = make_row(
+            [
+                [
+                    _(date, "a", 1),
+                    _(date, "a", 2, values=25),
+                ],
+                [
+                    _(date, "b", 1),
+                    _(date, "b", 2, values=25),
+                ],
+                [
+                    _(date, "c", 1),
+                    _(date, "c", 2, values=25),
+                ],
+                [
+                    _(date, "d", 1),
+                    _(date, "d", 2, values=25),
+                ],
+            ],
+            grid=True,
+        )
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == (365 * 4, 4, 1, VALUES + 25)
+    # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
+    slices(ds)
+
+    ds1 = open_dataset("test-2021-2021-6h-o96-abcd-1-1")
+    ds2 = open_dataset("test-2021-2021-6h-o96-abcd-2-1-25")
+
+    assert (ds.longitudes == np.concatenate([ds1.longitudes, ds2.longitudes])).all()
+    assert (ds.latitudes == np.concatenate([ds1.latitudes, ds2.latitudes])).all()
+
+    # For now
+    same_stats(ds, ds1, "abcd")
+
+
 if __name__ == "__main__":
-    test_ensemble_1()
+    test_grids()
