@@ -7,6 +7,8 @@ from tqdm import tqdm
 
 from ecml_tools.data import open_dataset
 
+VERSION = 1
+
 
 class SpeedTest:
     """Speed test for opening a dataset"""
@@ -42,10 +44,19 @@ def main():
         ),
     )
     parser.add_argument(
+        "-c",
+        "--count",
+        help="How many item to open",
+        type=int,
+    )
+    parser.add_argument(
         "--shuffle",
         action="store_true",
-        help="Whether to shuffle the dataset",
+        help="Whether to shuffle the dataset (default is to shuffle)",
+        default=True,
     )
+    parser.add_argument("--no-shuffle", dest="shuffle", action="store_false")
+
 
     parser.add_argument(
         "--workers",
@@ -56,11 +67,14 @@ def main():
 
     args = parser.parse_args()
 
-    indexes = list(range(len(open_dataset(args.path))))
-    print(len(indexes))
+    indexes = list(len(open_dataset(args.path)))
 
     if args.shuffle:
+        # take items at random to avoid hitting the caches and use hot data
         random.shuffle(indexes)
+
+    if args.count is not None:
+        indexes = indexes[: args.count]
 
     if args.workers > 1:
         tests = Tests(
