@@ -36,6 +36,11 @@ data_requires = [
     "tqdm",
 ]
 
+remote_requires = [
+    "boto3",
+    "requests",
+]
+
 provenance_requires = [
     "GitPython",
     "nvsmi",
@@ -50,7 +55,7 @@ create_requires = [
 ]
 
 
-all_requires = data_requires + provenance_requires + create_requires
+all_requires = data_requires + provenance_requires + create_requires + remote_requires
 
 setuptools.setup(
     name="ecml-tools",
@@ -67,6 +72,7 @@ setuptools.setup(
     install_requires=[],
     extras_require={
         "data": data_requires,
+        "remote": data_requires + remote_requires,
         "provenance": provenance_requires,
         "create": create_requires,
         "all": all_requires,

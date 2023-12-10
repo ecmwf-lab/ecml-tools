@@ -1,10 +1,34 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import argparse
 import random
+from multiprocessing import Pool
 
 from tqdm import tqdm
 
 from ecml_tools.data import open_dataset
+
+
+class SpeedTest:
+    """Speed test for opening a dataset"""
+
+    def __init__(self, path, indexes):
+        self.path = path
+        self.indexes = indexes
+
+    def run(self):
+        ds = open_dataset(self.path)
+        print(ds)
+        for i in tqdm(self.indexes):
+            ds[i]
+            # print(i)
+
+
+class Tests:
+    def __init__(self, tests):
+        self.tests = tests
+
+    def __call__(self, i):
+        self.tests[i].run()
 
 
 def main():
@@ -23,18 +47,34 @@ def main():
         help="Whether to shuffle the dataset",
     )
 
+    parser.add_argument(
+        "--workers",
+        type=int,
+        help="How many workers to use",
+        default=1,
+    )
+
     args = parser.parse_args()
 
-    ds = open_dataset(args.path)
-
-    indexes = list(range(len(ds)))
+    indexes = list(range(len(open_dataset(args.path))))
+    print(len(indexes))
 
     if args.shuffle:
         random.shuffle(indexes)
 
-    for i in tqdm(indexes, total=len(indexes), smoothing=0):
-        ds[i]
-        pass
+    if args.workers > 1:
+        tests = Tests(
+            [
+                SpeedTest(args.path, indexes[i :: args.workers])
+                for i in range(args.workers)
+            ]
+        )
+
+        with Pool(args.workers) as pool:
+            pool.map(tests, range(args.workers))
+    else:
+        test = SpeedTest(args.path, indexes)
+        test.run()
 
 
 if __name__ == "__main__":
