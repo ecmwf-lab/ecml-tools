@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import random
+import time
 from multiprocessing import Pool
 
 from tqdm import tqdm
@@ -8,6 +9,39 @@ from tqdm import tqdm
 from ecml_tools.data import open_dataset
 
 VERSION = 1
+
+
+def to_human_readable(seconds):
+    if seconds < 60:
+        return f"{seconds:.2f} seconds"
+    elif seconds < 60 * 60:
+        return f"{seconds / 60:.2f} minutes"
+    else:
+        return f"{seconds / 60 / 60:.2f} hours"
+
+
+def to_human_readable_bytes(size_bytes):
+    if size_bytes < 1024:
+        return f"{size_bytes} bytes"
+    elif size_bytes < 1024**2:
+        return f"{size_bytes / 1024:.2f} KB"
+    elif size_bytes < 1024**3:
+        return f"{size_bytes / 1024 ** 2:.2f} MB"
+    else:
+        return f"{size_bytes / 1024 ** 3:.2f} GB"
+
+
+def show(start, count, bytes=""):
+    end = time.time()
+    if bytes:
+        bytes = bytes / (end - start)
+        bytes = "(" + to_human_readable_bytes(bytes) + "/s)"
+    print(
+        (
+            f"Opening {count} items took {to_human_readable(end - start)}."
+            f" Items per seconds: {count / (end - start) :.2f} {bytes}"
+        )
+    )
 
 
 class SpeedTest:
@@ -47,6 +81,7 @@ def main():
         "-c",
         "--count",
         help="How many item to open",
+        default=1000,
         type=int,
     )
     parser.add_argument(
@@ -61,12 +96,20 @@ def main():
         "--workers",
         type=int,
         help="How many workers to use",
-        default=1,
+        default=8,
     )
 
     args = parser.parse_args()
+    nworkers = args.workers
+    start = time.time()
 
-    indexes = list(len(open_dataset(args.path)))
+    ds = open_dataset(args.path)
+
+    total = len(ds)
+    print(
+        f"Dataset has {total} items. Opening {args.count} items using {nworkers} workers."
+    )
+    indexes = list(range(len(open_dataset(args.path))))
 
     if args.shuffle:
         # take items at random to avoid hitting the caches and use hot data
@@ -75,19 +118,31 @@ def main():
     if args.count is not None:
         indexes = indexes[: args.count]
 
-    if args.workers > 1:
+    if nworkers > 1:
         tests = Tests(
-            [
-                SpeedTest(args.path, indexes[i :: args.workers])
-                for i in range(args.workers)
-            ]
+            [SpeedTest(args.path, indexes[i::nworkers]) for i in range(nworkers)]
         )
 
-        with Pool(args.workers) as pool:
-            pool.map(tests, range(args.workers))
+        with Pool(nworkers) as pool:
+            pool.map(tests, range(nworkers))
     else:
         test = SpeedTest(args.path, indexes)
         test.run()
+
+    ds = open_dataset(args.path)
+    first = ds[0]
+    shape, dtype, size = first.shape, first.dtype, first.size
+    size_bytes = size * dtype.itemsize
+
+    print()
+    print(
+        (
+            f"Each item has shape {shape} and dtype {dtype}, total {size} values, "
+            f"total {to_human_readable_bytes(size_bytes)}"
+        )
+    )
+    print("Speed test version:", VERSION)
+    show(start, args.count, bytes=size_bytes * args.count)
 
 
 if __name__ == "__main__":
