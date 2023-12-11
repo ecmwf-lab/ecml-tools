@@ -53,7 +53,6 @@ class SpeedTest:
 
     def run(self):
         ds = open_dataset(self.path)
-        print(ds)
         for i in tqdm(self.indexes):
             ds[i]
             # print(i)
