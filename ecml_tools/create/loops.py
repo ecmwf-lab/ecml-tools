@@ -60,7 +60,6 @@ class StartStopExpand(Expand):
         result = [list(g) for _, g in itertools.groupby(all, key=self.grouper_key)]
         self.groups = [[self.format(x) for x in g] for g in result]
 
-
     def format(self, x):
         return x
 

@@ -435,14 +435,14 @@ class Combined(Forwards):
         self.check_same_dates(d1, d2)
 
     def provenance(self):
-        result = {}
-        for d in self.datasets:
-            result.update(d.provenance())
-        return result
+        return [d.provenance() for d in self.datasets]
 
     def __repr__(self):
         lst = ", ".join(repr(d) for d in self.datasets)
         return f"{self.__class__.__name__}({lst})"
+
+    def metadata(self):
+        return [d.metadata() for d in self.datasets]
 
 
 class Concat(Combined):
