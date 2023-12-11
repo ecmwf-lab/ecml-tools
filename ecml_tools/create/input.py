@@ -481,6 +481,8 @@ class Loop:
 
         self.values = {}
         for k, v in self.config.items():
+            if k == "applies_to":
+                continue
             self.values[k] = expand_loops(v)
 
     def __repr__(self) -> str:
