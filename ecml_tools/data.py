@@ -33,7 +33,6 @@ class Dataset:
         if not kwargs:
             return self
 
-
         if "start" in kwargs or "end" in kwargs:
             start = kwargs.pop("start", None)
             end = kwargs.pop("end", None)
@@ -43,7 +42,6 @@ class Dataset:
         if "frequency" in kwargs:
             frequency = kwargs.pop("frequency")
             return Subset(self, self._frequency_to_indices(frequency))._subset(**kwargs)
-
 
         if "select" in kwargs:
             select = kwargs.pop("select")
@@ -821,8 +819,8 @@ def _as_date(d, dates, last):
                 return np.datetime64(f"{year:04}-{month:02}-{day:02}T00:00:00")
 
     if isinstance(d, str):
-        if '-' in d:
-            assert ':' not in d
+        if "-" in d:
+            assert ":" not in d
             bits = d.split("-")
             if len(bits) == 1:
                 return _as_date(int(bits[0]), dates, last)
@@ -832,9 +830,11 @@ def _as_date(d, dates, last):
 
             if len(bits) == 3:
                 return _as_date(
-                    int(bits[0]) * 10000 + int(bits[1]) * 100 + int(bits[2]),dates, last,
+                    int(bits[0]) * 10000 + int(bits[1]) * 100 + int(bits[2]),
+                    dates,
+                    last,
                 )
-        if ':' in d:
+        if ":" in d:
             assert len(d) == 5
             hour, minute = d.split(":")
             assert minute == "00"
@@ -845,7 +845,6 @@ def _as_date(d, dates, last):
             day = first.day
 
             return np.datetime64(f"{year:04}-{month:02}-{day:02}T{hour}:00:00")
-
 
     raise NotImplementedError(f"Unsupported date: {d} ({type(d)})")
 
