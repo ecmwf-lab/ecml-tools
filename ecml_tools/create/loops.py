@@ -25,10 +25,12 @@ class Expand(list):
         self.parse_config()
 
     def parse_config(self):
+        if "stop" in self._config:
+            raise ValueError(f"Use 'end' not 'stop' in loop. {self._config}")
         self.start = self._config.get("start")
         if self.start is not None:
             self.start = to_datetime(self.start)
-        self.end = self._config.get("end", self._config.get("stop"))
+        self.end = self._config.get("end")
         if self.end is not None:
             self.end = to_datetime(self.end)
         self.step = self._config.get("step", self._config.get("frequency", 1))
@@ -36,10 +38,9 @@ class Expand(list):
 
 
 class ValuesExpand(Expand):
-    def __init__(self, config, **kwargs):
-        super().__init__(config, **kwargs)
-        values = self._config["values"]
-        values = [[v] if not isinstance(v, list) else v for v in values]
+    def parse_config(self):
+        if not isinstance(self._config["values"], list):
+            raise ValueError(f"Values must be a list. {self._config}")
         for v in self._config["values"]:
             if not isinstance(v, (tuple, list)):
                 v = [v]
@@ -59,10 +60,6 @@ class StartStopExpand(Expand):
         result = [list(g) for _, g in itertools.groupby(all, key=self.grouper_key)]
         self.groups = [[self.format(x) for x in g] for g in result]
 
-    def parse_config(self):
-        if "stop" in self._config:
-            raise ValueError(f"Use 'end' not 'stop' in loop. {self._config}")
-        super().parse_config()
 
     def format(self, x):
         return x
