@@ -33,16 +33,17 @@ class Dataset:
         if not kwargs:
             return self
 
-        if "frequency" in kwargs:
-            frequency = kwargs.pop("frequency")
-
-            return Subset(self, self._frequency_to_indices(frequency))._subset(**kwargs)
 
         if "start" in kwargs or "end" in kwargs:
             start = kwargs.pop("start", None)
             end = kwargs.pop("end", None)
 
             return Subset(self, self._dates_to_indices(start, end))._subset(**kwargs)
+
+        if "frequency" in kwargs:
+            frequency = kwargs.pop("frequency")
+            return Subset(self, self._frequency_to_indices(frequency))._subset(**kwargs)
+
 
         if "select" in kwargs:
             select = kwargs.pop("select")
@@ -761,6 +762,10 @@ def _name_to_path(name, zarr_root):
 def _frequency_to_hours(frequency):
     if isinstance(frequency, int):
         return frequency
+
+    if isinstance(frequency, float):
+        assert int(frequency) == frequency
+        return int(frequency)
 
     m = re.match(r"(\d+)([dh])?", frequency)
     if m is None:

@@ -599,13 +599,14 @@ def test_subset_8():
     )
 
     assert isinstance(ds, Subset)
-    assert len(ds) == 365 * 4 - 1
+    assert len(ds) == 365 * 4
     assert len([row for row in ds]) == len(ds)
 
     print(ds.dates)
 
     dates = []
-    date = datetime.datetime(2021, 1, 1, 3)
+    date = datetime.datetime(2021, 1, 1, 3, 0, 0)
+    assert ds.dates[0].astype(object) == date, (ds.dates[0], date)
 
     for row in ds:
         expect = make_row(
@@ -625,9 +626,9 @@ def test_subset_8():
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
 
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
+    assert ds.shape == (365 * 4, 4, 1, VALUES)
 
-    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    same_stats(ds, open_dataset("test-2021-2021-1h-o96-abcd"), "abcd")
     slices(ds)
 
 
