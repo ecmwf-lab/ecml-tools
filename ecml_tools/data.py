@@ -78,8 +78,8 @@ class Dataset:
     def _dates_to_indices(self, start, end):
         # TODO: optimize
 
-        start = self.dates[0] if start is None else _as_first_date(start)
-        end = self.dates[-1] if end is None else _as_last_date(end)
+        start = self.dates[0] if start is None else _as_first_date(start, self.dates)
+        end = self.dates[-1] if end is None else _as_last_date(end, self.dates)
 
         return [i for i, date in enumerate(self.dates) if start <= date <= end]
 
@@ -776,7 +776,7 @@ def _frequency_to_hours(frequency):
     raise NotImplementedError()
 
 
-def _as_date(d, last):
+def _as_date(d, dates, last):
     if isinstance(d, datetime.datetime):
         assert d.minutes == 0 and d.hours == 0 and d.seconds == 0, d
         d = datetime.date(d.year, d.month, d.day)
@@ -816,27 +816,41 @@ def _as_date(d, last):
                 return np.datetime64(f"{year:04}-{month:02}-{day:02}T00:00:00")
 
     if isinstance(d, str):
-        bits = d.split("-")
-        if len(bits) == 1:
-            return _as_date(int(bits[0]), last)
+        if '-' in d:
+            assert ':' not in d
+            bits = d.split("-")
+            if len(bits) == 1:
+                return _as_date(int(bits[0]), dates, last)
 
-        if len(bits) == 2:
-            return _as_date(int(bits[0]) * 100 + int(bits[1]), last)
+            if len(bits) == 2:
+                return _as_date(int(bits[0]) * 100 + int(bits[1]), dates, last)
 
-        if len(bits) == 3:
-            return _as_date(
-                int(bits[0]) * 10000 + int(bits[1]) * 100 + int(bits[2]), last
-            )
+            if len(bits) == 3:
+                return _as_date(
+                    int(bits[0]) * 10000 + int(bits[1]) * 100 + int(bits[2]),dates, last,
+                )
+        if ':' in d:
+            assert len(d) == 5
+            hour, minute = d.split(":")
+            assert minute == "00"
+            assert not last
+            first = dates[0].astype(object)
+            year = first.year
+            month = first.month
+            day = first.day
+
+            return np.datetime64(f"{year:04}-{month:02}-{day:02}T{hour}:00:00")
+
 
     raise NotImplementedError(f"Unsupported date: {d} ({type(d)})")
 
 
-def _as_first_date(d):
-    return _as_date(d, last=False)
+def _as_first_date(d, dates):
+    return _as_date(d, dates, last=False)
 
 
-def _as_last_date(d):
-    return _as_date(d, last=True)
+def _as_last_date(d, dates):
+    return _as_date(d, dates, last=True)
 
 
 def _concat_or_join(datasets):

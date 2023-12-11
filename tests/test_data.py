@@ -591,6 +591,46 @@ def test_subset_7():
     slices(ds)
 
 
+def test_subset_8():
+    ds = open_dataset(
+        "test-2021-2021-1h-o96-abcd",
+        start="03:00",
+        frequency="6h",
+    )
+
+    assert isinstance(ds, Subset)
+    assert len(ds) == 365 * 4 - 1
+    assert len([row for row in ds]) == len(ds)
+
+    print(ds.dates)
+
+    dates = []
+    date = datetime.datetime(2021, 1, 1, 3)
+
+    for row in ds:
+        expect = make_row(
+            [
+                _(date, "a"),
+                _(date, "b"),
+                _(date, "c"),
+                _(date, "d"),
+            ]
+        )
+        assert (row == expect).all()
+        dates.append(date)
+        date += datetime.timedelta(hours=6)
+
+    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
+
+    assert ds.variables == ["a", "b", "c", "d"]
+    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+
+    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
+
+    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
+    slices(ds)
+
+
 def test_select_1():
     ds = open_dataset("test-2021-2021-6h-o96-abcd", select=["b", "d"])
 
@@ -930,24 +970,25 @@ def test_constructor_5():
 
 
 def test_dates():
-    assert _as_first_date(2021) == np.datetime64("2021-01-01T00:00:00")
-    assert _as_last_date(2021) == np.datetime64("2021-12-31T23:59:59")
-    assert _as_first_date("2021") == np.datetime64("2021-01-01T00:00:00")
-    assert _as_last_date("2021") == np.datetime64("2021-12-31T23:59:59")
+    dates = None
+    assert _as_first_date(2021, dates) == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date(2021, dates) == np.datetime64("2021-12-31T23:59:59")
+    assert _as_first_date("2021", dates) == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date("2021", dates) == np.datetime64("2021-12-31T23:59:59")
 
-    assert _as_first_date(202106) == np.datetime64("2021-06-01T00:00:00")
-    assert _as_last_date(202108) == np.datetime64("2021-08-31T23:59:59")
-    assert _as_first_date("202106") == np.datetime64("2021-06-01T00:00:00")
-    assert _as_last_date("202108") == np.datetime64("2021-08-31T23:59:59")
-    assert _as_first_date("2021-06") == np.datetime64("2021-06-01T00:00:00")
-    assert _as_last_date("2021-08") == np.datetime64("2021-08-31T23:59:59")
+    assert _as_first_date(202106, dates) == np.datetime64("2021-06-01T00:00:00")
+    assert _as_last_date(202108, dates) == np.datetime64("2021-08-31T23:59:59")
+    assert _as_first_date("202106", dates) == np.datetime64("2021-06-01T00:00:00")
+    assert _as_last_date("202108", dates) == np.datetime64("2021-08-31T23:59:59")
+    assert _as_first_date("2021-06", dates) == np.datetime64("2021-06-01T00:00:00")
+    assert _as_last_date("2021-08", dates) == np.datetime64("2021-08-31T23:59:59")
 
-    assert _as_first_date(20210101) == np.datetime64("2021-01-01T00:00:00")
-    assert _as_last_date(20210101) == np.datetime64("2021-01-01T23:59:59")
-    assert _as_first_date("20210101") == np.datetime64("2021-01-01T00:00:00")
-    assert _as_last_date("20210101") == np.datetime64("2021-01-01T23:59:59")
-    assert _as_first_date("2021-01-01") == np.datetime64("2021-01-01T00:00:00")
-    assert _as_last_date("2021-01-01") == np.datetime64("2021-01-01T23:59:59")
+    assert _as_first_date(20210101, dates) == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date(20210101, dates) == np.datetime64("2021-01-01T23:59:59")
+    assert _as_first_date("20210101", dates) == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date("20210101", dates) == np.datetime64("2021-01-01T23:59:59")
+    assert _as_first_date("2021-01-01", dates) == np.datetime64("2021-01-01T00:00:00")
+    assert _as_last_date("2021-01-01", dates) == np.datetime64("2021-01-01T23:59:59")
 
 
 def test_slice_1():
@@ -1235,4 +1276,4 @@ def test_statistics():
 
 
 if __name__ == "__main__":
-    test_statistics()
+    test_subset_8()
