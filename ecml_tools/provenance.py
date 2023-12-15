@@ -25,11 +25,19 @@ def lookup_git_repo(path):
     return None
 
 
-def check_for_git(paths):
+def check_for_git(paths, full):
     versions = {}
     for name, path in paths:
         repo = lookup_git_repo(path)
         if repo is None:
+            continue
+
+        if not full:
+            versions[name] = dict(
+                git=dict(
+                    sha1=repo.head.commit.hexsha,
+                ),
+            )
             continue
 
         versions[name] = dict(
@@ -83,7 +91,7 @@ def version(versions, name, module, roots, namespaces, paths):
     versions[name] = str(module)
 
 
-def module_versions():
+def module_versions(full):
     # https://docs.python.org/3/library/sysconfig.html
 
     roots = {}
@@ -111,7 +119,7 @@ def module_versions():
         if len(bits) == 2 and bits[0] in namespaces:
             version(versions, k, v, roots, namespaces, paths)
 
-    git_versions = check_for_git(paths)
+    git_versions = check_for_git(paths, full)
 
     return versions, git_versions
 
@@ -189,12 +197,19 @@ def assets_info(paths):
     return result
 
 
-def gather_provenance_info(assets=[]):
+def gather_provenance_info(assets=[], full=False):
     executable = sys.executable
 
-    versions, git_versions = module_versions()
+    versions, git_versions = module_versions(full)
 
-    return dict(
+    if not full:
+        return dict(
+            time=datetime.datetime.utcnow().isoformat(),
+            module_versions=versions,
+            git_versions=git_versions,
+        )
+    else:
+        return dict(
         time=datetime.datetime.utcnow().isoformat(),
         executable=executable,
         args=sys.argv,
