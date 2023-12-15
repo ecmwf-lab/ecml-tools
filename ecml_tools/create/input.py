@@ -128,6 +128,7 @@ class WrappedSource:
 
         assert name in [
             "era5-accumulations",
+            "oper-accumulations",
             "constants",
             "mars",
         ], f"{name} not implemented"
@@ -136,6 +137,9 @@ class WrappedSource:
             return None
 
         if name == "era5-accumulations":
+            return None
+
+        if name == "oper-accumulations":
             return None
 
         if name == "mars":
