@@ -36,6 +36,8 @@ def check_for_git(paths, full):
             versions[name] = dict(
                 git=dict(
                     sha1=repo.head.commit.hexsha,
+                    modified_files=len([item.a_path for item in repo.index.diff(None)]),
+                    untracked_files=len(repo.untracked_files),
                 ),
             )
             continue
@@ -53,7 +55,7 @@ def check_for_git(paths, full):
     return versions
 
 
-def version(versions, name, module, roots, namespaces, paths):
+def version(versions, name, module, roots, namespaces, paths, full):
     path = None
 
     if hasattr(module, "__file__"):
@@ -80,7 +82,10 @@ def version(versions, name, module, roots, namespaces, paths):
         if path.startswith("<stdlib>"):
             return
 
-        versions[name] = path
+        if full:
+            versions[name] = path
+        else:
+            versions[name] = os.path.join('...', os.path.basename(path))
         return
     except AttributeError:
         pass
@@ -111,13 +116,13 @@ def module_versions(full):
     namespaces = set()
     for k, v in sorted(sys.modules.items()):
         if "." not in k:
-            version(versions, k, v, roots, namespaces, paths)
+            version(versions, k, v, roots, namespaces, paths, full)
 
     # Catter for modules like "earthkit.meteo"
     for k, v in sorted(sys.modules.items()):
         bits = k.split(".")
         if len(bits) == 2 and bits[0] in namespaces:
-            version(versions, k, v, roots, namespaces, paths)
+            version(versions, k, v, roots, namespaces, paths, full)
 
     git_versions = check_for_git(paths, full)
 
