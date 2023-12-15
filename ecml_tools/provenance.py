@@ -85,7 +85,7 @@ def version(versions, name, module, roots, namespaces, paths, full):
         if full:
             versions[name] = path
         else:
-            versions[name] = os.path.join('...', os.path.basename(path))
+            versions[name] = os.path.join("...", os.path.basename(path))
         return
     except AttributeError:
         pass
@@ -210,19 +210,20 @@ def gather_provenance_info(assets=[], full=False):
     if not full:
         return dict(
             time=datetime.datetime.utcnow().isoformat(),
+            python=sys.version,
             module_versions=versions,
             git_versions=git_versions,
         )
     else:
         return dict(
-        time=datetime.datetime.utcnow().isoformat(),
-        executable=executable,
-        args=sys.argv,
-        python_path=sys.path,
-        config_paths=sysconfig.get_paths(),
-        module_versions=versions,
-        git_versions=git_versions,
-        platform=platform_info(),
-        gpus=gpu_info(),
-        assets=assets_info(assets),
-    )
+            time=datetime.datetime.utcnow().isoformat(),
+            executable=executable,
+            args=sys.argv,
+            python_path=sys.path,
+            config_paths=sysconfig.get_paths(),
+            module_versions=versions,
+            git_versions=git_versions,
+            platform=platform_info(),
+            gpus=gpu_info(),
+            assets=assets_info(assets),
+        )
