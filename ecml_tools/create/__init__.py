@@ -101,6 +101,15 @@ class Creator:
         loader = SizeLoader.from_dataset(path=self.path, print=self.print)
         loader.add_total_size()
 
+    def finalise(self, **kwargs):
+        self.statistics(**kwargs)
+        self.size()
+
+    def create(self):
+        self.init()
+        self.load()
+        self.finalise()
+
     def _cache_context(self):
         from .utils import cache_context
 
