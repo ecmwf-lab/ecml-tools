@@ -85,7 +85,8 @@ def version(versions, name, module, roots, namespaces, paths, full):
         if full:
             versions[name] = path
         else:
-            versions[name] = os.path.join("...", os.path.basename(path))
+            if not path.startswith("<"):
+                versions[name] = os.path.join("...", os.path.basename(path))
         return
     except AttributeError:
         pass
@@ -210,7 +211,7 @@ def gather_provenance_info(assets=[], full=False):
     if not full:
         return dict(
             time=datetime.datetime.utcnow().isoformat(),
-            python=sys.version,
+            python=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
             module_versions=versions,
             git_versions=git_versions,
         )
