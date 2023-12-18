@@ -686,6 +686,9 @@ class Inputs:
         params_levels = defaultdict(set)
         params_steps = defaultdict(set)
 
+        area = None
+        grid = None
+
         for field in data:
             if not hasattr(field, "as_mars"):
                 continue
