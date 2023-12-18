@@ -126,12 +126,14 @@ class WrappedSource:
         # parse the kwargs to get the datetimes
         name = self.kwargs.get("name", None)
 
-        assert name in [
+        if name in [
             "era5-accumulations",
             "oper-accumulations",
             "constants",
             "mars",
-        ], f"{name} not implemented"
+        ]:
+            print(f"{name} not implemented")
+            return None
 
         if name == "constants":
             return None
