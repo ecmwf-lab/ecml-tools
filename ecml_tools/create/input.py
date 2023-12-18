@@ -117,16 +117,17 @@ class SourceTemplate:
 class WrappedSource:
     _do_load = None
 
-    def __init__(self, name, kwargs, function=None):
+    def __init__(self, name, kwargs, function=None, selection=None):
         self.name = name  # for logging purposes only
         self.kwargs = kwargs
         self.function = function
+        self.selection = selection
 
     def get_datetimes(self):
         # parse the kwargs to get the datetimes
         name = self.kwargs.get("name", None)
 
-        if name in [
+        if name not in [
             "era5-accumulations",
             "oper-accumulations",
             "constants",
