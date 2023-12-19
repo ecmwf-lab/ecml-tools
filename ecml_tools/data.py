@@ -441,8 +441,22 @@ class Combined(Forwards):
         lst = ", ".join(repr(d) for d in self.datasets)
         return f"{self.__class__.__name__}({lst})"
 
+    def _update_dataset_metadata(self, dataset):
+        metadata = dataset.metadata()
+        metadata["variables"] = self.variables
+        dataset.metadata = lambda: metadata
+        return dataset
+
     def metadata(self):
-        return [d.metadata() for d in self.datasets]
+        _metadata = []
+        _datasets = []
+        for d in self.datasets:
+            d = self._update_dataset_metadata(d)
+            _metadata.append(d.metadata())
+            _datasets.append(d)
+        self.datasets = _datasets
+        return _metadata
+
 
 
 class Concat(Combined):
@@ -716,6 +730,7 @@ class Select(Forwards):
     @cached_property
     def statistics(self):
         return {k: v[self.indices] for k, v in self.dataset.statistics.items()}
+
 
 
 class Rename(Forwards):

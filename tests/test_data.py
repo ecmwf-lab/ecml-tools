@@ -652,6 +652,7 @@ def test_select_1():
 
     assert ds.variables == ["b", "d"]
     assert ds.name_to_index == {"b": 0, "d": 1}
+    assert ds.metadata()["variables"] == ["b", "d"]
 
     assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bd")
@@ -677,6 +678,7 @@ def test_select_2():
 
     assert ds.variables == ["c", "a"]
     assert ds.name_to_index == {"c": 0, "a": 1}
+    assert ds.metadata()["variables"] == ["c", "a"]
 
     assert ds.shape == (365 * 4, 2, 1, VALUES)
 
@@ -704,6 +706,7 @@ def test_select_3():
 
     assert ds.variables == ["a", "c"]
     assert ds.name_to_index == {"a": 0, "c": 1}
+    assert ds.metadata()["variables"] == ["a", "c"]
 
     assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
@@ -730,6 +733,7 @@ def test_rename():
 
     assert ds.variables == ["x", "b", "y", "d"]
     assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3}
+    assert ds.metadata()["variables"] == ["x", "b", "y", "d"]
 
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
@@ -755,6 +759,7 @@ def test_drop():
 
     assert ds.variables == ["b", "c", "d"]
     assert ds.name_to_index == {"b": 0, "c": 1, "d": 2}
+    assert ds.metadata()["variables"] == ["b", "c", "d"]
 
     assert ds.shape == (365 * 4, 3, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
@@ -781,6 +786,7 @@ def test_reorder_1():
 
     assert ds.variables == ["d", "c", "b", "a"]
     assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
+    assert ds.metadata()["variables"] == ["d", "c", "b", "a"]
 
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
@@ -807,6 +813,7 @@ def test_reorder_2():
 
     assert ds.variables == ["d", "c", "b", "a"]
     assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
+    assert ds.metadata()["variables"] == ["d", "c", "b", "a"]
 
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
@@ -837,6 +844,7 @@ def test_constructor_1():
 
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+    assert ds.metadata()[0]["variables"] == ds.variables
 
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
@@ -865,6 +873,7 @@ def test_constructor_2():
 
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+    assert ds.metadata()[0]["variables"] == ds.variables
 
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
@@ -893,6 +902,7 @@ def test_constructor_3():
 
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+    assert ds.metadata()[0]["variables"] == ds.variables
 
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
@@ -922,6 +932,7 @@ def test_constructor_4():
 
     assert ds.variables == ["a", "b", "c", "d"]
     assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
+    assert ds.metadata()[0]["variables"] == ds.variables
 
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
@@ -963,6 +974,7 @@ def test_constructor_5():
 
     assert ds.variables == ["x", "b", "y", "d", "a", "z", "t"]
     assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3, "a": 4, "z": 5, "t": 6}
+    assert ds.metadata()[0]["variables"] == ds.variables
 
     assert ds.shape == (365 * 4, 7, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
