@@ -35,7 +35,7 @@ from .zarr import add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
-VERSION = "0.14"
+VERSION = "0.15"
 
 
 class Loader:
@@ -177,7 +177,7 @@ class InitialiseLoader(Loader):
 
         metadata["data_request"] = self.loops.data_request
 
-        metadata["order_by"] = self.output_specs.order_by
+        metadata["order_by"] = self.output_specs.order_by_as_list
         metadata["remapping"] = self.output_specs.remapping
         metadata["flatten_grid"] = self.output_specs.flatten_grid
         metadata["ensemble_dimension"] = self.output_specs.config.ensemble_dimension

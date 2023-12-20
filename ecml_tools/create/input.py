@@ -189,6 +189,7 @@ class WrappedSource:
                 datetimes.add(new)
             return sorted(list(datetimes))
 
+        #return sorted(to_datetime_list(self.kwargs.get("date")))
         raise ValueError(f"{name=} Cannot count number of elements in {self}")
 
     def do_load(self, partial, others=None):
