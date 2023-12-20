@@ -73,7 +73,7 @@ class OutputSpecs:
     @property
     def order_by_as_list(self):
         # this is used when ordered dict are not supported (e.g. zarr attributes)
-        return [{k:v} for k,v in self.config.order_by.items()]
+        return [{k: v} for k, v in self.config.order_by.items()]
 
     @property
     def remapping(self):
