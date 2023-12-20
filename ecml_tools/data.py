@@ -518,9 +518,6 @@ class GivenAxis(Combined):
         super().check_compatibility(d1, d2)
         self.check_same_sub_shapes(d1, d2, drop_axis=self.axis)
 
-    def metadata(self):
-        raise NotImplementedError()
-
     @cached_property
     def shape(self):
         shapes = [d.shape for d in self.datasets]
