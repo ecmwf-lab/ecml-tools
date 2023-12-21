@@ -309,7 +309,7 @@ class Zarr(Dataset):
     def metadata_specific(self):
         result = {}
         for k, v in self.z.attrs.items():
-            if not k.startswith("_"):
+            # if not k.startswith("_"):
                 result[k] = v
         return result
 
