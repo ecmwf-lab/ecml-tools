@@ -310,7 +310,7 @@ class Zarr(Dataset):
         result = {}
         for k, v in self.z.attrs.items():
             # if not k.startswith("_"):
-                result[k] = v
+            result[k] = v
         return result
 
     def __repr__(self):
@@ -376,6 +376,7 @@ class Forwards(Dataset):
             "action": action,
             "dataset": self.forward.metadata_specific(),
         }
+
 
 class Combined(Forwards):
     def __init__(self, datasets):

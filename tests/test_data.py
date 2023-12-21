@@ -185,6 +185,7 @@ def metadata(ds):
     metadata = ds.metadata()
     assert isinstance(metadata, dict)
 
+
 def test_simple():
     ds = open_dataset(
         "test-2021-2022-6h-o96-abcd",
@@ -214,6 +215,7 @@ def test_simple():
     same_stats(ds, open_dataset("test-2021-2022-6h-o96-abcd"), "abcd")
     slices(ds)
     metadata(ds)
+
 
 def test_concat():
     ds = open_dataset(
