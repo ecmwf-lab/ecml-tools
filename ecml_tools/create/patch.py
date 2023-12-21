@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import os
-from collections import defaultdict
 
 import zarr
 
@@ -126,7 +125,7 @@ def apply_patch(path, verbose=True, dry_run=False):
 
     after = json.dumps(z.attrs.asdict(), sort_keys=True)
     if before != after:
-        print(f"CHANGED")
+        print("CHANGED")
 
     assert json.dumps(z.attrs.asdict(), sort_keys=True) == json.dumps(
         fixed_attrs, sort_keys=True

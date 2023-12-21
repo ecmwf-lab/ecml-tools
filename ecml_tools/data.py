@@ -17,6 +17,8 @@ import numpy as np
 import yaml
 import zarr
 
+import ecml_tools
+
 LOG = logging.getLogger(__name__)
 
 __all__ = ["open_dataset", "open_zarr"]
@@ -117,9 +119,6 @@ class Dataset:
     def dates_interval_to_indices(self, start, end):
         return self._dates_to_indices(start, end)
 
-    def metadata(self):
-        raise NotImplementedError()
-
     def provenance(self):
         return {}
 
@@ -128,6 +127,29 @@ class Dataset:
         shape = list(shape)
         shape.pop(drop_axis)
         return tuple(shape)
+
+    def metadata(self):
+        def tidy(v):
+            if isinstance(v, (list, tuple)):
+                return [tidy(i) for i in v]
+            if isinstance(v, dict):
+                return {k: tidy(v) for k, v in v.items()}
+            if isinstance(v, str) and v.startswith("/"):
+                return os.path.basename(v)
+            return v
+
+        return tidy(
+            {
+                "version": ecml_tools.__version__,
+                "shape": self.shape,
+                "variables": self.variables,
+                "arguments": self.arguments,
+                "specific": self.metadata_specific(),
+            }
+        )
+
+    def metadata_specific(self):
+        raise NotImplementedError()
 
 
 class ReadOnlyStore(zarr.storage.BaseStore):
@@ -284,7 +306,7 @@ class Zarr(Dataset):
             )
         ]
 
-    def metadata(self):
+    def metadata_specific(self):
         result = {}
         for k, v in self.z.attrs.items():
             if not k.startswith("_"):
@@ -348,9 +370,12 @@ class Forwards(Dataset):
     def dtype(self):
         return self.forward.dtype
 
-    def metadata(self):
-        return self.forward.metadata()
-
+    def metadata_specific(self):
+        action = self.__class__.__name__.lower()
+        return {
+            "action": action,
+            "dataset": self.forward.metadata_specific(),
+        }
 
 class Combined(Forwards):
     def __init__(self, datasets):
@@ -441,8 +466,12 @@ class Combined(Forwards):
         lst = ", ".join(repr(d) for d in self.datasets)
         return f"{self.__class__.__name__}({lst})"
 
-    def metadata(self):
-        return [d.metadata() for d in self.datasets]
+    def metadata_specific(self):
+        action = self.__class__.__name__.lower()
+        return {
+            "action": action,
+            "datasets": [d.metadata_specific() for d in self.datasets],
+        }
 
 
 class Concat(Combined):
