@@ -35,7 +35,7 @@ from .zarr import add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
-VERSION = "0.14"
+VERSION = "0.15"
 
 
 class Loader:
@@ -177,7 +177,7 @@ class InitialiseLoader(Loader):
 
         metadata["data_request"] = self.loops.data_request
 
-        metadata["order_by"] = self.output_specs.order_by
+        metadata["order_by"] = self.output_specs.order_by_as_list
         metadata["remapping"] = self.output_specs.remapping
         metadata["flatten_grid"] = self.output_specs.flatten_grid
         metadata["ensemble_dimension"] = self.output_specs.config.ensemble_dimension
@@ -464,6 +464,14 @@ class StatisticsLoader(GenericStatisticsLoader):
 
 
 class SizeLoader(Loader):
+    def __init__(self, path, print):
+        self.path = path
+        self.print = print
+
+    @classmethod
+    def from_dataset(cls, path, print):
+        return cls(path, print)
+
     def add_total_size(self):
         dic = compute_directory_sizes(self.path)
 
@@ -473,7 +481,4 @@ class SizeLoader(Loader):
         print(f"Total size: {bytes(size)}")
         print(f"Total number of files: {n}")
 
-        try:
-            self.update_metadata(total_size=size, total_number_of_files=n)
-        except PermissionError as e:
-            print(f"Cannot update metadata ({e})")
+        self.update_metadata(total_size=size, total_number_of_files=n)

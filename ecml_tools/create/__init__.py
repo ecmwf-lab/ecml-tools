@@ -101,6 +101,11 @@ class Creator:
         loader = SizeLoader.from_dataset(path=self.path, print=self.print)
         loader.add_total_size()
 
+    def patch(self, **kwargs):
+        from .patch import apply_patch
+
+        apply_patch(self.path, **kwargs)
+
     def finalise(self, **kwargs):
         self.statistics(**kwargs)
         self.size()
