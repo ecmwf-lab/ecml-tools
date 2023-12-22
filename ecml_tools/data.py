@@ -41,6 +41,12 @@ class Dataset:
 
             return Subset(self, self._dates_to_indices(start, end))._subset(**kwargs)
 
+        if "accumulate" in kwargs:
+            if "frequency" not in kwargs:
+                raise ValueError("Cannot use 'accumulate' without 'frequency'")
+            accumulate = kwargs.pop("accumulate")
+            return Accumulate(self, accumulate, kwargs["frequency"])._subset(**kwargs)
+
         if "frequency" in kwargs:
             frequency = kwargs.pop("frequency")
             return Subset(self, self._frequency_to_indices(frequency))._subset(**kwargs)
@@ -769,6 +775,29 @@ class Statistics(Forwards):
     @cached_property
     def statistics(self):
         return open_dataset(self._statistic).statistics
+
+
+class Accumulate(Forwards):
+    def __init__(self, dataset, accumulate, frequency):
+        super().__init__(dataset)
+        self._frequency = _frequency_to_hours(frequency)
+        if (self._frequency % dataset.frequency) != 0 or (
+            self._frequency == dataset.frequency
+        ):
+            raise ValueError(
+                f"Accumulate: frequency ({self._frequency}h) must be a strict multiple"
+                f" of the dataset frequency ({dataset.frequency}h)"
+            )
+
+        self._range = int(self._frequency / dataset.frequency)
+        self.dataset = dataset
+        if isinstance(accumulate, str):
+            accumulate = [accumulate]
+        self.accumulate = sorted([self.name_to_index[v] for v in accumulate])
+
+    def __getitem__(self, n):
+        item = self.dataset[n]
+        assert False, item
 
 
 def _name_to_path(name, zarr_root):
