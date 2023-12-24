@@ -41,12 +41,6 @@ class Dataset:
 
             return Subset(self, self._dates_to_indices(start, end))._subset(**kwargs)
 
-        if "accumulate" in kwargs:
-            if "frequency" not in kwargs:
-                raise ValueError("Cannot use 'accumulate' without 'frequency'")
-            accumulate = kwargs.pop("accumulate")
-            return Accumulate(self, accumulate, kwargs["frequency"])._subset(**kwargs)
-
         if "frequency" in kwargs:
             frequency = kwargs.pop("frequency")
             return Subset(self, self._frequency_to_indices(frequency))._subset(**kwargs)
@@ -149,6 +143,7 @@ class Dataset:
                 "version": ecml_tools.__version__,
                 "shape": self.shape,
                 "variables": self.variables,
+                "data_request": self.data_request,
                 "arguments": self.arguments,
                 "specific": self.metadata_specific(),
             }
@@ -324,6 +319,10 @@ class Zarr(Dataset):
 
     def end_of_statistics_date(self):
         return self.dates[-1]
+
+    @property
+    def data_request(self):
+        return self.z.attrs["data_request"]
 
 
 class Forwards(Dataset):
@@ -750,6 +749,33 @@ class Select(Forwards):
     def statistics(self):
         return {k: v[self.indices] for k, v in self.dataset.statistics.items()}
 
+    @cached_property
+    def data_request(self):
+        request = self.dataset.data_request
+        param_level = request.get('param_level')
+        param_step = request.get("param_step")
+        variables = self.variables
+
+
+        def _(x):
+            return '_'.join(str(i) for i in x)
+
+        if param_level is not None:
+            if 'sfc' in param_level:
+                param_level['sfc'] = [x for x in param_level['sfc'] if x in variables]
+
+            if 'pl' in param_level:
+                param_level['pl'] = [_(x) for x in param_level['pl'] if x in variables]
+
+            if 'ml' in param_level:
+                param_level['ml'] = [_(x) for x in param_level['pl'] if x in variables]
+
+        if param_step is not None:
+            param_step = [x for x in param_step if x[0] in variables]
+
+        return request
+
+
 
 class Rename(Forwards):
     def __init__(self, dataset, rename):
@@ -775,29 +801,6 @@ class Statistics(Forwards):
     @cached_property
     def statistics(self):
         return open_dataset(self._statistic).statistics
-
-
-class Accumulate(Forwards):
-    def __init__(self, dataset, accumulate, frequency):
-        super().__init__(dataset)
-        self._frequency = _frequency_to_hours(frequency)
-        if (self._frequency % dataset.frequency) != 0 or (
-            self._frequency == dataset.frequency
-        ):
-            raise ValueError(
-                f"Accumulate: frequency ({self._frequency}h) must be a strict multiple"
-                f" of the dataset frequency ({dataset.frequency}h)"
-            )
-
-        self._range = int(self._frequency / dataset.frequency)
-        self.dataset = dataset
-        if isinstance(accumulate, str):
-            accumulate = [accumulate]
-        self.accumulate = sorted([self.name_to_index[v] for v in accumulate])
-
-    def __getitem__(self, n):
-        item = self.dataset[n]
-        assert False, item
 
 
 def _name_to_path(name, zarr_root):

@@ -17,10 +17,14 @@ HAS_CREDENTIALS = os.path.exists(os.path.expanduser("~/.aws/credentials"))
 ZARR = "s3://ml-datasets/stable/aifs-ea-an-oper-0001-mars-n320-1979-2022-1h-v4.zarr"
 
 
+def combine(s):
+    return s.replace(" ", "").replace("\n", "")
+
+
 @pytest.mark.skipif(not HAS_CREDENTIALS, "No S3 credentials found")
 def test_metadata_1():
     ds = open_dataset(dataset=ZARR, drop=["sd"])
-    print(json.dumps(ds.metadata(), indent=2))
+    print(combine(json.dumps(ds.metadata(), indent=2)))
 
 
 if __name__ == "__main__":
