@@ -19,6 +19,8 @@ import zarr
 
 import ecml_tools
 
+from .request import DataRequest
+
 LOG = logging.getLogger(__name__)
 
 __all__ = ["open_dataset", "open_zarr"]
@@ -143,7 +145,7 @@ class Dataset:
                 "version": ecml_tools.__version__,
                 "shape": self.shape,
                 "variables": self.variables,
-                "data_request": self.data_request,
+                "data_request": self.data_request.as_dict(),
                 "arguments": self.arguments,
                 "specific": self.metadata_specific(),
             }
@@ -322,7 +324,7 @@ class Zarr(Dataset):
 
     @property
     def data_request(self):
-        return self.z.attrs["data_request"]
+        return DataRequest.from_zarr(self.z.attrs["data_request"])
 
 
 class Forwards(Dataset):
@@ -751,30 +753,7 @@ class Select(Forwards):
 
     @cached_property
     def data_request(self):
-        request = self.dataset.data_request
-        param_level = request.get('param_level')
-        param_step = request.get("param_step")
-        variables = self.variables
-
-
-        def _(x):
-            return '_'.join(str(i) for i in x)
-
-        if param_level is not None:
-            if 'sfc' in param_level:
-                param_level['sfc'] = [x for x in param_level['sfc'] if x in variables]
-
-            if 'pl' in param_level:
-                param_level['pl'] = [_(x) for x in param_level['pl'] if x in variables]
-
-            if 'ml' in param_level:
-                param_level['ml'] = [_(x) for x in param_level['pl'] if x in variables]
-
-        if param_step is not None:
-            param_step = [x for x in param_step if x[0] in variables]
-
-        return request
-
+        return self.dataset.data_request.select(self.variables)
 
 
 class Rename(Forwards):

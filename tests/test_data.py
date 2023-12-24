@@ -82,6 +82,8 @@ def create_zarr(
     root.attrs["resolution"] = resolution
     root.attrs["name_to_index"] = {k: i for i, k in enumerate(vars)}
 
+    root.attrs['data_request'] = {'grid': 1, 'area': 'g', 'param_level': {}}
+
     root.mean = np.mean(data, axis=0)
     root.stdev = np.std(data, axis=0)
     root.maximum = np.max(data, axis=0)
@@ -1346,4 +1348,4 @@ def test_statistics():
 
 
 if __name__ == "__main__":
-    test_subset_8()
+    test_simple()
