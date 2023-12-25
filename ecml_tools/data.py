@@ -141,18 +141,26 @@ class Dataset:
             return v
 
         return tidy(
-            {
-                "version": ecml_tools.__version__,
-                "shape": self.shape,
-                "variables": self.variables,
-                "data_request": self.data_request.as_dict(),
-                "arguments": self.arguments,
-                "specific": self.metadata_specific(),
-            }
+            dict(
+                version=ecml_tools.__version__,
+                shape=self.shape,
+                arguments=self.arguments,
+                specific=self.metadata_specific(),
+                frequency=self.frequency,
+                variables=self.variables,
+            )
         )
 
-    def metadata_specific(self):
-        raise NotImplementedError()
+    def metadata_specific(self, **kwargs):
+        action = self.__class__.__name__.lower()
+        assert isinstance(self.frequency, int), (self.frequency, self, action)
+        return dict(
+            action=action,
+            variables=self.variables,
+            shape=self.shape,
+            frequency=self.frequency,
+            **kwargs,
+        )
 
 
 class ReadOnlyStore(zarr.storage.BaseStore):
@@ -291,7 +299,7 @@ class Zarr(Dataset):
             LOG.warning("No 'frequency' in %r, computing from 'dates'", self)
         dates = self.dates
         delta = dates[1].astype(object) - dates[0].astype(object)
-        return delta.total_seconds() // 3600
+        return int(delta.total_seconds() / 3600)
 
     @property
     def name_to_index(self):
@@ -309,22 +317,14 @@ class Zarr(Dataset):
             )
         ]
 
-    def metadata_specific(self):
-        result = {}
-        for k, v in self.z.attrs.items():
-            # if not k.startswith("_"):
-            result[k] = v
-        return result
-
     def __repr__(self):
         return self.path
 
     def end_of_statistics_date(self):
         return self.dates[-1]
 
-    @property
-    def data_request(self):
-        return DataRequest.from_zarr(self.variables, self.z.attrs["data_request"])
+    def metadata_specific(self):
+        return super().metadata_specific(attrs=dict(self.z.attrs))
 
 
 class Forwards(Dataset):
@@ -377,12 +377,11 @@ class Forwards(Dataset):
     def dtype(self):
         return self.forward.dtype
 
-    def metadata_specific(self):
-        action = self.__class__.__name__.lower()
-        return {
-            "action": action,
-            "dataset": self.forward.metadata_specific(),
-        }
+    def metadata_specific(self, **kwargs):
+        return super().metadata_specific(
+            forward=self.forward.metadata_specific(),
+            **kwargs,
+        )
 
 
 class Combined(Forwards):
@@ -474,12 +473,14 @@ class Combined(Forwards):
         lst = ", ".join(repr(d) for d in self.datasets)
         return f"{self.__class__.__name__}({lst})"
 
-    def metadata_specific(self):
-        action = self.__class__.__name__.lower()
-        return {
-            "action": action,
-            "datasets": [d.metadata_specific() for d in self.datasets],
-        }
+    def metadata_specific(self, **kwargs):
+        # We need to skip the forward superclass
+        # TODO: revisit this
+        return Dataset.metadata_specific(
+            self,
+            datasets=[d.metadata_specific() for d in self.datasets],
+            **kwargs,
+        )
 
 
 class Concat(Combined):
@@ -538,12 +539,6 @@ class Concat(Combined):
     def shape(self):
         return (len(self),) + self.datasets[0].shape[1:]
 
-    @property
-    def data_request(self):
-        return DataRequest.from_concat(
-            self.variables, [c.data_request for c in self.datasets]
-        )
-
 
 class GivenAxis(Combined):
     """Given a given axis, combine the datasets along that axis"""
@@ -580,11 +575,7 @@ class GivenAxis(Combined):
 
 
 class Ensemble(GivenAxis):
-    @property
-    def data_request(self):
-        return DataRequest.from_ensemble(
-            self.variables, [c.data_request for c in self.datasets]
-        )
+    pass
 
 
 class Grids(GivenAxis):
@@ -605,12 +596,6 @@ class Grids(GivenAxis):
     def check_same_grid(self, d1, d2):
         # We don't check the grid, because we want to be able to combine
         pass
-
-    @property
-    def data_request(self):
-        return DataRequest.from_grid(
-            self.variables, [c.data_request for c in self.datasets]
-        )
 
 
 class Join(Combined):
@@ -688,12 +673,6 @@ class Join(Combined):
             for k in self.datasets[0].statistics
         }
 
-    @property
-    def data_request(self):
-        return DataRequest.from_join(
-            self.variables, [c.data_request for c in self.datasets]
-        )
-
 
 class Subset(Forwards):
     def __init__(self, dataset, indices):
@@ -735,11 +714,7 @@ class Subset(Forwards):
     def frequency(self):
         dates = self.dates
         delta = dates[1].astype(object) - dates[0].astype(object)
-        return delta.total_seconds() // 3600
-
-    @cached_property
-    def data_request(self):
-        return self.forward.data_request
+        return int(delta.total_seconds() / 3600)
 
 
 class Select(Forwards):
@@ -777,9 +752,8 @@ class Select(Forwards):
     def statistics(self):
         return {k: v[self.indices] for k, v in self.dataset.statistics.items()}
 
-    @cached_property
-    def data_request(self):
-        return self.dataset.data_request.select(self.variables)
+    def metadata_specific(self, **kwargs):
+        return super().metadata_specific(indices=self.indices, **kwargs)
 
 
 class Rename(Forwards):
@@ -798,9 +772,8 @@ class Rename(Forwards):
     def name_to_index(self):
         return {k: i for i, k in enumerate(self.variables)}
 
-    @cached_property
-    def data_request(self):
-        return self.forward.data_request.rename(self.variables, self.rename)
+    def metadata_specific(self, **kwargs):
+        return super().metadata_specific(rename=self.rename, **kwargs)
 
 
 class Statistics(Forwards):
@@ -812,9 +785,11 @@ class Statistics(Forwards):
     def statistics(self):
         return open_dataset(self._statistic).statistics
 
-    @cached_property
-    def data_request(self):
-        return self.forward.data_request
+    def metadata_specific(self, **kwargs):
+        return super().metadata_specific(
+            statistics=open_dataset(self._statistic).metadata_specific(),
+            **kwargs,
+        )
 
 
 def _name_to_path(name, zarr_root):
