@@ -8,14 +8,35 @@
 
 import logging
 
-
 LOG = logging.getLogger(__name__)
 
 
 class DataRequest:
     @classmethod
-    def from_zarr(cls, request):
-        return ZarrRequest(request)
+    def from_zarr(cls, variables, request):
+        return ZarrRequest(variables, request)
+
+    @classmethod
+    def from_concat(cls, variables, requests):
+        # Assume that all requests are the same
+        return requests[0]
+
+    @classmethod
+    def from_join(cls, variables, requests):
+        # Assume that all requests are the same
+        print(variables)
+        print([r.variables for r in requests])
+        return requests[0]
+
+    @classmethod
+    def from_ensemble(cls, variables, requests):
+        # Assume that all requests are the same
+        return requests[0]
+
+    @classmethod
+    def from_grid(cls, variables, requests):
+        # Assume that all requests are the same
+        return requests[0]
 
     def as_dict(self):
         return {
@@ -27,13 +48,18 @@ class DataRequest:
             "param_step": self.param_step,
         }
 
-
-class ZarrRequest(DataRequest):
-    def __init__(self, request):
-        self.request = request
-
     def select(self, variables):
         return Select(self, variables)
+
+    def rename(self, variables, rename):
+        LOG.warning("Rename %s not implemented, ignored", rename)
+        return self
+
+
+class ZarrRequest(DataRequest):
+    def __init__(self, variables, request):
+        self.request = request
+        self.variables = variables
 
     @property
     def grid(self):

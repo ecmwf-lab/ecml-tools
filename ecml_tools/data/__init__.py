@@ -324,7 +324,7 @@ class Zarr(Dataset):
 
     @property
     def data_request(self):
-        return DataRequest.from_zarr(self.z.attrs["data_request"])
+        return DataRequest.from_zarr(self.variables, self.z.attrs["data_request"])
 
 
 class Forwards(Dataset):
@@ -538,6 +538,12 @@ class Concat(Combined):
     def shape(self):
         return (len(self),) + self.datasets[0].shape[1:]
 
+    @property
+    def data_request(self):
+        return DataRequest.from_concat(
+            self.variables, [c.data_request for c in self.datasets]
+        )
+
 
 class GivenAxis(Combined):
     """Given a given axis, combine the datasets along that axis"""
@@ -574,7 +580,11 @@ class GivenAxis(Combined):
 
 
 class Ensemble(GivenAxis):
-    pass
+    @property
+    def data_request(self):
+        return DataRequest.from_ensemble(
+            self.variables, [c.data_request for c in self.datasets]
+        )
 
 
 class Grids(GivenAxis):
@@ -595,6 +605,12 @@ class Grids(GivenAxis):
     def check_same_grid(self, d1, d2):
         # We don't check the grid, because we want to be able to combine
         pass
+
+    @property
+    def data_request(self):
+        return DataRequest.from_grid(
+            self.variables, [c.data_request for c in self.datasets]
+        )
 
 
 class Join(Combined):
@@ -644,7 +660,7 @@ class Join(Combined):
                     ok = True
                 i += 1
             if not ok:
-                LOG.warning("Dataset %r completly occulted.", d)
+                LOG.warning("Dataset %r completely overridden.", d)
 
         return Select(self, indices)
 
@@ -671,6 +687,12 @@ class Join(Combined):
             k: np.concatenate([d.statistics[k] for d in self.datasets], axis=0)
             for k in self.datasets[0].statistics
         }
+
+    @property
+    def data_request(self):
+        return DataRequest.from_join(
+            self.variables, [c.data_request for c in self.datasets]
+        )
 
 
 class Subset(Forwards):
@@ -714,6 +736,10 @@ class Subset(Forwards):
         dates = self.dates
         delta = dates[1].astype(object) - dates[0].astype(object)
         return delta.total_seconds() // 3600
+
+    @cached_property
+    def data_request(self):
+        return self.forward.data_request
 
 
 class Select(Forwards):
@@ -762,6 +788,7 @@ class Rename(Forwards):
         for n in rename:
             assert n in dataset.variables
         self._variables = [rename.get(v, v) for v in dataset.variables]
+        self.rename = rename
 
     @property
     def variables(self):
@@ -770,6 +797,10 @@ class Rename(Forwards):
     @cached_property
     def name_to_index(self):
         return {k: i for i, k in enumerate(self.variables)}
+
+    @cached_property
+    def data_request(self):
+        return self.forward.data_request.rename(self.variables, self.rename)
 
 
 class Statistics(Forwards):
@@ -780,6 +811,10 @@ class Statistics(Forwards):
     @cached_property
     def statistics(self):
         return open_dataset(self._statistic).statistics
+
+    @cached_property
+    def data_request(self):
+        return self.forward.data_request
 
 
 def _name_to_path(name, zarr_root):
