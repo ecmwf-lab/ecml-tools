@@ -19,8 +19,6 @@ import zarr
 
 import ecml_tools
 
-from .request import DataRequest
-
 LOG = logging.getLogger(__name__)
 
 __all__ = ["open_dataset", "open_zarr"]
