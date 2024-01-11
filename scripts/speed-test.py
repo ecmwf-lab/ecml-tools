@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import yaml
 import random
 import time
 from multiprocessing import Pool
@@ -104,7 +105,8 @@ def main():
 
     path = args.path
     if path.endswith(".yaml"):
-        path = yaml.load(open(path))
+        with open(path, "r") as f:
+            path = yaml.safe_load(f)
         
     ds = open_dataset(path)
 
