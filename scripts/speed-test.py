@@ -102,13 +102,17 @@ def main():
     nworkers = args.workers
     start = time.time()
 
-    ds = open_dataset(args.path)
+    path = args.path
+    if path.endswith(".yaml"):
+        path = yaml.load(open(path))
+        
+    ds = open_dataset(path)
 
     total = len(ds)
     print(
         f"Dataset has {total} items. Opening {args.count} items using {nworkers} workers."
     )
-    indexes = list(range(len(open_dataset(args.path))))
+    indexes = list(range(len(open_dataset(path))))
 
     if args.shuffle:
         # take items at random to avoid hitting the caches and use hot data
@@ -119,16 +123,16 @@ def main():
 
     if nworkers > 1:
         tests = Tests(
-            [SpeedTest(args.path, indexes[i::nworkers]) for i in range(nworkers)]
+            [SpeedTest(path, indexes[i::nworkers]) for i in range(nworkers)]
         )
 
         with Pool(nworkers) as pool:
             pool.map(tests, range(nworkers))
     else:
-        test = SpeedTest(args.path, indexes)
+        test = SpeedTest(path, indexes)
         test.run()
 
-    ds = open_dataset(args.path)
+    ds = open_dataset(path)
     first = ds[0]
     shape, dtype, size = first.shape, first.dtype, first.size
     size_bytes = size * dtype.itemsize
