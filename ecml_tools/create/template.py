@@ -74,7 +74,10 @@ def substitute(x, vars=None, ignore_missing=False):
                 try:
                     if "(" in bit:
                         # substitute by a function
-                        FUNCTIONS = dict(hdates_from_date=hdates_from_date)
+                        FUNCTIONS = dict(
+                            hdates_from_date=hdates_from_date,
+                            datetime_format=datetime_format,
+                        )
 
                         pattern = r"\$(\w+)\(([^)]*)\)"
                         match = re.match(pattern, bit)
@@ -117,6 +120,16 @@ def substitute(x, vars=None, ignore_missing=False):
         return out
 
     return x
+
+
+def datetime_format(dates, format, join=None):
+    formated = [to_datetime(d).strftime(format) for d in dates]
+    formated = set(formated)
+    formated = list(formated)
+    formated = sorted(formated)
+    if join:
+        formated = join.join(formated)
+    return formated
 
 
 def hdates_from_date(date, start_year, end_year):

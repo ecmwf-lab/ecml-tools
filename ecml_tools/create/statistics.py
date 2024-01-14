@@ -205,6 +205,10 @@ def compute_aggregated_statistics(data, variables_names):
 
 def compute_statistics(array, check_variables_names=None):
     nvars = array.shape[1]
+    
+    print(nvars, array.shape, check_variables_names)
+    if check_variables_names:
+        assert nvars == len(check_variables_names)
     stats_shape = (array.shape[0], nvars)
 
     count = np.zeros(stats_shape, dtype=np.int64)

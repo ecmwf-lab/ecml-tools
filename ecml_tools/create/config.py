@@ -13,6 +13,7 @@ import os
 import warnings
 from functools import cached_property
 
+import yaml
 from climetlab.core.order import build_remapping, normalize_order_by
 
 from .utils import load_json_or_yaml
@@ -52,36 +53,43 @@ class Config(DictObj):
 
 
 class OutputSpecs:
-    def __init__(self, main_config, parent):
-        self.config = main_config.output
+    def __init__(self, config, parent):
+        self.config = config
+        if "order_by" in config:
+            assert isinstance(config.order_by, dict), config.order_by
+
         self.parent = parent
 
     @property
-    def shape(self):
-        shape = [len(c) for c in self.parent.loops.coords.values()]
+    def dtype(self):
+        return self.config.dtype
 
-        field_shape = list(self.parent.loops.first_field.shape)
-        if self.config.flatten_grid:
-            field_shape = [math.prod(field_shape)]
+    @property
+    def order_by_as_list(self):
+        # this is used when an ordered dict is not supported (e.g. zarr attributes)
+        return [{k: v} for k, v in self.config.order_by.items()]
 
-        return shape + field_shape
+    def get_chunking(self, coords):
+        user = self.config.chunking
+        chunks = []
+        for k, v in coords.items():
+            if k in user:
+                chunks.append(user[k])
+            else:
+                chunks.append(len(v))
+        return tuple(chunks)
+
+    @property
+    def append_axis(self):
+        return self.config.append_axis
 
     @property
     def order_by(self):
         return self.config.order_by
 
     @property
-    def order_by_as_list(self):
-        # this is used when ordered dict are not supported (e.g. zarr attributes)
-        return [{k: v} for k, v in self.config.order_by.items()]
-
-    @property
     def remapping(self):
         return self.config.remapping
-
-    @cached_property
-    def chunking(self):
-        return self.parent.loops._chunking(self.config.chunking)
 
     @property
     def flatten_grid(self):
@@ -101,20 +109,22 @@ class LoadersConfig(Config):
         if "description" not in self:
             raise ValueError("Must provide a description in the config.")
 
+        if "dates" not in self.output:
+            raise ValueError("Must provide output:dates in the config.")
+
         # deprecated/obsolete
         if "order" in self.output:
             raise ValueError(f"Do not use 'order'. Use order_by in {self}")
         if "loops" in self:
-            warnings.warn("Should use loop instead of loops in config")
             assert "loop" not in self
+            warnings.warn("Should use loop instead of loops in config")
             self.loop = self.pop("loops")
 
         self.normalise()
 
     def normalise(self):
-        if not isinstance(self.input, (tuple, list)):
-            LOG.warning(f"{self.input=} is not a list")
-            self.input = [self.input]
+        if isinstance(self.input, (tuple, list)):
+            self.input = dict(concat=self.input)
 
         if not isinstance(self.loop, list):
             assert isinstance(self.loop, dict), self.loop
@@ -224,7 +234,7 @@ def _prepare_serialisation(o):
         dic = {}
         for k, v in o.items():
             v = _prepare_serialisation(v)
-            if k == "order_by":
+            if k == "order_by" and isinstance(v, dict):
                 # zarr attributes are saved with sort_keys=True
                 # and ordered dict are reordered.
                 # This is a problem for "order_by"
@@ -257,5 +267,17 @@ CONFIGS = {
 
 def loader_config(config):
     config = Config(config)
-    purpose = config.get("purpose")
-    return CONFIGS[purpose](config)
+    obj = CONFIGS[config.get("purpose")](config)
+
+    # yaml round trip to check that serialisation works as expected
+    copy = obj.get_serialisable_dict()
+    copy = yaml.load(yaml.dump(copy), Loader=yaml.SafeLoader)
+    copy = Config(copy)
+    copy = CONFIGS[config.get("purpose")](config)
+    assert yaml.dump(obj) == yaml.dump(copy), (obj, copy)
+
+    return copy
+
+
+def build_output(*args, **kwargs):
+    return OutputSpecs(*args, **kwargs)

@@ -17,8 +17,10 @@ import zarr
 from ecml_tools.data import open_dataset
 
 from .check import DatasetName
-from .config import OutputSpecs, loader_config
-from .input import FullLoops, PartialLoops
+from .config import OutputSpecs, build_output, loader_config
+from .group import build_groups
+from .input import build_input
+from .writer import CubesFilter
 from .statistics import (
     StatisticsRegistry,
     compute_aggregated_statistics,
@@ -35,7 +37,7 @@ from .zarr import add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
-VERSION = "0.15"
+VERSION = "0.20"
 
 
 class Loader:
@@ -106,14 +108,26 @@ class Loader:
         z = zarr.open(self.path, mode=mode)
         return add_zarr_dataset(zarr_root=z, **kwargs)
 
+    def get_zarr_chunks(self):
+        import zarr
+
+        z = zarr.open(self.path, mode="r")
+        return z["data"].chunks
+        assert chunks == z.data.chunks
+
 
 class InitialiseLoader(Loader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.statistics_registry.delete()
 
-        self.loops = PartialLoops(self.main_config, parent=self)
-        self.output_specs = OutputSpecs(self.main_config, parent=self)
+        self.groups = build_groups(*self.main_config.loop)
+        self.inputs = build_input(self.main_config.input, parent=None, selection=None)
+        self.output = build_output(self.main_config.output, parent=self)
+
+        print(self.groups)
+        print(self.inputs)
+        # print([(k,len(v)) for k,v in self.inputs.coords.items()])
 
     def initialise(self, check_name=True):
         """Create empty dataset"""
@@ -122,48 +136,54 @@ class InitialiseLoader(Loader):
         print(self.main_config)
         print("-------------------------")
 
-        total_shape = self.output_specs.shape
-        self.print(f"total_shape = {total_shape}")
-        print("-------------------------")
+        dates = self.inputs.dates_obj.values
+        frequency = self.inputs.frequency
+        assert isinstance(frequency, int), frequency
 
-        grid_points = self.loops.grid_points
-        print(f"gridpoints size: {[len(i) for i in grid_points]}")
-        print("-------------------------")
+        firstdate = self.inputs.dates_obj.values[0]
+        minimal_input = self.inputs.select(dates=firstdate)
+        print(minimal_input)
 
-        dates = self.loops.get_datetimes()
         self.print(f"Found {len(dates)} datetimes.")
         print(
-            f"Dates: Found {len(dates)} datetimes, in {self.loops.n_cubes} cubes: ",
+            f"Dates: Found {len(dates)} datetimes, in {self.groups.n_groups} groups: ",
             end="",
         )
-        lengths = [str(len(c.get_datetimes())) for c in self.loops.iter_cubes()]
+        lengths = [str(len(g)) for g in self.groups]
         print("+".join(lengths))
         self.print(f"Found {len(dates)} datetimes {'+'.join(lengths)}.")
         print("-------------------------")
 
-        names = self.loops.variables
-        self.print(f"Found {len(names)} variables : {','.join(names)}.")
+        variables = minimal_input.variables
+        self.print(f"Found {len(variables)} variables : {','.join(variables)}.")
 
-        names_from_config = self.main_config.output.order_by[
-            self.main_config.output.statistics
-        ]
-        assert (
-            names == names_from_config
-        ), f"Requested= {names_from_config} Actual= {names}"
+        ensembles = minimal_input.ensembles
+        self.print(
+            f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}."
+        )
 
-        resolution = self.loops.resolution
+        grid_points = minimal_input.grid_points
+        print(f"gridpoints size: {[len(i) for i in grid_points]}")
+        print("-------------------------")
+
+        resolution = minimal_input.resolution
         print(f"{resolution=}")
 
-        chunks = self.output_specs.chunking
+        print("-------------------------")
+        coords = minimal_input.coords
+        coords["dates"] = dates
+        total_shape = minimal_input.shape
+        total_shape[0] = len(dates)
+        self.print(f"total_shape = {total_shape}")
+        print("-------------------------")
+
+        chunks = self.output.get_chunking(coords)
         print(f"{chunks=}")
-        dtype = self.output_specs.config.dtype
+        dtype = self.output.dtype
 
         self.print(
             f"Creating Dataset '{self.path}', with {total_shape=}, {chunks=} and {dtype=}"
         )
-
-        frequency = self.loops.frequency
-        assert isinstance(frequency, int), frequency
 
         metadata = {}
         metadata["uuid"] = str(uuid.uuid4())
@@ -175,14 +195,22 @@ class InitialiseLoader(Loader):
         metadata["description"] = self.main_config.description
         metadata["resolution"] = resolution
 
-        metadata["data_request"] = self.loops.data_request
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+        # metadata["data_request"] = self.inputs.get_data_request()
 
-        metadata["order_by"] = self.output_specs.order_by_as_list
-        metadata["remapping"] = self.output_specs.remapping
-        metadata["flatten_grid"] = self.output_specs.flatten_grid
-        metadata["ensemble_dimension"] = self.output_specs.config.ensemble_dimension
+        metadata["order_by"] = self.output.order_by_as_list
+        metadata["remapping"] = self.output.remapping
+        metadata["flatten_grid"] = self.output.flatten_grid
+        metadata["ensemble_dimension"] = len(ensembles)
 
-        metadata["variables"] = names
+        metadata["variables"] = variables
         metadata["version"] = VERSION
         metadata["frequency"] = frequency
         metadata["start_date"] = dates[0].isoformat()
@@ -235,17 +263,42 @@ class InitialiseLoader(Loader):
 
         self.registry.add_to_history("init finished")
 
+        assert chunks == self.get_zarr_chunks(), (chunks, self.get_zarr_chunks())
+
+        print("‼️‼️‼️‼️ no data_request in output zarr yet")
+
 
 class ContentLoader(Loader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.loops = FullLoops(self.main_config, parent=self)
-        self.output_specs = OutputSpecs(self.main_config, parent=self)
+        self.groups = build_groups(*self.main_config.loop)
+        self.inputs = build_input(self.main_config.input, parent=None, selection=None)
+        self.output = build_output(self.main_config.output, parent=self)
 
     def load(self, parts):
         self.registry.add_to_history("loading_data_start", parts=parts)
-        data_writer = DataWriter(parts, parent=self)
-        data_writer.write()
+
+        z = zarr.open(self.path, mode="r+")
+        data_writer = DataWriter(
+            parts, parent=self, full_array=z["data"], print=self.print
+        )
+
+        total = len(self.registry.get_flags())
+        filter = CubesFilter(parts=parts, total=total)
+        for igroup, group in enumerate(self.groups):
+            print("✅", igroup, group)
+            if self.registry.get_flag(igroup):
+                LOG.info(f" -> Skipping {igroup} total={len(group)} (already done)")
+                continue
+            if not filter(igroup):
+                continue
+            self.print(f" -> Processing i={igroup} total={len(group)}")
+            assert isinstance(group[0], datetime.datetime), group
+
+            inputs = self.inputs.select(dates=group)
+            data_writer.write(inputs, igroup)
+        exit()
+
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
         self.statistics_registry.add_provenance(

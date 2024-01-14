@@ -7,6 +7,7 @@
 # nor does it submit to any jurisdiction.
 #
 
+import datetime
 import logging
 import time
 import warnings
@@ -163,63 +164,50 @@ class OffsetView(ArrayLike):
 
 
 class DataWriter:
-    def __init__(self, parts, parent, print=print):
+    def __init__(self, parts, full_array, parent, print=print):
         self.parent = parent
-        self.parts = parts
+        self.full_array = full_array
 
         self.path = parent.path
         self.statistics_registry = parent.statistics_registry
         self.registry = parent.registry
         self.print = parent.print
 
-        self.output_config = parent.main_config.output
+        self.append_axis = parent.output.append_axis
+        self.n_cubes = parent.groups.n_groups
+        print(parent.output.config)
 
-        self.n_cubes = parent.loops.n_cubes
-        self.iter_cubes = parent.loops.iter_cubes
 
-    def write(self):
-        import zarr
-
-        z = zarr.open(self.path, mode="r+")
-        self.full_array = z["data"]
-
-        total = len(self.registry.get_flags())
-        filter = CubesFilter(parts=self.parts, total=total)
-
-        for icube, lazycube in enumerate(self.iter_cubes()):
-            if not filter(icube):
-                continue
-            if self.registry.get_flag(icube):
-                LOG.info(f" -> Skipping {icube} total={self.n_cubes} (already done)")
-                continue
-
-            self.print(f" -> Processing i={icube} total={self.n_cubes}")
-            self.write_cube(lazycube, icube)
+    def write(self, inputs, igroup):
+        print()
+        print(f"✅✅ {igroup=}", inputs)
+        print(inputs)
+        ds =inputs.get_data
+        print(f"❗OK DS={ds}  (({len(ds)}))")
+        cube = inputs.get_cube()
+        print(f"❌ Got cube: {cube}")
+        self.write_cube(cube, igroup)
 
     @property
     def variables_names(self):
         return self.parent.main_config.get_variables_names()
 
-    def write_cube(self, lazycube, icube):
+    def write_cube(self, cube, icube):
         assert isinstance(icube, int), icube
 
-        cube = lazycube.to_cube()
-
         shape = cube.extended_user_shape
-        chunks = cube.chunking(self.output_config.chunking)
-        axis = self.output_config.append_axis
 
         slice = self.registry.get_slice_for(icube)
         LOG.info(
             (
                 f"Building dataset '{self.path}' i={icube} total={self.n_cubes} "
-                "(total shape ={shape}) at {slice}, {chunks=}"
+                f"(total shape ={shape}) at {slice}, {self.full_array.chunks=}"
             )
         )
-        self.print(f"Building dataset (total shape ={shape}) at {slice}, {chunks=}")
+        self.print(f"Building dataset (total shape ={shape}) at {slice}, {self.full_array.chunks=}")
 
         offset = slice.start
-        array = OffsetView(self.full_array, offset=offset, axis=axis, shape=shape)
+        array = OffsetView(self.full_array, offset=offset, axis=self.append_axis, shape=shape)
         array = FastWriteArray(array, shape=shape)
         self.load_datacube(cube, array)
 
@@ -237,7 +225,7 @@ class DataWriter:
 
         reading_chunks = None
         total = cube.count(reading_chunks)
-        # self.print(f"Loading datacube {cube}")
+        self.print(f"Loading datacube: {cube}")
         bar = progress_bar(
             iterable=cube.iterate_cubelets(reading_chunks),
             total=total,
@@ -246,12 +234,17 @@ class DataWriter:
         for i, cubelet in enumerate(bar):
             now = time.time()
             data = cubelet.to_numpy()
-            bar.set_description(
+            print(
+                # bar.set_description(
                 f"Loading {i}/{total} {str(cubelet)} ({data.shape}) {cube=}"
             )
             load += time.time() - now
 
             j = cubelet.extended_icoords[1]
+            print("❗",j,self.variables_names[j], cubelet._coords_names, data.mean())
+            print(cubelet.extended_icoords)
+            print(f"{self.variables_names=}")
+                
             check_data_values(
                 data[:],
                 name=self.variables_names[j],
