@@ -175,14 +175,12 @@ class DataWriter:
 
         self.append_axis = parent.output.append_axis
         self.n_cubes = parent.groups.n_groups
-        print(parent.output.config)
-
 
     def write(self, inputs, igroup):
         print()
         print(f"✅✅ {igroup=}", inputs)
         print(inputs)
-        ds =inputs.get_data
+        ds = inputs.get_data
         print(f"❗OK DS={ds}  (({len(ds)}))")
         cube = inputs.get_cube()
         print(f"❌ Got cube: {cube}")
@@ -190,7 +188,7 @@ class DataWriter:
 
     @property
     def variables_names(self):
-        return self.parent.main_config.get_variables_names()
+        return self.parent.variables_names
 
     def write_cube(self, cube, icube):
         assert isinstance(icube, int), icube
@@ -204,10 +202,14 @@ class DataWriter:
                 f"(total shape ={shape}) at {slice}, {self.full_array.chunks=}"
             )
         )
-        self.print(f"Building dataset (total shape ={shape}) at {slice}, {self.full_array.chunks=}")
+        self.print(
+            f"Building dataset (total shape ={shape}) at {slice}, {self.full_array.chunks=}"
+        )
 
         offset = slice.start
-        array = OffsetView(self.full_array, offset=offset, axis=self.append_axis, shape=shape)
+        array = OffsetView(
+            self.full_array, offset=offset, axis=self.append_axis, shape=shape
+        )
         array = FastWriteArray(array, shape=shape)
         self.load_datacube(cube, array)
 
@@ -241,10 +243,10 @@ class DataWriter:
             load += time.time() - now
 
             j = cubelet.extended_icoords[1]
-            print("❗",j,self.variables_names[j], cubelet._coords_names, data.mean())
+            print("❗", j, self.variables_names[j], cubelet._coords_names, data.mean())
             print(cubelet.extended_icoords)
             print(f"{self.variables_names=}")
-                
+
             check_data_values(
                 data[:],
                 name=self.variables_names[j],

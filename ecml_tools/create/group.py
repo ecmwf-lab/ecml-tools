@@ -35,8 +35,8 @@ class Group(list):
         assert len(self) >= 1, self
 
     def __repr__(self):
-        content = ",".join([str(_.strftime("%Y-%m-%d:%H")) for _ in self]) 
-        #content = ",".join([str(_.strftime("%Y-%m-%d:%H")) for _ in self[:10]]) + "..."
+        content = ",".join([str(_.strftime("%Y-%m-%d:%H")) for _ in self])
+        # content = ",".join([str(_.strftime("%Y-%m-%d:%H")) for _ in self[:10]]) + "..."
         return f"Group({len(self)}, {content})"
 
 

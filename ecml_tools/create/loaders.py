@@ -20,7 +20,6 @@ from .check import DatasetName
 from .config import OutputSpecs, build_output, loader_config
 from .group import build_groups
 from .input import build_input
-from .writer import CubesFilter
 from .statistics import (
     StatisticsRegistry,
     compute_aggregated_statistics,
@@ -32,7 +31,7 @@ from .utils import (
     normalize_and_check_dates,
     progress_bar,
 )
-from .writer import DataWriter
+from .writer import CubesFilter, DataWriter
 from .zarr import add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
@@ -64,6 +63,19 @@ class Loader:
                 statistics_tmp,
                 history_callback=self.registry.add_to_history,
             )
+
+    @property
+    def order_by(self):
+        return self.output.order_by
+
+    @property
+    def flatten_grid(self):
+        return self.output.flatten_grid
+
+    def read_dataset_metadata(self):
+        ds = open_dataset(self.path)
+        self.dataset_shape = ds.shape
+        self.variables_names = ds.variables
 
     @classmethod
     def from_config(cls, *, config, path, print=print, **kwargs):
@@ -122,8 +134,8 @@ class InitialiseLoader(Loader):
         self.statistics_registry.delete()
 
         self.groups = build_groups(*self.main_config.loop)
-        self.inputs = build_input(self.main_config.input, parent=None, selection=None)
         self.output = build_output(self.main_config.output, parent=self)
+        self.inputs = build_input(self.main_config.input, parent=self, selection=None)
 
         print(self.groups)
         print(self.inputs)
@@ -206,7 +218,7 @@ class InitialiseLoader(Loader):
         # metadata["data_request"] = self.inputs.get_data_request()
 
         metadata["order_by"] = self.output.order_by_as_list
-        metadata["remapping"] = self.output.remapping
+        metadata["remapping"] = self.inputs.remapping
         metadata["flatten_grid"] = self.output.flatten_grid
         metadata["ensemble_dimension"] = len(ensembles)
 
@@ -272,8 +284,9 @@ class ContentLoader(Loader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.groups = build_groups(*self.main_config.loop)
-        self.inputs = build_input(self.main_config.input, parent=None, selection=None)
         self.output = build_output(self.main_config.output, parent=self)
+        self.inputs = build_input(self.main_config.input, parent=self, selection=None)
+        self.read_dataset_metadata()
 
     def load(self, parts):
         self.registry.add_to_history("loading_data_start", parts=parts)
@@ -321,10 +334,8 @@ class GenericStatisticsLoader(Loader):
     def _incomplete(self):
         return not all(self.registry.get_flags(sync=False))
 
-    def read_dataset_metadata(self, statistics_start, statistics_end):
+    def read_dataset_dates_metadata(self, statistics_start, statistics_end):
         ds = open_dataset(self.path)
-        self.dataset_shape = ds.shape
-        self.variables_names = ds.variables
 
         subset = ds.dates_interval_to_indices(statistics_start, statistics_end)
         self.i_start = subset[0]
@@ -442,7 +453,8 @@ class RecomputeStatisticsLoader(GenericStatisticsLoader):
 
         start = statistics_start or self.main_config.output.get("statistics_start")
         end = statistics_end or self.main_config.output.get("statistics_end")
-        self.read_dataset_metadata(start, end)
+        self.read_dataset_metadata()
+        self.read_dataset_dates_metadata(start, end)
 
     def get_detailed_stats(self):
         self._build_temporary_statistics()
@@ -484,7 +496,6 @@ class RecomputeStatisticsLoader(GenericStatisticsLoader):
         self.statistics_registry.add_provenance(
             name="provenance_recompute_statistics", config=self.main_config
         )
-        exit()
 
 
 class StatisticsLoader(GenericStatisticsLoader):
@@ -513,7 +524,8 @@ class StatisticsLoader(GenericStatisticsLoader):
 
         start = self.main_config.output.get("statistics_start")
         end = self.main_config.output.get("statistics_end")
-        self.read_dataset_metadata(start, end)
+        self.read_dataset_metadata()
+        self.read_dataset_dates_metadata(start, end)
 
 
 class SizeLoader(Loader):

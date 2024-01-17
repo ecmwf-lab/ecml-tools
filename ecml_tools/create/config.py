@@ -133,11 +133,6 @@ class LoadersConfig(Config):
         if "order_by" in self.output:
             self.output.order_by = normalize_order_by(self.output.order_by)
 
-        self.output.remapping = self.output.get("remapping", {})
-        self.output.remapping = build_remapping(
-            self.output.remapping, patches={"number": {None: 0}}
-        )
-
         self.output.chunking = self.output.get("chunking", {})
         self.output.dtype = self.output.get("dtype", "float32")
 

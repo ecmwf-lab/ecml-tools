@@ -27,6 +27,19 @@ from .utils import make_list_int, seconds, to_datetime, to_datetime_list
 LOG = logging.getLogger(__name__)
 
 
+def merge_remappings(*remappings):
+    remapping = remappings[0]
+    for other in remappings[1:]:
+        if not other:
+            continue
+        assert other == remapping, (
+            "Multiple inconsistent remappings not implemented",
+            other,
+            remapping,
+        )
+    return remapping
+
+
 def assert_is_fieldset(obj):
     from climetlab.readers.grib.index import FieldSet
 
@@ -98,6 +111,7 @@ class Coords:
 
 class Input:
     _dates = None
+
     def __init__(self, config, selection=None, parent=None):
         assert parent != self, (parent, self)
         assert isinstance(config, dict), config
@@ -105,24 +119,96 @@ class Input:
         self.name = config.get("name")
         self.parent = parent
         self.cache = Cache()
-        self.selection = selection
-        self._dates = self._set_dates(config, selection)
+        self._dates = self._build_dates(config, selection)
 
-    def _set_dates(self, config, selection):
+        self.order_by = parent.order_by
+        self.flatten_grid = parent.flatten_grid
+
+    def _build_dates(self, config, selection):
         if selection:
             assert len(selection) == 1, selection
             assert "dates" in selection, selection
-            return deepcopy(selection['dates'])
-        if 'dates' in config:
-            return deepcopy(config['dates'])
+            return deepcopy(selection["dates"])
+        if "dates" in config:
+            return deepcopy(config["dates"])
         return None
+
+    def _build_coords(self):
+        from_data = self.get_cube().user_coords
+        from_config = self.order_by
+
+        keys_from_config = list(from_config.keys())
+        keys_from_data = list(from_data.keys())
+        assert (
+            keys_from_data == keys_from_config
+        ), f"Critical error: {keys_from_data=} != {keys_from_config=}. {self=}"
+
+        # assert keys[0] == "valid_datetime", keys
+        # assert keys[1] == "param_level", keys
+        # assert keys[2] == "number", keys
+
+        variables_key = list(from_config.keys())[1]
+        ensembles_key = list(from_config.keys())[2]
+        self.cache.variables = from_data[variables_key]  # "param_level"
+        self.cache.ensembles = from_data[ensembles_key]  # "number"
+
+        if isinstance(from_config[variables_key], (list, tuple)):
+            assert all(
+                [
+                    v == w
+                    for v, w in zip(
+                        from_data[variables_key], from_config[variables_key]
+                    )
+                ]
+            ), (from_data[variables_key], from_config[variables_key])
+
+        first_field = self.get_data[0]
+
+        grid_points = first_field.grid_points()
+        grid_values = list(range(len(grid_points[0])))
+
+        self.cache.grid_points = grid_points
+        self.cache.resolution = first_field.resolution
+        self.cache.grid_values = grid_values
 
     def select(self, dates=None):
         if not dates:
             return self
         if not isinstance(dates, (list, tuple)):
             dates = [dates]
-        return self.__class__(self._config, selection=dict(dates=dates), parent=self.parent)
+        return self.__class__(
+            self._config, selection=dict(dates=dates), parent=self.parent
+        )
+
+    @property
+    def variables(self):
+        if not hasattr(self.cache, "variables"):
+            self._build_coords()
+        return self.cache.variables
+
+    @property
+    def ensembles(self):
+        if not hasattr(self.cache, "ensembles"):
+            self._build_coords()
+        return self.cache.ensembles
+
+    @property
+    def resolution(self):
+        if not hasattr(self.cache, "resolution"):
+            self._build_coords()
+        return self.cache.resolution
+
+    @property
+    def grid_values(self):
+        if not hasattr(self.cache, "grid_values"):
+            self._build_coords()
+        return self.cache.grid_values
+
+    @property
+    def grid_points(self):
+        if not hasattr(self.cache, "grid_points"):
+            self._build_coords()
+        return self.cache.grid_points
 
     @property
     def dates_obj(self):
@@ -131,14 +217,6 @@ class Input:
     @property
     def dates(self):
         return self._dates
-
-    @property
-    def flatten_grid(self):
-        return self._config.get("flatten_grid", True)
-
-    @property
-    def order_by(self):
-        return normalize_order_by(self._config.get("order_by"))
 
     @property
     def remapping(self):
@@ -184,40 +262,20 @@ class Input:
             "values": self.grid_values,
         }
 
-    @property
-    def variables(self):
-        self._raise_not_implemented()
-
-    @property
-    def ensembles(self):
-        self._raise_not_implemented()
-
-    @property
-    def grid_values(self):
-        self._raise_not_implemented()
-
     def _raise_not_implemented(self):
         raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
-
-    @property
-    def grid_points(self):
-        self._raise_not_implemented()
-
-    @property
-    def resolution(self):
-        self._raise_not_implemented()
 
     def __repr__(self, *args, __indent__="\n", **kwargs):
         more = ",".join([str(a)[:5000] for a in args])
         more += ",".join([f"{k}={v}"[:5000] for k, v in kwargs.items()])
 
-        if 'dates' in self._config:
+        if "dates" in self._config:
             more += " *dates-in-config "
 
         dates = str(self.dates)
         dates = dates[:5000]
         more += dates
-        
+
         more = more[:5000]
         txt = f"{self.__class__.__name__}:{dates}{__indent__}{more}"
         if __indent__:
@@ -256,8 +314,8 @@ class Input:
 
 
 class TerminalInput(Input):
-    def __init__(self, config, selection=None, parent=None):
-        super().__init__(config, selection=selection, parent=parent)
+    def __init__(self, config, **kwargs):
+        super().__init__(config, **kwargs)
 
         from climetlab import load_dataset, load_source
 
@@ -271,67 +329,11 @@ class TerminalInput(Input):
             "cml.load_dataset": load_dataset,
         }[config.get("function")]
 
-    def _build_coords(self):
-        coords = {}
-        # coords["dates"] = self.dates_obj.values
-
-        cube = self.get_cube()
-        user_coords = cube.user_coords
-
-        ensembles = user_coords["number"]
-
-        print("❌❌ assuming param_level here")
-        variables = user_coords["param_level"]
-
-        ds = self.get_data
-        first_field = ds[0]
-        grid_points = first_field.grid_points()
-        grid_values = list(range(len(grid_points[0])))
-        resolution = first_field.resolution
-
-        self.cache.grid_points = grid_points
-        self.cache.resolution = resolution
-        self.cache.grid_values = grid_values
-        self.cache.variables = variables
-        self.cache.ensembles = ensembles
-
-        return coords
-
     @property
     def dates(self):
-        #if self._dates is not None:
+        # if self._dates is not None:
         #    return self._dates
         return self.parent.dates
-
-    @property
-    def variables(self):
-        if not hasattr(self.cache, "variables"):
-            self._build_coords()
-        return self.cache.variables
-
-    @property
-    def ensembles(self):
-        if not hasattr(self.cache, "ensembles"):
-            self._build_coords()
-        return self.cache.ensembles
-
-    @property
-    def resolution(self):
-        if not hasattr(self.cache, "resolution"):
-            self._build_coords()
-        return self.cache.resolution
-
-    @property
-    def grid_values(self):
-        if not hasattr(self.cache, "grid_values"):
-            self._build_coords()
-        return self.cache.grid_values
-
-    @property
-    def grid_points(self):
-        if not hasattr(self.cache, "grid_points"):
-            self._build_coords()
-        return self.cache.grid_points
 
     @property
     def get_data(self):
@@ -353,8 +355,15 @@ class TerminalInput(Input):
         kwargs = substitute(kwargs, vars)
 
         kwargs_str = ",".join([f"{k}={v}" for k, v in kwargs.items()])
-        print(f"✅ get_data {id(self)}", args, kwargs_str, "DATES =",self.dates, len(self.dates_obj.values))
-        print("  for", self, 'D=', self.dates)
+        print(
+            f"✅ get_data {id(self)}",
+            args,
+            kwargs_str,
+            "DATES =",
+            self.dates,
+            len(self.dates_obj.values),
+        )
+        print("  for", self, "D=", self.dates)
         print(f"  {self.parent.parent.dates=}")
         ds = self.func(*args, **kwargs)
         print("get-data-len-ds", len(ds))
@@ -370,18 +379,18 @@ class TerminalInput(Input):
 
 
 class ConcatInput(Input):
-    def __init__(self, config, selection=None, parent=None):
-        super().__init__(config, selection=selection, parent=parent)
+    def __init__(self, config, **kwargs):
+        super().__init__(config, **kwargs)
         inputs = config["concat"]
         self.inputs = []
         for i in inputs:
-            i = build_input(i, parent=self, selection=selection)
+            i = build_input(i, parent=self, selection=kwargs.get("selection"))
             # todo: remove i if empty
             self.inputs.append(i)
 
     @property
     def dates(self):
-        #if self._dates is not None:
+        # if self._dates is not None:
         #    return self._dates
         assert len(self.inputs) == 1
         return self.inputs[0].dates
@@ -405,114 +414,13 @@ class ConcatInput(Input):
             raise NotImplementedError()
         return self.inputs[0].get_data
 
-    @property
-    def resolution(self):
-        if len(self.inputs) != 1:
-            raise NotImplementedError()
-        return self.inputs[0].resolution
-
-    @property
-    def grid_values(self):
-        if len(self.inputs) != 1:
-            raise NotImplementedError()
-        return self.inputs[0].grid_values
-
-    @property
-    def grid_points(self):
-        if len(self.inputs) != 1:
-            raise NotImplementedError()
-        return self.inputs[0].grid_points
-
-    @property
-    def ensembles(self):
-        if len(self.inputs) != 1:
-            raise NotImplementedError()
-        return self.inputs[0].ensembles
-
-    @property
-    def variables(self):
-        if len(self.inputs) != 1:
-            raise NotImplementedError()
-        return self.inputs[0].variables
-
     def get_cube(self):
         if len(self.inputs) != 1:
             raise NotImplementedError()
         return self.inputs[0].get_cube()
-        #for i in self.inputs:
-        #    idates = i.dates
-        #    if dates[0] in idates:
-        #        for d in dates:
-        #            if not d in idates:
-        #                raise ValueError(
-        #                    f"Cannot find all dates {dates}. Only {i.dates} are available in {i}"
-        #                )
-        #        return i.get_cube(dates)
-        #raise ValueError(
-        #    f"Cannot find all dates {dates}, only {self.dates} are available in {self}"
-        #)
 
 
-class RepeatInput(Input):
-    def __init__(self, config, selection=None, parent=None):
-        super().__init__(config, selection=selection, parent=parent)
-
-        assert "dates" in config, config
-        assert self.dates is not None, (self._config, selection)
-        print("Concat", len(self.dates_obj.values), config, selection, self._dates)
-
-        self.input = build_input(
-            self._config["repeat"], parent=self, selection=selection
-        )
-
-
-    def __repr__(self):
-        return super().__repr__(self.input)
-
-    # def get_first_field(self):
-    #    assert False
-    # dates = self.dates
-    # input = self.input
-    # if len(dates) != 1:
-    #    first_date = dates[0]
-    #    input = RepeatInput(self._config, selection=dict(dates=[dates[0]]))
-    # assert input.dates is not None, self
-    # return input.first_field
-
-    def get_cube(self):
-        return self.input.get_cube()
-    
-    @property
-    def dates(self):
-        return self._dates
-
-    @property
-    def resolution(self):
-        return self.input.resolution
-
-    @property
-    def grid_values(self):
-        return self.input.grid_values
-
-    @property
-    def grid_points(self):
-        return self.input.grid_points
-
-    @property
-    def ensembles(self):
-        return self.input.ensembles
-
-    @property
-    def variables(self):
-        return self.input.variables
-
-    @property
-    def get_data(self):
-        return self.input.get_data
-
-
-def merge_dicts(a, b, lists):
-    assert lists in ("concat", "replace")
+def merge_dicts(a, b):
     if isinstance(a, dict):
         assert isinstance(b, dict), (a, b)
         a = deepcopy(a)
@@ -520,32 +428,25 @@ def merge_dicts(a, b, lists):
             if k not in a:
                 a[k] = v
             else:
-                a[k] = merge_dicts(a[k], v, lists=lists)
+                a[k] = merge_dicts(a[k], v)
         return a
 
-    if isinstance(a, list):
-        if lists == "concat":
-            assert isinstance(b, list), (a, b)
-            return a + b
-        if lists == "replace":
-            return b
-        raise ValueError(f"Unknown lists method {lists}")
-
-    return b
+    return deepcopy(b)
 
 
 class JoinInput(Input):
-    def __init__(self, config, selection=None, parent=None):
-        super().__init__(config, selection=selection, parent=parent)
+    def __init__(self, config, **kwargs):
+        super().__init__(config, **kwargs)
         inputs = config["join"]
 
         self.inputs = []
-        inputs_config = {}
+        previous_configs = {}
         for config in inputs:
-            inherit = inputs_config.get(config.pop("inherit", None), {})
-            config = merge_dicts(inherit, config, lists="replace")
-            inputs_config[config["name"]] = config
-            self.inputs.append(build_input(config, parent=self, selection=selection))
+            inherit = previous_configs.get(config.pop("inherit", None), {})
+            config = merge_dicts(inherit, config)
+            previous_configs[config["name"]] = config
+            input = build_input(config, parent=self, selection=kwargs.get("selection"))
+            self.inputs.append(input)
 
         for i in self.inputs[1:]:
             self.check_compatibility(self.inputs[0], i)
@@ -564,9 +465,12 @@ class JoinInput(Input):
 
     @property
     def dates(self):
-        #if self._dates is not None:
-        #    return dates
-        return self.parent.dates
+        return self._dates
+
+    @property
+    def remapping(self):
+        remappings = [i.remapping for i in self.inputs]
+        return merge_remappings(*remappings)
 
     @property
     def resolution(self):
@@ -576,95 +480,31 @@ class JoinInput(Input):
         return resolution
 
     @property
-    def grid_values(self):
-        return self.inputs[0].grid_values
-
-    @property
-    def grid_points(self):
-        return self.inputs[0].grid_points
-
-    @property
-    def ensembles(self):
-        ensembles = self.inputs[0].ensembles
-        for i in self.inputs[1:]:
-            assert i.ensembles == ensembles
-        return ensembles
-
-    @property
-    def variables(self):
-        variables = []
-        for i in self.inputs:
-            new = i.variables
-            for v in new:
-                assert v not in variables, (i, variables)
-            variables += new
-        return variables
-
-    @property
     def get_data(self):
         ds = self.inputs[0].get_data
-        print('For', self.inputs[0])
-        print('  len-ds', len(ds))
         for i in self.inputs[1:]:
-            new = i.get_data
-            print('For', i, 'with', i.dates)
-            print('  len-ds', len(new))
-            ds += new
-            assert_is_fieldset(ds)
-        print('TOTAL: len-ds', len(ds))
+            ds += i.get_data
+            assert_is_fieldset(ds), i
         return ds
 
-    @property
-    def remapping(self):
-        remapping = {}
-        for i in self.inputs:
-            if not i.remapping:
-                continue
-            if remapping:
-                assert i.remapping == remapping, (
-                    "Multiple remappings not implemented",
-                    i.remapping,
-                    remapping,
-                )
-            remapping = i.remapping
-        return remapping
 
-    @property
-    def order_by(self):
-        order_by = self.inputs[0].order_by
-        for i in self.inputs[1:]:
-            order_by = merge_dicts(order_by, i.order_by, lists="concat")
-        return order_by
-
-    @property
-    def flatten_grid(self):
-        flatten_grid = self.inputs[0].flatten_grid
-        assert all(
-            i.flatten_grid == flatten_grid for i in self.inputs[1:]
-        ), "Different flatten_grid not supported"
-        return flatten_grid
-
-
-def build_input(config, selection, parent):
+def build_input(config, **kwargs):
     config = deepcopy(config)
 
     if isinstance(config, list):
-        config = dict(concat=config)
+        return ConcatInput(config, **kwargs)
 
-    assert isinstance(config, dict), (type(config), config)
-
-    if "join" in config:
-        if not isinstance(config["join"], list):
-            raise ValueError(f"Join must be a list, got {config['join']}")
-        return JoinInput(config, parent=parent, selection=selection)
+    if not isinstance(config, dict):
+        raise ValueError(f"Invalid input config {config}")
 
     if "concat" in config:
         if not isinstance(config["concat"], list):
             raise ValueError(f"Concat must be a list, got {config['concat']}")
+        return ConcatInput(config, **kwargs)
 
-        return ConcatInput(config, parent=parent, selection=selection)
+    if "join" in config:
+        if not isinstance(config["join"], list):
+            raise ValueError(f"Join must be a list, got {config['join']}")
+        return JoinInput(config, **kwargs)
 
-    if "repeat" in config:
-        return RepeatInput(config, parent=parent, selection=selection)
-
-    return TerminalInput(config, parent=parent, selection=selection)
+    return TerminalInput(config, **kwargs)

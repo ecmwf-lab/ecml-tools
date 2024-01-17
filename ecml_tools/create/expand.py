@@ -172,7 +172,7 @@ def expand_class(config):
         ]
         or isinstance(config["start"], datetime.datetime)
         or isinstance(config["end"], datetime.datetime)
-        or 'frequency' in config
+        or "frequency" in config
         or (config.get("kind") == "dates" and "start" in config)
     ):
         return DateStartStopExpand
