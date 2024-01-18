@@ -156,7 +156,7 @@ def expand_class(config):
 
     assert isinstance(config, dict), config
 
-    if "start" not in config and not "values" in config:
+    if "start" not in config and "values" not in config:
         raise ValueError(f"Cannot expand loop from {config}")
 
     if isinstance(config.get("values"), list):

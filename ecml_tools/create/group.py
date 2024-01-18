@@ -7,26 +7,9 @@
 # nor does it submit to any jurisdiction.
 #
 import datetime
-import itertools
 from functools import cached_property
 
 from .expand import expand_class
-
-
-def expand_values(config):
-    cls = expand_class(config)
-    values = cls(config).values
-    # assert isinstance(values, list), values
-    # assert not isinstance(values[0], list), values
-    return values
-
-
-def expand_groups(config):
-    cls = _expand_class(config)
-    groups = cls(config).groups
-    assert isinstance(groups, list), groups
-    assert isinstance(groups[0], list), groups
-    return groups
 
 
 class Group(list):
@@ -49,20 +32,19 @@ class Groups:
         self._config = config
         self.cls = expand_class(config)
 
-    @property
+    @cached_property
     def values(self):
         dates = list(self.cls(self._config).values)
         assert isinstance(dates[0], datetime.datetime), dates[0]
         return dates
 
-    def __iter__(self):
-        for i in self.cls(self._config).groups:
-            g = Group(i)
-            yield g
+    @property
+    def groups(self):
+        return [Group(g) for g in self.cls(self._config).groups]
 
     @cached_property
     def n_groups(self):
-        return len([i for i in self])
+        return len(self.groups)
 
     @property
     def frequency(self):
@@ -74,8 +56,8 @@ class Groups:
         return frequency
 
     def __repr__(self):
-        content = "+".join([str(len(list(g))) for g in self])
-        for g in self:
+        content = "+".join([str(len(list(g))) for g in self.groups])
+        for g in self.groups:
             assert isinstance(g[0], datetime.datetime), g[0]
 
         return f"{self.__class__.__name__}({content}={len(self.values)})({self.n_groups} groups)"

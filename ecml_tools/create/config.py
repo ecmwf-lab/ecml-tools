@@ -8,13 +8,11 @@
 #
 import datetime
 import logging
-import math
 import os
 import warnings
-from functools import cached_property
 
 import yaml
-from climetlab.core.order import build_remapping, normalize_order_by
+from climetlab.core.order import normalize_order_by
 
 from .utils import load_json_or_yaml
 
@@ -109,8 +107,8 @@ class LoadersConfig(Config):
         if "description" not in self:
             raise ValueError("Must provide a description in the config.")
 
-        if "dates" not in self.output:
-            raise ValueError("Must provide output:dates in the config.")
+        if "dates" in self.output:
+            raise ValueError("Obsolete: Dates should not be provided in output config.")
 
         # deprecated/obsolete
         if "order" in self.output:

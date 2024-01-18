@@ -17,7 +17,7 @@ import zarr
 from ecml_tools.data import open_dataset
 
 from .check import DatasetName
-from .config import OutputSpecs, build_output, loader_config
+from .config import build_output, loader_config
 from .group import build_groups
 from .input import build_input
 from .statistics import (
@@ -32,7 +32,7 @@ from .utils import (
     progress_bar,
 )
 from .writer import CubesFilter, DataWriter
-from .zarr import add_zarr_dataset
+from .zarr import ZarrBuiltRegistry, add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
@@ -83,14 +83,10 @@ class Loader:
 
     @cached_property
     def registry(self):
-        from .zarr import ZarrBuiltRegistry
-
         return ZarrBuiltRegistry(self.path)
 
     @classmethod
     def from_dataset(cls, *, path, print=print, **kwargs):
-        import zarr
-
         assert os.path.exists(path), f"Path {path} does not exist."
         z = zarr.open(path, mode="r")
         config = z.attrs["_create_yaml_config"]
@@ -98,14 +94,10 @@ class Loader:
         return cls.from_config(config=config, path=path, print=print, **kwargs)
 
     def initialise_dataset_backend(self):
-        import zarr
-
         z = zarr.open(self.path, mode="w")
         z.create_group("_build")
 
     def update_metadata(self, **kwargs):
-        import zarr
-
         z = zarr.open(self.path, mode="w+")
         for k, v in kwargs.items():
             if isinstance(v, np.datetime64):
@@ -115,17 +107,19 @@ class Loader:
             z.attrs[k] = v
 
     def _add_dataset(self, mode="r+", **kwargs):
-        import zarr
-
         z = zarr.open(self.path, mode=mode)
         return add_zarr_dataset(zarr_root=z, **kwargs)
 
     def get_zarr_chunks(self):
-        import zarr
-
         z = zarr.open(self.path, mode="r")
         return z["data"].chunks
-        assert chunks == z.data.chunks
+
+    def print_info(self):
+        z = zarr.open(self.path, mode="r")
+        try:
+            print(z["data"].info)
+        except Exception as e:
+            print(e)
 
 
 class InitialiseLoader(Loader):
@@ -149,6 +143,15 @@ class InitialiseLoader(Loader):
         print("-------------------------")
 
         dates = self.inputs.dates_obj.values
+        if self.groups.frequency != self.inputs.frequency:
+            raise ValueError(
+                f"Frequency mismatch: {self.groups.frequency} != {self.input.frequency}"
+            )
+        if self.groups.values[0] != self.inputs.dates_obj.values[0]:
+            raise ValueError(
+                f"First date mismatch: {self.groups.values[0]} != {self.inputs.dates_obj.values[0]}"
+            )
+
         frequency = self.inputs.frequency
         assert isinstance(frequency, int), frequency
 
@@ -161,9 +164,10 @@ class InitialiseLoader(Loader):
             f"Dates: Found {len(dates)} datetimes, in {self.groups.n_groups} groups: ",
             end="",
         )
-        lengths = [str(len(g)) for g in self.groups]
-        print("+".join(lengths))
-        self.print(f"Found {len(dates)} datetimes {'+'.join(lengths)}.")
+        lengths = [len(g) for g in self.groups.groups]
+        self.print(
+            f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}."
+        )
         print("-------------------------")
 
         variables = minimal_input.variables
@@ -207,14 +211,6 @@ class InitialiseLoader(Loader):
         metadata["description"] = self.main_config.description
         metadata["resolution"] = resolution
 
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
         metadata["data_request"] = minimal_input.data_request
 
         metadata["order_by"] = self.output.order_by_as_list
@@ -277,8 +273,6 @@ class InitialiseLoader(Loader):
 
         assert chunks == self.get_zarr_chunks(), (chunks, self.get_zarr_chunks())
 
-        print("‼️‼️‼️‼️ no data_request in output zarr yet")
-
 
 class ContentLoader(Loader):
     def __init__(self, **kwargs):
@@ -298,8 +292,7 @@ class ContentLoader(Loader):
 
         total = len(self.registry.get_flags())
         filter = CubesFilter(parts=parts, total=total)
-        for igroup, group in enumerate(self.groups):
-            print("✅", igroup, group)
+        for igroup, group in enumerate(self.groups.groups):
             if self.registry.get_flag(igroup):
                 LOG.info(f" -> Skipping {igroup} total={len(group)} (already done)")
                 continue
@@ -310,13 +303,14 @@ class ContentLoader(Loader):
 
             inputs = self.inputs.select(dates=group)
             data_writer.write(inputs, igroup)
-        exit()
 
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
         self.statistics_registry.add_provenance(
             name="provenance_load", config=self.main_config
         )
+
+        self.print_info()
 
 
 class GenericStatisticsLoader(Loader):

@@ -6,23 +6,16 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-import datetime
-import itertools
 import logging
-import math
 import time
-import warnings
 from collections import defaultdict
 from copy import deepcopy
-from functools import cached_property
 
-import numpy as np
-from climetlab.core.order import build_remapping, normalize_order_by
+from climetlab.core.order import build_remapping
 
-from .config import Config
 from .group import build_groups
 from .template import substitute
-from .utils import make_list_int, seconds, to_datetime, to_datetime_list
+from .utils import seconds
 
 LOG = logging.getLogger(__name__)
 
@@ -288,34 +281,7 @@ class Input:
         return txt
 
     def check_compatibility(self, d1, d2):
-        # These are the default checks
-        # Derived classes should turn individual checks off if they are not needed
-        # self.check_same_resolution(d1, d2)
-        # self.check_same_frequency(d1, d2)
-        # self.check_same_grid(d1, d2)
-        # self.check_same_lengths(d1, d2)
-        # self.check_same_variables(d1, d2)
-        # self.check_same_dates(d1, d2)
         pass
-
-    def check_same_dates(self, d1, d2):
-        self.check_same_frequency(d1, d2)
-
-        if d1.dates[0] != d2.dates[0]:
-            raise ValueError(
-                f"Incompatible start dates: {d1.dates[0]} and {d2.dates[0]} ({d1} {d2})"
-            )
-
-        if d1.dates[-1] != d2.dates[-1]:
-            raise ValueError(
-                f"Incompatible end dates: {d1.dates[-1]} and {d2.dates[-1]} ({d1} {d2})"
-            )
-
-    def check_same_frequency(self, d1, d2):
-        if d1.frequency != d2.frequency:
-            raise ValueError(
-                f"Incompatible frequencies: {d1.frequency} and {d2.frequency} ({d1} {d2})"
-            )
 
 
 class TerminalInput(Input):
@@ -336,8 +302,6 @@ class TerminalInput(Input):
 
     @property
     def dates(self):
-        # if self._dates is not None:
-        #    return self._dates
         return self.parent.dates
 
     @property
@@ -359,9 +323,7 @@ class TerminalInput(Input):
         args = substitute(args, vars)
         kwargs = substitute(kwargs, vars)
 
-        kwargs_str = ",".join([f"{k}={v}" for k, v in kwargs.items()])
-        ds = self.func(*args, **kwargs)
-        return ds
+        return self.func(*args, **kwargs)
 
     def __repr__(self):
         content = " ".join([f"{k}={v}" for k, v in self._config.items()])
@@ -380,9 +342,7 @@ class ConcatInput(Input):
 
     @property
     def dates(self):
-        # if self._dates is not None:
-        #    return self._dates
-        assert len(self.inputs) == 1
+        assert len(self.inputs) == 1, "Multiple input in concat not implemented yet"
         return self.inputs[0].dates
         # dates = []
         # for i in self.inputs:
@@ -452,10 +412,6 @@ class JoinInput(Input):
     def __repr__(self):
         content = "\n".join([str(i) for i in self.inputs])
         return f"{self.__class__.__name__}:\n{content}".replace("\n", "\n  ")
-
-    @property
-    def dates(self):
-        return self._dates
 
     @property
     def remapping(self):

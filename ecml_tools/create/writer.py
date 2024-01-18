@@ -7,7 +7,6 @@
 # nor does it submit to any jurisdiction.
 #
 
-import datetime
 import logging
 import time
 import warnings
@@ -177,13 +176,7 @@ class DataWriter:
         self.n_cubes = parent.groups.n_groups
 
     def write(self, inputs, igroup):
-        print()
-        print(f"✅✅ {igroup=}", inputs)
-        print(inputs)
-        ds = inputs.get_data
-        print(f"❗OK DS={ds}  (({len(ds)}))")
         cube = inputs.get_cube()
-        print(f"❌ Got cube: {cube}")
         self.write_cube(cube, igroup)
 
     @property
@@ -236,16 +229,12 @@ class DataWriter:
         for i, cubelet in enumerate(bar):
             now = time.time()
             data = cubelet.to_numpy()
-            print(
-                # bar.set_description(
+            bar.set_description(
                 f"Loading {i}/{total} {str(cubelet)} ({data.shape}) {cube=}"
             )
             load += time.time() - now
 
             j = cubelet.extended_icoords[1]
-            print("❗", j, self.variables_names[j], cubelet._coords_names, data.mean())
-            print(cubelet.extended_icoords)
-            print(f"{self.variables_names=}")
 
             check_data_values(
                 data[:],
@@ -260,8 +249,6 @@ class DataWriter:
         now = time.time()
         save += time.time() - now
 
-        LOG.info("Written")
-        self.print_info()
         LOG.info("Written.")
 
         self.print(
@@ -274,17 +261,3 @@ class DataWriter:
             f" load time: {seconds(load)},"
             f" write time: {seconds(save)}."
         )
-
-    def print_info(self):
-        import zarr
-
-        z = zarr.open(self.path, mode="r")
-        try:
-            print(z["data"].info)
-        except Exception as e:
-            print(e)
-        print("...")
-        try:
-            print(z["data"].info)
-        except Exception as e:
-            print(e)
