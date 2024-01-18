@@ -172,6 +172,7 @@ class Input:
         self.cache.grid_values = grid_values
 
     def select(self, dates=None):
+        """Selects a subset of the data, only subsetting on dates is needed for now"""
         if not dates:
             return self
         if not isinstance(dates, (list, tuple)):
@@ -179,6 +180,12 @@ class Input:
         return self.__class__(
             self._config, selection=dict(dates=dates), parent=self.parent
         )
+
+    @property
+    def data_request(self):
+        """Returns a dictionary with the parameters needed to retrieve the data"""
+        ds = self.get_data
+        return _get_data_request(ds)
 
     @property
     def variables(self):
@@ -224,11 +231,8 @@ class Input:
 
     def get_cube(self):
         ds = self.get_data
-        for i, g in enumerate(ds):
-            print(i, "field", g, self.dates, type(self))
 
         start = time.time()
-
         LOG.info("Sorting dataset %s %s", self.order_by, self.remapping)
         cube = ds.cube(
             self.order_by,
@@ -238,6 +242,7 @@ class Input:
         )
         cube = cube.squeeze()
         LOG.info(f"Sorting done in {seconds(time.time()-start)}.")
+
         return cube
 
     @property
@@ -355,27 +360,12 @@ class TerminalInput(Input):
         kwargs = substitute(kwargs, vars)
 
         kwargs_str = ",".join([f"{k}={v}" for k, v in kwargs.items()])
-        print(
-            f"✅ get_data {id(self)}",
-            args,
-            kwargs_str,
-            "DATES =",
-            self.dates,
-            len(self.dates_obj.values),
-        )
-        print("  for", self, "D=", self.dates)
-        print(f"  {self.parent.parent.dates=}")
         ds = self.func(*args, **kwargs)
-        print("get-data-len-ds", len(ds))
         return ds
 
     def __repr__(self):
         content = " ".join([f"{k}={v}" for k, v in self._config.items()])
         return f"{self.__class__.__name__}({self.name}) {content}"
-
-    def get_data_request(self):
-        ds = self.get_data
-        return _get_data_request(ds)
 
 
 class ConcatInput(Input):

@@ -215,7 +215,7 @@ class InitialiseLoader(Loader):
         print("‼️‼️‼️‼️ no data_request in output zarr yet")
         print("‼️‼️‼️‼️ no data_request in output zarr yet")
         print("‼️‼️‼️‼️ no data_request in output zarr yet")
-        # metadata["data_request"] = self.inputs.get_data_request()
+        metadata["data_request"] = minimal_input.data_request
 
         metadata["order_by"] = self.output.order_by_as_list
         metadata["remapping"] = self.inputs.remapping
