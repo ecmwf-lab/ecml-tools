@@ -109,9 +109,11 @@ class Dataset:
             vars = {k: i for i, k in enumerate(vars)}
 
         indices = []
-        for k, v in sorted(self.name_to_index.items(), key=lambda x: x[1]):
-            indices.append(vars[k])
 
+        for k, v in sorted(vars.items(), key=lambda x: x[1]):
+            indices.append(self.name_to_index[k])
+
+        # Make sure we don't forget any variables
         assert set(indices) == set(range(len(self.name_to_index)))
 
         return indices
@@ -159,6 +161,39 @@ class Dataset:
             frequency=self.frequency,
             **kwargs,
         )
+
+    def __repr__(self):
+        return self.__class__.__name__ + "()"
+
+
+class Source:
+    def __init__(self, dataset, index, source=None, info=None):
+        self.dataset = dataset
+        self.index = index
+        self.source = source
+        self.info = info
+
+    def __repr__(self):
+        p = s = self.source
+        while s is not None:
+            p = s
+            s = s.source
+
+        return (
+            f"{self.dataset}[{self.index}, {self.dataset.variables[self.index]}] ({p})"
+        )
+
+    def target(self):
+        p = s = self.source
+        while s is not None:
+            p = s
+            s = s.source
+        return p
+
+    def dump(self, depth=0):
+        print(" " * depth, self)
+        if self.source is not None:
+            self.source.dump(depth + 1)
 
 
 class ReadOnlyStore(zarr.storage.BaseStore):
@@ -220,14 +255,18 @@ class S3Store(ReadOnlyStore):
 
 
 def open_zarr(path):
-    store = path
-    if store.startswith("http://") or store.startswith("https://"):
-        store = HTTPStore(store)
+    try:
+        store = path
+        if store.startswith("http://") or store.startswith("https://"):
+            store = HTTPStore(store)
 
-    elif store.startswith("s3://"):
-        store = S3Store(store)
+        elif store.startswith("s3://"):
+            store = S3Store(store)
 
-    return zarr.convenience.open(store, "r")
+        return zarr.convenience.open(store, "r")
+    except Exception:
+        LOG.exception("Failed to open %r", path)
+        raise
 
 
 class Zarr(Dataset):
@@ -323,6 +362,9 @@ class Zarr(Dataset):
 
     def metadata_specific(self):
         return super().metadata_specific(attrs=dict(self.z.attrs))
+
+    def source(self, index):
+        return Source(self, index, info=self.path)
 
 
 class Forwards(Dataset):
@@ -597,6 +639,10 @@ class Grids(GivenAxis):
 
 
 class Join(Combined):
+    """
+    Join the datasets along the variables axis.
+    """
+
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)
         self.check_same_sub_shapes(d1, d2, drop_axis=1)
@@ -671,8 +717,20 @@ class Join(Combined):
             for k in self.datasets[0].statistics
         }
 
+    def source(self, index):
+        i = index
+        for dataset in self.datasets:
+            if i < dataset.shape[1]:
+                return Source(self, index, dataset.source(i))
+            i -= dataset.shape[1]
+        assert False
+
 
 class Subset(Forwards):
+    """
+    Select a subset of the dates.
+    """
+
     def __init__(self, dataset, indices):
         while isinstance(dataset, Subset):
             indices = [dataset.indices[i] for i in indices]
@@ -714,8 +772,15 @@ class Subset(Forwards):
         delta = dates[1].astype(object) - dates[0].astype(object)
         return int(delta.total_seconds() / 3600)
 
+    def source(self, index):
+        return Source(self, index, self.forward.source(index))
+
 
 class Select(Forwards):
+    """
+    Select a subset of the variables.
+    """
+
     def __init__(self, dataset, indices):
         while isinstance(dataset, Select):
             indices = [dataset.indices[i] for i in indices]
@@ -752,6 +817,9 @@ class Select(Forwards):
 
     def metadata_specific(self, **kwargs):
         return super().metadata_specific(indices=self.indices, **kwargs)
+
+    def source(self, index):
+        return Source(self, index, self.dataset.source(self.indices[index]))
 
 
 class Rename(Forwards):
