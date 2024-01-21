@@ -39,6 +39,7 @@ data_requires = [
 remote_requires = [
     "boto3",
     "requests",
+    "s3fs", # prepml copy only
 ]
 
 provenance_requires = [
