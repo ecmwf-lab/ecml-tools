@@ -10,6 +10,7 @@ import datetime
 import logging
 import os
 import warnings
+from copy import deepcopy
 
 import yaml
 from climetlab.core.order import normalize_order_by
@@ -42,11 +43,23 @@ class DictObj(dict):
         self[attr] = value
 
 
+def resolve_includes(config):
+    if isinstance(config, list):
+        return [resolve_includes(c) for c in config]
+    if isinstance(config, dict):
+        include = config.pop("<<", {})
+        new = deepcopy(include)
+        new.update(config)
+        return {k: resolve_includes(v) for k, v in new.items()}
+    return config
+
+
 class Config(DictObj):
     def __init__(self, config):
         if isinstance(config, str):
             self.config_path = os.path.realpath(config)
             config = load_json_or_yaml(config)
+        config = resolve_includes(config)
         super().__init__(config)
 
 
@@ -200,6 +213,13 @@ class AifsPurposeConfig(LoadersConfig):
     purpose = "aifs"
 
     def normalise(self):
+        if "licence" not in self:
+            self.licence = "CC-BY-4.0"
+            print(f"❗ Setting licence={self.licence} because it was not provided.")
+        if "copyright" not in self:
+            self.copyright = "ecmwf"
+            print(f"❗ Setting copyright={self.copyright} because it was not provided.")
+
         self.check_dict_value_and_set(self.output, "flatten_grid", True)
         self.check_dict_value_and_set(self.output, "ensemble_dimension", 2)
 

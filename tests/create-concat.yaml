@@ -1,0 +1,54 @@
+description: "develop version of the dataset for a few days and a few variables, once data on mars is cached it should take a few seconds to generate the dataset"
+dataset_status: testing
+purpose: aifs
+name: test-small
+
+loop:
+- dates:
+    start: 2020-12-30 00:00:00
+    end: 2021-01-03 12:00:00
+    frequency: 12h
+    group_by: monthly
+
+common:
+  mars_request: &mars_request
+    name: mars
+    expver: '0001'
+    class: ea
+    date: $datetime_format($dates,%Y%m%d)
+    time: $datetime_format($dates,%H%M)
+    grid: 20./20.
+    levtype: sfc
+    stream: oper
+    type: an
+
+
+input:
+  concat:
+  - dates:
+      start: 2020-12-30 00:00:00
+      end: 2021-01-01 12:00:00
+      frequency: 12h
+      source:
+        '<<': *mars_request
+        param: [2t]
+  - dates:
+      start: 2021-01-02 00:00:00
+      end: 2021-01-03 12:00:00
+      frequency: 12h
+      source:
+        '<<': *mars_request
+        param: [2t]
+
+output:
+  chunking: {dates: 1}
+  dtype: float32
+  flatten_grid: True
+  order_by:
+  - valid_datetime
+  - param_level
+  - number
+  statistics: param_level
+  statistics_end: 2021
+  remapping: &remapping
+    param_level: '{param}_{levelist}'

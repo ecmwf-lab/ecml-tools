@@ -14,20 +14,20 @@ from ecml_tools.data import open_dataset
 
 def _config_path(name):
     here = os.path.dirname(__file__)
-    return os.path.join(here, name + '.yaml')
+    return os.path.join(here, name + ".yaml")
 
 
 def _output_path(name):
     here = os.path.dirname(__file__)
-    return os.path.join(here, name + '-output')
+    return os.path.join(here, name + "-output")
 
 
 def _reference_path(name):
     here = os.path.dirname(__file__)
-    return os.path.join(here, name + '-reference')
+    return os.path.join(here, name + "-reference")
 
 
-def compare(dir1, dir2, skip=['.zattrs', 'provenance_load.json']):
+def compare(dir1, dir2, skip=[".zattrs", "provenance_load.json"]):
     """Compare two directories recursively."""
     for file1 in os.listdir(dir1):
         path1 = os.path.join(dir1, file1)
@@ -57,9 +57,9 @@ def test_create_1():
 
     compare(output, reference)
 
-    #ds = open_dataset(zarr_path)
-    #assert ds.shape == (10, 8, 1, 162)
-    #assert ds.variables == (10, 8, 1, 162)
+    # ds = open_dataset(zarr_path)
+    # assert ds.shape == (10, 8, 1, 162)
+    # assert ds.variables == (10, 8, 1, 162)
 
 
 if __name__ == "__main__":

@@ -6,14 +6,16 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
+import datetime
 import logging
 import time
 from collections import defaultdict
 from copy import deepcopy
+from functools import cached_property
 
 from climetlab.core.order import build_remapping
 
-from .group import build_groups
+from .group import Groups, build_groups
 from .template import substitute
 from .utils import seconds
 
@@ -39,7 +41,7 @@ def assert_is_fieldset(obj):
     assert isinstance(obj, FieldSet), type(obj)
 
 
-def _get_data_request(data):
+def _datasource_request(data):
     date = None
     params_levels = defaultdict(set)
     params_steps = defaultdict(set)
@@ -77,8 +79,9 @@ def _get_data_request(data):
     params_steps = sort(params_steps)
     params_levels = sort(params_levels)
 
-    out = dict(param_level=params_levels, param_step=params_steps, area=area, grid=grid)
-    return out
+    return dict(
+        param_level=params_levels, param_step=params_steps, area=area, grid=grid
+    )
 
 
 class Cache:
@@ -86,64 +89,29 @@ class Cache:
 
 
 class Coords:
-    def __init__(self, **dic):
-        self._dic = dic
-        self.shape = [len(v) for k, v in self._dic.items()]
-
-        for k, v in self._dic.items():
-            assert k in [
-                "dates",
-                "resolution",
-                "grid_points",
-                "ensembles",
-                "variables",
-                "grid_values",
-            ], self._dic
-            setattr(self, k, v)
-
-
-class Input:
-    _dates = None
-
-    def __init__(self, config, selection=None, parent=None):
-        assert parent != self, (parent, self)
-        assert isinstance(config, dict), config
-        self._config = config
-        self.name = config.get("name")
-        self.parent = parent
+    def __init__(self, owner):
+        self.owner = owner
         self.cache = Cache()
-        self._dates = self._build_dates(config, selection)
-
-        self.order_by = parent.order_by
-        self.flatten_grid = parent.flatten_grid
-
-    def _build_dates(self, config, selection):
-        if selection:
-            assert len(selection) == 1, selection
-            assert "dates" in selection, selection
-            return deepcopy(selection["dates"])
-        if "dates" in config:
-            return deepcopy(config["dates"])
-        return None
 
     def _build_coords(self):
-        from_data = self.get_cube().user_coords
-        from_config = self.order_by
+        assert isinstance(self.owner.context, Context), type(self.owner.context)
+        assert isinstance(self.owner, Result), type(self.owner)
+        assert hasattr(self.owner, "context"), self.owner
+        assert hasattr(self.owner, "datasource"), self.owner
+        assert hasattr(self.owner, "get_cube"), self.owner
+        self.owner.datasource
+
+        from_data = self.owner.get_cube().user_coords
+        from_config = self.owner.context.order_by
 
         keys_from_config = list(from_config.keys())
         keys_from_data = list(from_data.keys())
         assert (
             keys_from_data == keys_from_config
-        ), f"Critical error: {keys_from_data=} != {keys_from_config=}. {self=}"
-
-        # assert keys[0] == "valid_datetime", keys
-        # assert keys[1] == "param_level", keys
-        # assert keys[2] == "number", keys
+        ), f"Critical error: {keys_from_data=} != {keys_from_config=}. {self.owner=}"
 
         variables_key = list(from_config.keys())[1]
         ensembles_key = list(from_config.keys())[2]
-        self.cache.variables = from_data[variables_key]  # "param_level"
-        self.cache.ensembles = from_data[ensembles_key]  # "number"
 
         if isinstance(from_config[variables_key], (list, tuple)):
             assert all(
@@ -155,8 +123,10 @@ class Input:
                 ]
             ), (from_data[variables_key], from_config[variables_key])
 
-        first_field = self.get_data[0]
+        self.cache.variables = from_data[variables_key]  # "param_level"
+        self.cache.ensembles = from_data[ensembles_key]  # "number"
 
+        first_field = self.owner.datasource[0]
         grid_points = first_field.grid_points()
         grid_values = list(range(len(grid_points[0])))
 
@@ -164,88 +134,55 @@ class Input:
         self.cache.resolution = first_field.resolution
         self.cache.grid_values = grid_values
 
-    def select(self, dates=None):
-        """Selects a subset of the data, only subsetting on dates is needed for now"""
-        if not dates:
-            return self
-        if not isinstance(dates, (list, tuple)):
-            dates = [dates]
-        return self.__class__(
-            self._config, selection=dict(dates=dates), parent=self.parent
-        )
+    def __getattr__(self, name):
+        if name in [
+            "variables",
+            "ensembles",
+            "resolution",
+            "grid_values",
+            "grid_points",
+        ]:
+            if not hasattr(self.cache, name):
+                self._build_coords()
+            return getattr(self.cache, name)
+        raise AttributeError(name)
 
-    @property
-    def data_request(self):
-        """Returns a dictionary with the parameters needed to retrieve the data"""
-        ds = self.get_data
-        return _get_data_request(ds)
 
+class HasCoordsMixin:
     @property
     def variables(self):
-        if not hasattr(self.cache, "variables"):
-            self._build_coords()
-        return self.cache.variables
+        return self._coords.variables
 
     @property
     def ensembles(self):
-        if not hasattr(self.cache, "ensembles"):
-            self._build_coords()
-        return self.cache.ensembles
+        return self._coords.ensembles
 
     @property
     def resolution(self):
-        if not hasattr(self.cache, "resolution"):
-            self._build_coords()
-        return self.cache.resolution
+        return self._coords.resolution
 
     @property
     def grid_values(self):
-        if not hasattr(self.cache, "grid_values"):
-            self._build_coords()
-        return self.cache.grid_values
+        return self._coords.grid_values
 
     @property
     def grid_points(self):
-        if not hasattr(self.cache, "grid_points"):
-            self._build_coords()
-        return self.cache.grid_points
-
-    @property
-    def dates_obj(self):
-        return build_groups(self.dates)
+        return self._coords.grid_points
 
     @property
     def dates(self):
-        return self._dates
-
-    @property
-    def remapping(self):
-        return build_remapping(self._config.get("remapping", {}))
-
-    def get_cube(self):
-        ds = self.get_data
-
-        start = time.time()
-        LOG.info("Sorting dataset %s %s", self.order_by, self.remapping)
-        cube = ds.cube(
-            self.order_by,
-            remapping=self.remapping,
-            flatten_values=self.flatten_grid,
-            patches={"number": {None: 0}},
-        )
-        cube = cube.squeeze()
-        LOG.info(f"Sorting done in {seconds(time.time()-start)}.")
-
-        return cube
+        if self._dates is None:
+            raise ValueError(f"No dates for {self}")
+        return self._dates.values
 
     @property
     def frequency(self):
-        return self.dates_obj.frequency
+        return self._dates.frequency
 
     @property
     def shape(self):
         return [
-            len(self.dates_obj.values),
+            len(self.dates),
             len(self.variables),
             len(self.ensembles),
             len(self.grid_values),
@@ -254,25 +191,96 @@ class Input:
     @property
     def coords(self):
         return {
-            "dates": self.dates_obj.values,
+            "dates": self.dates,
             "variables": self.variables,
             "ensembles": self.ensembles,
             "values": self.grid_values,
         }
 
-    def _raise_not_implemented(self):
-        raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
+
+class Action:
+    def __init__(self, context, /, *args, **kwargs):
+        assert isinstance(context, Context), type(context)
+        self.context = context
+        self.kwargs = kwargs
+        self.args = args
+
+    @classmethod
+    def _short_str(cls, x):
+        x = str(x)
+        if len(x) < 1000:
+            return x
+        return x[:1000] + "..."
 
     def __repr__(self, *args, __indent__="\n", **kwargs):
         more = ",".join([str(a)[:5000] for a in args])
         more += ",".join([f"{k}={v}"[:5000] for k, v in kwargs.items()])
 
-        if "dates" in self._config:
-            more += " *dates-in-config "
+        more = more[:5000]
+        txt = f"{self.__class__.__name__}:{__indent__}{more}"
+        if __indent__:
+            txt = txt.replace("\n", "\n  ")
+        return txt
 
-        dates = str(self.dates)
-        dates = dates[:5000]
-        more += dates
+    def select(self, dates, **kwargs):
+        return result_factory(self, dates=dates, **kwargs)
+
+    def _raise_not_implemented(self):
+        raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
+
+
+class Result(HasCoordsMixin):
+    empty = False
+
+    def __init__(self, context, dates=None):
+        assert isinstance(context, Context), type(context)
+        self.context = context
+        self._coords = Coords(self)
+        self._dates = dates
+
+    @property
+    def datasource(self):
+        self._raise_not_implemented()
+
+    @property
+    def data_request(self):
+        """Returns a dictionary with the parameters needed to retrieve the data"""
+        return _datasource_request(self.datasource)
+
+    def get_cube(self):
+        print(f"getting cube from {self.__class__.__name__}")
+        ds = self.datasource
+        assert_is_fieldset(ds)
+
+        remapping = self.context.remapping
+        order_by = self.context.order_by
+        flatten_grid = self.context.flatten_grid
+        start = time.time()
+        LOG.info("Sorting dataset %s %s", order_by, remapping)
+        assert order_by, order_by
+        cube = ds.cube(
+            order_by,
+            remapping=remapping,
+            flatten_values=flatten_grid,
+            patches={"number": {None: 0}},
+        )
+        cube = cube.squeeze()
+        LOG.info(f"Sorting done in {seconds(time.time()-start)}.")
+
+        return cube
+
+    def __repr__(self, *args, __indent__="\n", **kwargs):
+        more = ",".join([str(a)[:5000] for a in args])
+        more += ",".join([f"{k}={v}"[:5000] for k, v in kwargs.items()])
+
+        dates = " no-dates"
+        if self._dates is not None:
+            dates = f" {len(self.dates)} dates"
+            dates += " ("
+            dates += "/".join(d.strftime("%Y-%m-%d:%H") for d in self.dates)
+            if len(dates) > 100:
+                dates = dates[:100] + "..."
+            dates += ")"
 
         more = more[:5000]
         txt = f"{self.__class__.__name__}:{dates}{__indent__}{more}"
@@ -280,94 +288,211 @@ class Input:
             txt = txt.replace("\n", "\n  ")
         return txt
 
-    def check_compatibility(self, d1, d2):
-        pass
+    def _raise_not_implemented(self):
+        raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
 
 
-class TerminalInput(Input):
-    def __init__(self, config, **kwargs):
-        super().__init__(config, **kwargs)
+class EmptyResult(Result):
+    empty = True
 
-        from climetlab import load_dataset, load_source
+    def __init__(self, context, dates=None):
+        super().__init__(context)
 
-        self.func = {
-            None: load_source,
-            "load_source": load_source,
-            "load_dataset": load_dataset,
-            "climetlab.load_source": load_source,
-            "climetlab.load_dataset": load_dataset,
-            "cml.load_source": load_source,
-            "cml.load_dataset": load_dataset,
-        }[config.get("function")]
+    @cached_property
+    def datasource(self):
+        from climetlab import load_source
+
+        return load_source("empty")
+
+    @property
+    def variables(self):
+        return []
+
+
+class ReferencesSolver(dict):
+    def __init__(self, context, dates):
+        self.context = context
+        self.dates = dates
+
+    def __getitem__(self, key):
+        if key == "dates":
+            return self.dates.values
+        if key in self.context.references:
+            result = self.context.references[key]
+            return result.datasource
+        raise KeyError(key)
+
+
+class SourceResult(Result):
+    def __init__(self, context, dates, action, previous_sibling=None):
+        super().__init__(context, dates)
+        self.action = action
+
+        _args = self.action.args
+        _kwargs = self.action.kwargs
+
+        if "@" in _kwargs:
+            name = _kwargs.pop("@")
+            context.register_reference(name, self)
+
+        print("✅dates in source result:", dates)
+        vars = ReferencesSolver(context, dates)
+
+        self.args = substitute(_args, vars)
+        self.kwargs = substitute(_kwargs, vars)
+
+    @cached_property
+    def datasource(self):
+        from climetlab import load_source
+
+        return load_source(*self.args, **self.kwargs)
+
+    def __repr__(self):
+        content = " ".join([f"{v}" for v in self.args])
+        content += " ".join([f"{k}={v}" for k, v in self.kwargs.items()])
+
+        return super().__repr__(content)
+
+
+class JoinResult(Result):
+    def __init__(self, context, dates, results, **kwargs):
+        super().__init__(context, dates)
+        self.results = [r for r in results if not r.empty]
+
+    @property
+    def datasource(self):
+        ds = EmptyResult(self.context, self._dates).datasource
+        for i in self.results:
+            ds += i.datasource
+            assert_is_fieldset(ds), i
+        return ds
+
+    @property
+    def variables(self):
+        variables = super().variables
+        print("🆗variables in JoinResult:", variables)
+        return variables
+
+    def __repr__(self):
+        content = "\n".join([str(i) for i in self.results])
+        return super().__repr__(content)
+
+
+class SourceAction(Action):
+    def __init__(self, context, *args, **kwargs):
+        if "args" in kwargs and "kwargs" in kwargs:
+            assert len(kwargs) == 2, (args, kwargs)
+            assert not args, (args, kwargs)
+            args = kwargs.pop("args")
+            kwargs = kwargs.pop("kwargs")
+        print("sourceaction", args, kwargs)
+
+        super().__init__(context, *args, **kwargs)
+
+    def __repr__(self):
+        content = ""
+        content += ",".join([self._short_str(a) for a in self.args])
+        content += " ".join(
+            [self._short_str(f"{k}={v}") for k, v in self.kwargs.items()]
+        )
+        content = self._short_str(content)
+        return super().__repr__(content)
+
+    def select(self, dates):
+        return SourceResult(self.context, dates, action=self)
+
+
+class ConcatResult(Result):
+    def __init__(self, context, dates, results):
+        super().__init__(context, dates)
+        self.results = [r for r in results if not r.empty]
+
+    @property
+    def datasource(self):
+        ds = EmptyResult(self.context, self.dates).datasource
+        for i in self.results:
+            ds += i.datasource
+            assert_is_fieldset(ds), i
+        return ds
+
+    @property
+    def variables(self):
+        variables = None
+        for f in self.results:
+            if f.empty:
+                continue
+            if variables is None:
+                variables = f.variables
+            assert variables == f.variables, (variables, f.variables)
+        assert variables is not None, self.results
+        return variables
 
     @property
     def dates(self):
-        return self.parent.dates
+        dates = []
+        for i in self.results:
+            d = i.dates
+            if d is None:
+                continue
+            dates += d
+        assert isinstance(dates[0], datetime.datetime), dates[0]
+        return sorted(dates)
 
     @property
-    def get_data(self):
-        assert self.dates is not None, self.dates
-        config = deepcopy(self._config)
-
-        args = config.get("args", [])
-        kwargs = config.get("kwargs", {})
-
-        vars = {}
-        if self.dates:
-            vars["dates"] = self.dates_obj.values
-
-        previous = self.parent._find_previous(self)
-        if previous:
-            vars["previous"] = previous.get_data
-
-        args = substitute(args, vars)
-        kwargs = substitute(kwargs, vars)
-
-        return self.func(*args, **kwargs)
+    def frequency(self):
+        return build_groups(self.dates).frequency
 
     def __repr__(self):
-        content = " ".join([f"{k}={v}" for k, v in self._config.items()])
-        return f"{self.__class__.__name__}({self.name}) {content}"
+        content = "\n".join([str(i) for i in self.results])
+        return super().__repr__(content)
 
 
-class ConcatInput(Input):
-    def __init__(self, config, **kwargs):
-        super().__init__(config, **kwargs)
-        inputs = config["concat"]
-        self.inputs = []
-        for i in inputs:
-            i = build_input(i, parent=self, selection=kwargs.get("selection"))
-            # todo: remove i if empty
-            self.inputs.append(i)
-
-    @property
-    def dates(self):
-        assert len(self.inputs) == 1, "Multiple input in concat not implemented yet"
-        return self.inputs[0].dates
-        # dates = []
-        # for i in self.inputs:
-        #     d = i.dates
-        #     if d is None:
-        #         continue
-        #     dates += d
-        # assert isinstance(dates[0], datetime.datetime), dates[0]
-        # return sorted(dates)
+class ActionWithList(Action):
+    def __init__(self, context, *configs):
+        super().__init__(context, *configs)
+        self.actions = [action_factory(c, context) for c in configs]
 
     def __repr__(self):
-        content = "\n".join([str(i) for i in self.inputs])
-        dates = len(self.dates_obj.values)
-        return str(dates) + "-" + super().__repr__(content)
+        content = "\n".join([str(i) for i in self.actions])
+        return super().__repr__(content)
 
-    @property
-    def get_data(self):
-        if len(self.inputs) != 1:
-            raise NotImplementedError()
-        return self.inputs[0].get_data
 
-    def get_cube(self):
-        if len(self.inputs) != 1:
-            raise NotImplementedError()
-        return self.inputs[0].get_cube()
+class ConcatAction(ActionWithList):
+    def select(self, dates):
+        print("🆗dates in ConcatAction select:", dates)
+        return ConcatResult(self.context, None, [a.select(dates) for a in self.actions])
+
+
+class JoinAction(ActionWithList):
+    def select(self, dates):
+        return JoinResult(self.context, dates, [a.select(dates) for a in self.actions])
+
+
+class DateAction(Action):
+    def __init__(self, context, **kwargs):
+        super().__init__(context, **kwargs)
+
+        datesconfig = {}
+        subconfig = {}
+        for k, v in deepcopy(kwargs).items():
+            if k in ["start", "end", "frequency"]:
+                datesconfig[k] = v
+            else:
+                subconfig[k] = v
+
+        self._dates = build_groups(datesconfig)
+        self.content = action_factory(subconfig, context)
+
+    def select(self, dates):
+        newdates = self._dates.intersect(dates)
+        if newdates.empty():
+            return EmptyResult(self.context, dates=newdates)
+
+        print("🆗dates in DateAction select:", newdates)
+        return self.content.select(newdates)
+
+    def __repr__(self):
+        return super().__repr__(f"{self._dates}\n{self.content}")
 
 
 def merge_dicts(a, b):
@@ -384,73 +509,72 @@ def merge_dicts(a, b):
     return deepcopy(b)
 
 
-class JoinInput(Input):
-    def __init__(self, config, **kwargs):
-        super().__init__(config, **kwargs)
-        inputs = config["join"]
+class Context:
+    def __init__(self, loader=None):
+        self.order_by = loader.output.order_by
+        self.flatten_grid = loader.output.flatten_grid
+        self.remapping = build_remapping(loader.output.remapping)
 
-        self.inputs = []
-        previous_configs = {}
-        for config in inputs:
-            inherit = previous_configs.get(config.pop("inherit", None), {})
-            config = merge_dicts(inherit, config)
-            previous_configs[config["name"]] = config
-            input = build_input(config, parent=self, selection=kwargs.get("selection"))
-            self.inputs.append(input)
+        self.references = {}
 
-        for i in self.inputs[1:]:
-            self.check_compatibility(self.inputs[0], i)
+    def register_reference(self, name, obj):
+        assert isinstance(obj, Result), type(obj)
+        if name in self.references:
+            raise ValueError(f"Duplicate reference {name}")
+        self.references[name] = obj
 
-    def _find_previous(self, input):
-        previous = None
-        for i in self.inputs:
-            if i == input:
-                return previous
-            previous = i
-        return None
+    def find_reference(self, name):
+        if name in self.references:
+            return self.references[name]
+        # It can happend that the required name is not yet registered,
+        # even if it is defined in the config.
+        # Handling this case implies implementing a lazy inheritance resolution
+        # and would complexify the code. This is not implemented.
+        raise ValueError(f"Cannot find reference {name}")
 
-    def __repr__(self):
-        content = "\n".join([str(i) for i in self.inputs])
-        return f"{self.__class__.__name__}:\n{content}".replace("\n", "\n  ")
-
-    @property
-    def remapping(self):
-        remappings = [i.remapping for i in self.inputs]
-        return merge_remappings(*remappings)
-
-    @property
-    def resolution(self):
-        resolution = self.inputs[0].resolution
-        for i in self.inputs[1:]:
-            assert i.resolution == resolution
-        return resolution
-
-    @property
-    def get_data(self):
-        ds = self.inputs[0].get_data
-        for i in self.inputs[1:]:
-            ds += i.get_data
-            assert_is_fieldset(ds), i
-        return ds
+    # def resolve_inheritance(self, config):
+    #     if not isinstance(config, dict):
+    #         return config
+    #     if "inherit" in config:
+    #         config = deepcopy(config)
+    #         inherit = config.pop("inherit")
+    #         other = self.find_inheritance(inherit)
+    #         return merge_dicts(other._config, config)
+    #     return config
 
 
-def build_input(config, **kwargs):
-    config = deepcopy(config)
-
-    if isinstance(config, list):
-        return ConcatInput(config, **kwargs)
-
+def action_factory(config, context):
+    assert isinstance(context, Context), (type, context)
     if not isinstance(config, dict):
         raise ValueError(f"Invalid input config {config}")
 
-    if "concat" in config:
-        if not isinstance(config["concat"], list):
-            raise ValueError(f"Concat must be a list, got {config['concat']}")
-        return ConcatInput(config, **kwargs)
+    config = deepcopy(config)
+    assert len(config) == 1, config
 
-    if "join" in config:
-        if not isinstance(config["join"], list):
-            raise ValueError(f"Join must be a list, got {config['join']}")
-        return JoinInput(config, **kwargs)
+    key = list(config.keys())[0]
+    cls = dict(
+        concat=ConcatAction,
+        join=JoinAction,
+        #        pipe=PipeAction,
+        source=SourceAction,
+        #        remapping=RemappingAction,
+        dates=DateAction,
+    )[key]
 
-    return TerminalInput(config, **kwargs)
+    if isinstance(config[key], list):
+        args, kwargs = config[key], {}
+
+    if isinstance(config[key], dict):
+        args, kwargs = [], config[key]
+    return cls(context, *args, **kwargs)
+
+
+def result_factory(spec, dates, **kwargs):
+    return spec.result_class(spec, dates, **kwargs)
+
+
+def build_input(config, loader):
+    context = Context(loader=loader)
+    print(config)
+
+    return action_factory(config, context)

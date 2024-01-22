@@ -56,7 +56,7 @@ class Creator:
         from .loaders import ContentLoader
 
         with self._cache_context():
-            loader = ContentLoader.from_dataset(
+            loader = ContentLoader.from_dataset_config(
                 path=self.path, statistics_tmp=self.statistics_tmp, print=self.print
             )
             loader.load(parts=parts)
@@ -74,6 +74,7 @@ class Creator:
             force=force,
             statistics_tmp=self.statistics_tmp,
             statistics_output=output,
+            recompute=False,
         )
         loader.run()
 
@@ -83,15 +84,16 @@ class Creator:
         end=None,
         force=False,
     ):
-        from .loaders import RecomputeStatisticsLoader
+        from .loaders import StatisticsLoader
 
-        loader = RecomputeStatisticsLoader.from_dataset(
+        loader = StatisticsLoader.from_dataset(
             path=self.path,
             print=self.print,
             force=force,
             statistics_tmp=self.statistics_tmp,
             statistics_start=start,
             statistics_end=end,
+            recompute=True,
         )
         loader.run()
 

@@ -23,7 +23,41 @@ class Group(list):
         return f"Group({len(self)}, {content})"
 
 
-class Groups:
+class BaseGroups:
+    def __repr__(self):
+        try:
+            content = "+".join([str(len(list(g))) for g in self.groups])
+            for g in self.groups:
+                assert isinstance(g[0], datetime.datetime), g[0]
+            return f"{self.__class__.__name__}({content}={len(self.values)})({self.n_groups} groups)"
+        except:
+            return f"{self.__class__.__name__}({len(self.values)} dates)"
+
+    def intersect(self, dates):
+        if dates is None:
+            return self
+        if not isinstance(dates, Groups):
+            dates = build_groups(dates)
+        return GroupsIntersection(self, dates)
+
+    def empty(self):
+        return len(self.values) == 0
+
+    @cached_property
+    def n_groups(self):
+        return len(self.groups)
+
+    @property
+    def frequency(self):
+        datetimes = self.values
+        freq = (datetimes[1] - datetimes[0]).total_seconds() / 3600
+        assert round(freq) == freq, freq
+        assert int(freq) == freq, freq
+        frequency = int(freq)
+        return frequency
+
+
+class Groups(BaseGroups):
     def __init__(self, config):
         assert isinstance(config, dict), config
         for k, v in config.items():
@@ -42,31 +76,38 @@ class Groups:
     def groups(self):
         return [Group(g) for g in self.cls(self._config).groups]
 
-    @cached_property
-    def n_groups(self):
-        return len(self.groups)
+
+class EmptyGroups(BaseGroups):
+    def __init__(self):
+        self.values = []
+        self.groups = []
 
     @property
     def frequency(self):
-        datetimes = self.values
-        freq = (datetimes[1] - datetimes[0]).total_seconds() / 3600
-        assert round(freq) == freq, freq
-        assert int(freq) == freq, freq
-        frequency = int(freq)
-        return frequency
+        return None
 
-    def __repr__(self):
-        content = "+".join([str(len(list(g))) for g in self.groups])
-        for g in self.groups:
-            assert isinstance(g[0], datetime.datetime), g[0]
 
-        return f"{self.__class__.__name__}({content}={len(self.values)})({self.n_groups} groups)"
+class GroupsIntersection(BaseGroups):
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+
+    @cached_property
+    def values(self):
+        intersection = []
+        for e in self.a.values:
+            if e in self.b.values:
+                intersection.append(e)
+        return intersection
 
 
 def build_groups(*objs):
     if len(objs) > 1:
         raise NotImplementedError()
     obj = objs[0]
+
+    if isinstance(obj, GroupsIntersection):
+        return obj
 
     if isinstance(obj, Groups):
         return obj

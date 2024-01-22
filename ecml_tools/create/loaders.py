@@ -30,6 +30,7 @@ from .utils import (
     compute_directory_sizes,
     normalize_and_check_dates,
     progress_bar,
+    to_datetime,
 )
 from .writer import CubesFilter, DataWriter
 from .zarr import ZarrBuiltRegistry, add_zarr_dataset
@@ -40,29 +41,41 @@ VERSION = "0.20"
 
 
 class Loader:
-    def __init__(self, *, path, config, print=print, **kwargs):
+    def __init__(self, *, path, print=print, **kwargs):
         # Catch all floating point errors, including overflow, sqrt(<0), etc
         np.seterr(all="raise")
 
-        # config is the path to the config file or a dict with the config
-        assert isinstance(config, dict) or isinstance(config, str), config
         assert isinstance(path, str), path
-
-        self.main_config = loader_config(config)
 
         self.path = path
         self.kwargs = kwargs
         self.print = print
 
-        if "statistics_tmp" in kwargs:
-            statistics_tmp = kwargs["statistics_tmp"]
-            if statistics_tmp is None:
-                statistics_tmp = path + ".statistics"
+        statistics_tmp = kwargs.get("statistics_tmp") or self.path + ".statistics"
 
-            self.statistics_registry = StatisticsRegistry(
-                statistics_tmp,
-                history_callback=self.registry.add_to_history,
-            )
+        self.statistics_registry = StatisticsRegistry(
+            statistics_tmp,
+            history_callback=self.registry.add_to_history,
+        )
+
+    @classmethod
+    def from_config(cls, *, config, path, print=print, **kwargs):
+        # config is the path to the config file or a dict with the config
+        assert isinstance(config, dict) or isinstance(config, str), config
+        return cls(config=config, path=path, print=print, **kwargs)
+
+    @classmethod
+    def from_dataset_config(cls, *, path, print=print, **kwargs):
+        assert os.path.exists(path), f"Path {path} does not exist."
+        z = zarr.open(path, mode="r")
+        config = z.attrs["_create_yaml_config"]
+        print("Config loaded from zarr config: ", config)
+        return cls.from_config(config=config, path=path, print=print, **kwargs)
+
+    @classmethod
+    def from_dataset(cls, *, path, **kwargs):
+        assert os.path.exists(path), f"Path {path} does not exist."
+        return cls(path=path, **kwargs)
 
     @property
     def order_by(self):
@@ -77,21 +90,19 @@ class Loader:
         self.dataset_shape = ds.shape
         self.variables_names = ds.variables
 
-    @classmethod
-    def from_config(cls, *, config, path, print=print, **kwargs):
-        return cls(config=config, path=path, print=print, **kwargs)
+        z = zarr.open(self.path, "r")
+        start = z.attrs.get("statistics_start_date")
+        end = z.attrs.get("statistics_end_date")
+        if start:
+            start = to_datetime(start)
+        if end:
+            end = to_datetime(end)
+        self._statistics_start_date_from_dataset = start
+        self._statistics_end_date_from_dataset = end
 
     @cached_property
     def registry(self):
         return ZarrBuiltRegistry(self.path)
-
-    @classmethod
-    def from_dataset(cls, *, path, print=print, **kwargs):
-        assert os.path.exists(path), f"Path {path} does not exist."
-        z = zarr.open(path, mode="r")
-        config = z.attrs["_create_yaml_config"]
-        print("Config loaded from zarr: ", config)
-        return cls.from_config(config=config, path=path, print=print, **kwargs)
 
     def initialise_dataset_backend(self):
         z = zarr.open(self.path, mode="w")
@@ -123,17 +134,27 @@ class Loader:
 
 
 class InitialiseLoader(Loader):
-    def __init__(self, **kwargs):
+    def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
+        self.main_config = loader_config(config)
+
         self.statistics_registry.delete()
 
         self.groups = build_groups(*self.main_config.loop)
         self.output = build_output(self.main_config.output, parent=self)
-        self.inputs = build_input(self.main_config.input, parent=self, selection=None)
+        self.input = build_input(self.main_config.input, self)
 
+        print(self.input)
+        self.inputs = self.input.select(dates=None)
+        all_dates = self.inputs.dates
+        self.minimal_input = self.input.select(dates=[all_dates[0]])
+
+        print("GROUPS")
         print(self.groups)
+        print("ALL INPUTS")
         print(self.inputs)
-        # print([(k,len(v)) for k,v in self.inputs.coords.items()])
+        print("MINIMAL INPUT")
+        print(self.minimal_input)
 
     def initialise(self, check_name=True):
         """Create empty dataset"""
@@ -142,22 +163,20 @@ class InitialiseLoader(Loader):
         print(self.main_config)
         print("-------------------------")
 
-        dates = self.inputs.dates_obj.values
+        print("Using this fraction of the data to find metadata: :", self.minimal_input)
+        dates = self.inputs.dates
         if self.groups.frequency != self.inputs.frequency:
             raise ValueError(
-                f"Frequency mismatch: {self.groups.frequency} != {self.input.frequency}"
+                f"Frequency mismatch: {self.groups.frequency} != {self.inputs.frequency}"
             )
-        if self.groups.values[0] != self.inputs.dates_obj.values[0]:
+        if self.groups.values[0] != self.inputs.dates[0]:
             raise ValueError(
-                f"First date mismatch: {self.groups.values[0]} != {self.inputs.dates_obj.values[0]}"
+                f"First date mismatch: {self.groups.values[0]} != {self.inputs.dates[0]}"
             )
+        print("-------------------------")
 
         frequency = self.inputs.frequency
         assert isinstance(frequency, int), frequency
-
-        firstdate = self.inputs.dates_obj.values[0]
-        minimal_input = self.inputs.select(dates=firstdate)
-        print(minimal_input)
 
         self.print(f"Found {len(dates)} datetimes.")
         print(
@@ -170,25 +189,25 @@ class InitialiseLoader(Loader):
         )
         print("-------------------------")
 
-        variables = minimal_input.variables
+        variables = self.minimal_input.variables
         self.print(f"Found {len(variables)} variables : {','.join(variables)}.")
 
-        ensembles = minimal_input.ensembles
+        ensembles = self.minimal_input.ensembles
         self.print(
             f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}."
         )
 
-        grid_points = minimal_input.grid_points
+        grid_points = self.minimal_input.grid_points
         print(f"gridpoints size: {[len(i) for i in grid_points]}")
         print("-------------------------")
 
-        resolution = minimal_input.resolution
+        resolution = self.minimal_input.resolution
         print(f"{resolution=}")
 
         print("-------------------------")
-        coords = minimal_input.coords
+        coords = self.minimal_input.coords
         coords["dates"] = dates
-        total_shape = minimal_input.shape
+        total_shape = self.minimal_input.shape
         total_shape[0] = len(dates)
         self.print(f"total_shape = {total_shape}")
         print("-------------------------")
@@ -209,20 +228,27 @@ class InitialiseLoader(Loader):
         metadata["_create_yaml_config"] = self.main_config.get_serialisable_dict()
 
         metadata["description"] = self.main_config.description
-        metadata["resolution"] = resolution
+        metadata["version"] = VERSION
 
-        metadata["data_request"] = minimal_input.data_request
+        metadata["data_request"] = self.minimal_input.data_request
+        metadata["remapping"] = self.output.remapping
 
         metadata["order_by"] = self.output.order_by_as_list
-        metadata["remapping"] = self.inputs.remapping
         metadata["flatten_grid"] = self.output.flatten_grid
-        metadata["ensemble_dimension"] = len(ensembles)
 
+        metadata["ensemble_dimension"] = len(ensembles)
         metadata["variables"] = variables
-        metadata["version"] = VERSION
+        metadata["resolution"] = resolution
+
+        metadata["licence"] = self.main_config["licence"]
+        metadata["copyright"] = self.main_config["copyright"]
+
         metadata["frequency"] = frequency
         metadata["start_date"] = dates[0].isoformat()
         metadata["end_date"] = dates[-1].isoformat()
+
+        # metadata["statistics_start_date"]=self.output.get("statistics_start")
+        # metadata["statistics_end_date"]=self.output.get("statistics_end")
 
         if check_name:
             basename, ext = os.path.splitext(os.path.basename(self.path))
@@ -254,7 +280,7 @@ class InitialiseLoader(Loader):
         # write data
         ###############################################################
 
-        self.initialise_dataset_backend()  # this is backend specific
+        self.initialise_dataset_backend()
 
         self.update_metadata(**metadata)
 
@@ -275,11 +301,14 @@ class InitialiseLoader(Loader):
 
 
 class ContentLoader(Loader):
-    def __init__(self, **kwargs):
+    def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
+        self.main_config = loader_config(config)
+
         self.groups = build_groups(*self.main_config.loop)
         self.output = build_output(self.main_config.output, parent=self)
-        self.inputs = build_input(self.main_config.input, parent=self, selection=None)
+        self.input = build_input(self.main_config.input, self)
+
         self.read_dataset_metadata()
 
     def load(self, parts):
@@ -291,17 +320,18 @@ class ContentLoader(Loader):
         )
 
         total = len(self.registry.get_flags())
+        n_groups = len(self.groups.groups)
         filter = CubesFilter(parts=parts, total=total)
         for igroup, group in enumerate(self.groups.groups):
             if self.registry.get_flag(igroup):
-                LOG.info(f" -> Skipping {igroup} total={len(group)} (already done)")
+                LOG.info(f" -> Skipping {igroup} total={n_groups} (already done)")
                 continue
             if not filter(igroup):
                 continue
-            self.print(f" -> Processing i={igroup} total={len(group)}")
+            self.print(f" -> Processing {igroup} total={n_groups}")
             assert isinstance(group[0], datetime.datetime), group
 
-            inputs = self.inputs.select(dates=group)
+            inputs = self.input.select(dates=group)
             data_writer.write(inputs, igroup)
 
         self.registry.add_to_history("loading_data_end", parts=parts)
@@ -313,29 +343,114 @@ class ContentLoader(Loader):
         self.print_info()
 
 
-class GenericStatisticsLoader(Loader):
+class StatisticsLoader(Loader):
+    main_config = {}
+
     def __init__(
         self,
+        config=None,
         statistics_output=None,
         statistics_start=None,
         statistics_end=None,
         force=False,
+        recompute=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.recompute = recompute
+
+        self._write_to_dataset = True
+
+        self.statistics_output = statistics_output
+        if self.statistics_output:
+            self._write_to_dataset = False
+
+        if config:
+            self.main_config = loader_config(config)
+
+        self._statistics_start = statistics_start
+        self._statistics_end = statistics_end
+
+        self.check_complete(force=force)
+
+        self.read_dataset_metadata()
+        self.read_dataset_dates_metadata()
+
+    def run(self):
+        # if requested, recompute statistics from data
+        # into the temporary statistics directory
+        # (this should have been done already when creating the dataset content)
+        if self.recompute:
+            self.recompute_temporary_statistics()
+
+        # compute the detailed statistics from temporary statistics directory
+        detailed = self.get_detailed_stats()
+
+        if self._write_to_dataset:
+            self.write_detailed_statistics(detailed)
+
+        # compute the aggregated statistics from the detailed statistics
+        # for the selected dates
+        selected = {k: v[self.i_start : self.i_end + 1] for k, v in detailed.items()}
+        stats = compute_aggregated_statistics(selected, self.variables_names)
+
+        if self._write_to_dataset:
+            self.write_aggregated_statistics(stats)
+
+    def check_complete(self, force):
+        if self._complete:
+            return
+        if not force:
+            raise Exception(
+                f"❗Zarr {self.path} is not fully built. Use 'force' option."
+            )
+        if self._write_to_dataset:
+            print(
+                f"❗Zarr {self.path} is not fully built, not writting statistics into dataset."
+            )
+            self._write_to_dataset = False
 
     @property
-    def _incomplete(self):
-        return not all(self.registry.get_flags(sync=False))
+    def statistics_start(self):
+        user = self._statistics_start
+        config = self.main_config.get("output", {}).get("statistics_start")
+        dataset = self._statistics_start_date_from_dataset
+        return user or config or dataset
 
-    def read_dataset_dates_metadata(self, statistics_start, statistics_end):
+    @property
+    def statistics_end(self):
+        user = self._statistics_end
+        config = self.main_config.get("output", {}).get("statistics_end")
+        dataset = self._statistics_end_date_from_dataset
+        return user or config or dataset
+
+    @property
+    def _complete(self):
+        return all(self.registry.get_flags(sync=False))
+
+    def read_dataset_dates_metadata(self):
         ds = open_dataset(self.path)
-
-        subset = ds.dates_interval_to_indices(statistics_start, statistics_end)
+        subset = ds.dates_interval_to_indices(
+            self.statistics_start, self.statistics_end
+        )
         self.i_start = subset[0]
         self.i_end = subset[-1]
         self.date_start = ds.dates[subset[0]]
         self.date_end = ds.dates[subset[-1]]
+
+        # do not write statistics to dataset if dates do not match the ones in the dataset metadata
+        start = self._statistics_start_date_from_dataset
+        end = self._statistics_end_date_from_dataset
+
+        start_ok = start is None or to_datetime(self.date_start) == start
+        end_ok = end is None or to_datetime(self.date_end) == end
+        if not (start_ok and end_ok):
+            print(
+                f"Statistics start/end dates {self.date_start}/{self.date_end} "
+                f"do not match dates in the dataset metadata {start}/{end}. "
+                f"Will not write statistics to dataset."
+            )
+            self._write_to_dataset = False
 
         def check():
             i_len = self.i_end + 1 - self.i_start
@@ -347,13 +462,42 @@ class GenericStatisticsLoader(Loader):
 
         check()
 
-    def run(self):
-        detailed = self.get_detailed_stats()
-        self.write_detailed_statistics(detailed)
+    def recompute_temporary_statistics(self):
+        self.statistics_registry.create(exist_ok=True)
 
-        selected = {k: v[self.i_start : self.i_end + 1] for k, v in detailed.items()}
-        stats = compute_aggregated_statistics(selected, self.variables_names)
-        self.write_aggregated_statistics(stats)
+        self.print(
+            (
+                f"Building temporary statistics from data {self.path}. "
+                f"From {self.date_start} to {self.date_end}"
+            )
+        )
+
+        shape = (self.i_end + 1 - self.i_start, len(self.variables_names))
+        detailed_stats = dict(
+            minimum=np.full(shape, np.nan, dtype=np.float64),
+            maximum=np.full(shape, np.nan, dtype=np.float64),
+            sums=np.full(shape, np.nan, dtype=np.float64),
+            squares=np.full(shape, np.nan, dtype=np.float64),
+            count=np.full(shape, -1, dtype=np.int64),
+        )
+
+        ds = open_dataset(self.path)
+        key = (slice(self.i_start, self.i_end + 1), slice(None, None))
+        for i in progress_bar(
+            desc="Computing Statistics",
+            iterable=range(self.i_start, self.i_end + 1),
+        ):
+            i_ = i - self.i_start
+            data = ds[slice(i, i + 1), :]
+            one = compute_statistics(data, self.variables_names)
+            for k, v in one.items():
+                detailed_stats[k][i_] = v
+
+        print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
+        self.statistics_registry[key] = detailed_stats
+        self.statistics_registry.add_provenance(
+            name="provenance_recompute_statistics", config=self.main_config
+        )
 
     def get_detailed_stats(self):
         expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
@@ -373,11 +517,6 @@ class GenericStatisticsLoader(Loader):
             raise
 
     def write_detailed_statistics(self, detailed_stats):
-        if self.statistics_output:
-            print(
-                "Not writting detailed statistics into dataset because option 'output' is set."
-            )
-            return
         z = zarr.open(self.path)["_build"]
         for k, v in detailed_stats.items():
             if k == "variables_names":
@@ -424,112 +563,10 @@ class GenericStatisticsLoader(Loader):
         print(f"Wrote statistics in {self.path}")
 
 
-class RecomputeStatisticsLoader(GenericStatisticsLoader):
-    def __init__(
-        self,
-        statistics_start=None,
-        statistics_end=None,
-        force=False,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-
-        print(f"Recomputing temporary statistics from {self.statistics_registry}")
-        print("not writting statistics into dataset.")
-        self._write_to_dataset = False
-
-        if self._incomplete:
-            msg = f"❗Zarr {self.path} is not fully built"
-            if force:
-                print(msg)
-            else:
-                raise Exception(msg)
-
-        start = statistics_start or self.main_config.output.get("statistics_start")
-        end = statistics_end or self.main_config.output.get("statistics_end")
-        self.read_dataset_metadata()
-        self.read_dataset_dates_metadata(start, end)
-
-    def get_detailed_stats(self):
-        self._build_temporary_statistics()
-        return super().get_detailed_stats()
-
-    def _build_temporary_statistics(self):
-        self.statistics_registry.create(exist_ok=True)
-
-        self.print(
-            (
-                f"Building temporary statistics from data {self.path}. "
-                f"From {self.date_start} to {self.date_end}"
-            )
-        )
-
-        shape = (self.i_end + 1 - self.i_start, len(self.variables_names))
-        detailed_stats = dict(
-            minimum=np.full(shape, np.nan, dtype=np.float64),
-            maximum=np.full(shape, np.nan, dtype=np.float64),
-            sums=np.full(shape, np.nan, dtype=np.float64),
-            squares=np.full(shape, np.nan, dtype=np.float64),
-            count=np.full(shape, -1, dtype=np.int64),
-        )
-
-        ds = open_dataset(self.path)
-        key = (slice(self.i_start, self.i_end + 1), slice(None, None))
-        for i in progress_bar(
-            desc="Computing Statistics",
-            iterable=range(self.i_start, self.i_end + 1),
-        ):
-            i_ = i - self.i_start
-            data = ds[slice(i, i + 1), :]
-            one = compute_statistics(data, self.variables_names)
-            for k, v in one.items():
-                detailed_stats[k][i_] = v
-
-        print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
-        self.statistics_registry[key] = detailed_stats
-        self.statistics_registry.add_provenance(
-            name="provenance_recompute_statistics", config=self.main_config
-        )
-
-
-class StatisticsLoader(GenericStatisticsLoader):
-    def __init__(
-        self,
-        statistics_output=None,
-        force=False,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self._write_to_dataset = True
-
-        self.statistics_output = statistics_output
-
-        if self.statistics_output:
-            self._write_to_dataset = False
-
-        if self._incomplete:
-            msg = f"❗Zarr {self.path} is not fully built"
-            if force:
-                print(msg)
-                print("Not writting statistics into dataset.")
-                self._write_to_dataset = False
-            else:
-                raise Exception(msg)
-
-        start = self.main_config.output.get("statistics_start")
-        end = self.main_config.output.get("statistics_end")
-        self.read_dataset_metadata()
-        self.read_dataset_dates_metadata(start, end)
-
-
 class SizeLoader(Loader):
     def __init__(self, path, print):
         self.path = path
         self.print = print
-
-    @classmethod
-    def from_dataset(cls, path, print):
-        return cls(path, print)
 
     def add_total_size(self):
         dic = compute_directory_sizes(self.path)

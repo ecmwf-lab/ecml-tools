@@ -16,53 +16,55 @@ loop:
     group_by: monthly
 
 input:
-- dates:
-    start: 2020-12-30 00:00:00
-    end: 2021-01-03 12:00:00
-    frequency: 12h
   join:
-  - name: sfc_data
     remapping: *remapping
-    kwargs:
-      name: mars
-      class: ea
-      date: $datetime_format($dates,%Y%m%d)
-      time: $datetime_format($dates,%H%M)
-      #date: $datetime_format($dates,'2023%m%d')
-      #hdate: $dates
-      expver: '0001'
-      grid: 20./20.
-      levtype: sfc
-      param: [2t]
-      stream: oper
-      type: an
+    dates:
+      start: 2020-12-30 00:00:00
+      end: 2021-01-03 12:00:00
+      frequency: 12h
+    content:
+    - source:
+        name: sfc_data
+        kwargs:
+          name: mars
+          class: ea
+          date: $datetime_format($dates,%Y%m%d)
+          time: $datetime_format($dates,%H%M)
+          #date: $datetime_format($dates,'2023%m%d')
+          #hdate: $dates
+          expver: '0001'
+          grid: 20./20.
+          levtype: sfc
+          param: [2t]
+          stream: oper
+          type: an
 
-  - name: acc_data
-    inherit: sfc_data
-    remapping: *remapping
-    kwargs:
-      name: era5-accumulations
-      param: [cp, tp]
-      # era5-accumulations requires time in hours
-      time: $datetime_format($dates,%H)
+    - source:
+        name: acc_data
+        inherit: sfc_data
+        kwargs:
+          name: era5-accumulations
+          param: [cp, tp]
+          # era5-accumulations requires time in hours
+          time: $datetime_format($dates,%H)
 
-  - name: pl_data
-    inherit: sfc_data
-    remapping: *remapping
-    kwargs:
-      name: mars
-      levtype: pl
-      param: [q, t]
-      level: [50, 100]
+    - source:
+        name: pl_data
+        inherit: sfc_data
+        kwargs:
+          name: mars
+          levtype: pl
+          param: [q, t]
+          level: [50, 100]
 
-  - name: forcings
-    remapping: *remapping
-    kwargs:
-      name: constants
-      param:
-      - cos_latitude
-      # date: $dates
-      source_or_dataset: $previous
+    - source:
+        name: forcings
+        kwargs:
+          name: constants
+          param:
+          - cos_latitude
+          source_or_dataset: $previous
+
 
 
 output:

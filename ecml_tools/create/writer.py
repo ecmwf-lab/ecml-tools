@@ -229,21 +229,23 @@ class DataWriter:
         for i, cubelet in enumerate(bar):
             now = time.time()
             data = cubelet.to_numpy()
+            cubelet_coords = cubelet.coords
+
             bar.set_description(
                 f"Loading {i}/{total} {str(cubelet)} ({data.shape}) {cube=}"
             )
             load += time.time() - now
 
-            j = cubelet.extended_icoords[1]
+            j = cubelet_coords[1]
 
             check_data_values(
                 data[:],
                 name=self.variables_names[j],
-                log=[i, j, data.shape, cubelet.extended_icoords],
+                log=[i, j, data.shape, cubelet_coords],
             )
 
             now = time.time()
-            array[cubelet.extended_icoords] = data
+            array[cubelet_coords] = data
             save += time.time() - now
 
         now = time.time()
