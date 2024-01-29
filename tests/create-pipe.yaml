@@ -35,11 +35,16 @@ input:
           param: [2t]
           levtype: sfc
 
-    - source:
-        '<<': *mars_request
-        param: [q, t]
-        levtype: pl
-        level: [50, 100]
+    - pipe:
+      - source:
+          '<<': *mars_request
+          param: [q, t]
+          levtype: pl
+          level: [50, 100]
+      - filter:
+          param: [q]
+      - filter:
+          level: [50]
 
     - source:
         '<<': *mars_request

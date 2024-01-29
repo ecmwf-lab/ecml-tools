@@ -149,11 +149,13 @@ class InitialiseLoader(Loader):
         all_dates = self.inputs.dates
         self.minimal_input = self.input.select(dates=[all_dates[0]])
 
-        print("GROUPS")
+        print("✅ GROUPS")
         print(self.groups)
-        print("ALL INPUTS")
+        print("✅ ACTIONS")
+        print(self.input._action)
+        print("✅ ALL INPUTS")
         print(self.inputs)
-        print("MINIMAL INPUT")
+        print("✅ MINIMAL INPUT")
         print(self.minimal_input)
 
     def initialise(self, check_name=True):
@@ -163,7 +165,6 @@ class InitialiseLoader(Loader):
         print(self.main_config)
         print("-------------------------")
 
-        print("Using this fraction of the data to find metadata: :", self.minimal_input)
         dates = self.inputs.dates
         if self.groups.frequency != self.inputs.frequency:
             raise ValueError(
