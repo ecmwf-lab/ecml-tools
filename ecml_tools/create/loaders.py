@@ -77,13 +77,18 @@ class Loader:
         assert os.path.exists(path), f"Path {path} does not exist."
         return cls(path=path, **kwargs)
 
-    @property
-    def order_by(self):
-        return self.output.order_by
+    def build_input(self):
+        from climetlab.core.order import build_remapping
 
-    @property
-    def flatten_grid(self):
-        return self.output.flatten_grid
+        builder = build_input(
+            self.main_config.input,
+            order_by=self.output.order_by,
+            flatten_grid=self.output.flatten_grid,
+            remapping=build_remapping(self.output.remapping),
+        )
+        print("✅ INPUT_BUILDER")
+        print(builder)
+        return builder
 
     def read_dataset_metadata(self):
         ds = open_dataset(self.path)
@@ -142,7 +147,7 @@ class InitialiseLoader(Loader):
 
         self.groups = build_groups(*self.main_config.loop)
         self.output = build_output(self.main_config.output, parent=self)
-        self.input = build_input(self.main_config.input, self)
+        self.input = self.build_input()
 
         print(self.input)
         self.inputs = self.input.select(dates=None)
@@ -151,8 +156,6 @@ class InitialiseLoader(Loader):
 
         print("✅ GROUPS")
         print(self.groups)
-        print("✅ ACTIONS")
-        print(self.input._action)
         print("✅ ALL INPUTS")
         print(self.inputs)
         print("✅ MINIMAL INPUT")
@@ -308,8 +311,7 @@ class ContentLoader(Loader):
 
         self.groups = build_groups(*self.main_config.loop)
         self.output = build_output(self.main_config.output, parent=self)
-        self.input = build_input(self.main_config.input, self)
-
+        self.input = self.build_input()
         self.read_dataset_metadata()
 
     def load(self, parts):

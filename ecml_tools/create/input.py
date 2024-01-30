@@ -351,6 +351,7 @@ class SourceResult(Result):
     def datasource(self):
         from climetlab import load_source
 
+        print(f"loading source with {self.args} {self.kwargs}")
         return load_source(*self.args, **self.kwargs)
 
     def __repr__(self):
@@ -647,10 +648,10 @@ def step_factory(config, context, _upstream_action):
 
 
 class Context:
-    def __init__(self, loader=None):
-        self.order_by = loader.output.order_by
-        self.flatten_grid = loader.output.flatten_grid
-        self.remapping = build_remapping(loader.output.remapping)
+    def __init__(self, /, order_by, flatten_grid, remapping):
+        self.order_by = order_by
+        self.flatten_grid = flatten_grid
+        self.remapping = build_remapping(remapping)
 
         self.references = {}
 
@@ -671,17 +672,17 @@ class Context:
 
 
 class InputBuilder:
-    def __init__(self, config, loader):
-        self.loader = loader
+    def __init__(self, config, **kwargs):
+        self.kwargs = kwargs
         self.config = config
 
     @property
     def _action(self):
-        context = Context(loader=self.loader)
+        context = Context(**self.kwargs)
         return action_factory(self.config, context)
 
     def select(self, dates):
+        """ This changes the context. """
         return self._action.select(dates)
-
 
 build_input = InputBuilder
