@@ -35,7 +35,7 @@ def compare(dir1, dir2):
     files1 = set(os.listdir(dir1))
     files2 = set(os.listdir(dir2))
     files = files1.union(files2)
-    
+
     for f in files:
         path1 = os.path.join(dir1, f)
         path2 = os.path.join(dir2, f)
@@ -47,8 +47,8 @@ def compare(dir1, dir2):
 
         assert os.path.isfile(path2), f"File {path2} does not exist"
 
-        content1 = open(path1,'rb').read()
-        content2 = open(path2,'rb').read()
+        content1 = open(path1, "rb").read()
+        content2 = open(path2, "rb").read()
 
         if f == ".zattrs":
             compare_dot_zattrs(json.loads(content1), json.loads(content2))
@@ -66,15 +66,20 @@ def _test_create(name):
     output = os.path.join(here, name + "-output", name + ".zarr")
     reference = os.path.join(here, name + "-reference", name + ".zarr")
 
-    c = Creator(output, config=config, cache=None, overwrite=True)
+    # cache=None is using the default cache
+    c = Creator(
+        output,
+        config=config,
+        cache=None,
+        overwrite=True,
+    )
     c.create()
 
     # ds = open_dataset(zarr_path)
-    # assert ds.shape == 
-    # assert ds.variables == 
+    # assert ds.shape ==
+    # assert ds.variables ==
 
     compare(reference, output)
-
 
 
 def test_create_concat():
