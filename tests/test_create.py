@@ -30,6 +30,18 @@ def compare_dot_zattrs(a, b):
     return a == b, (a, b)
 
 
+def compare_zarr(dir1, dir2):
+    a = open_dataset(dir1)
+    b = open_dataset(dir2)
+    # compare_dir(dir1, dir2)
+    assert a.shape == b.shape, (a.shape, b.shape)
+    assert (a.dates == b.dates).all(), (a.dates, b.dates)
+    print(a.variables, b.variables)
+    assert (a.variables == b.variables).all(), (a.variables, b.variables)
+    for k, date in zip(range(a.shape[0]), a.dates):
+        for j in range(a.shape[1]):
+            assert (a[k, j] == b[k, j]).all(), (k, date,j, a[k, j], b[k, j])
+
 def compare(dir1, dir2):
     """Compare two directories recursively."""
     files1 = set(os.listdir(dir1))
@@ -79,7 +91,7 @@ def _test_create(name):
     # assert ds.shape ==
     # assert ds.variables ==
 
-    compare(reference, output)
+    compare_zarr(reference, output)
 
 
 def test_create_concat():
@@ -95,6 +107,15 @@ def test_create_pipe():
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    _test_create(sys.argv[1])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--name", help="Name of the test case")
+    parser.add_argument("--compare", nargs=2, help="Compare two directories")
+
+    args = parser.parse_args()
+
+    if args.compare:
+        compare_zarr(args.compare[0], args.compare[1])
+    else:
+        _test_create(args.name)
