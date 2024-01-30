@@ -1,0 +1,54 @@
+description: "develop version of the dataset for a few days and a few variables, once data on mars is cached it should take a few seconds to generate the dataset"
+dataset_status: testing
+purpose: aifs
+name: creat-join-old
+
+loop:
+  dates:
+    start: 2020-12-30
+    end: 2021-01-03
+    group_by: monthly
+
+input:
+- sfc_data:
+    kwargs:
+      name: mars
+      expver: '0001'
+      class: ea
+      grid: 20./20.
+      stream: oper
+      type: an
+      date: $dates
+      time: [0, 12]
+      param: [2t]
+      levtype: sfc
+- acc_data:
+    inherit: sfc_data
+    kwargs:
+      name: era5-accumulations
+      param: [cp, tp]
+- pl_data:
+    inherit: sfc_data
+    kwargs:
+      name: mars
+      param: [q, t]
+      levtype: pl
+      level: [50, 100]
+- forcings:
+    kwargs:
+      name: constants
+      param:
+      - cos_latitude
+      source_or_dataset: $sfc_data
+
+output:
+  chunking:
+    valid_datetime: 1
+  dtype: float32
+  order_by:
+  - valid_datetime
+  - param_level: ['2t', 'cos_latitude', 'cp', 'q_100', 'q_50', 't_100', 't_50', 'tp']
+  remapping:
+    param_level: '{param}_{levelist}'
+  statistics: param_level
+  statistics_end: 2021

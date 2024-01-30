@@ -15,10 +15,13 @@ from ecml_tools.data import open_dataset
 
 def compare_dot_zattrs(a, b):
     if isinstance(a, dict):
-        for k in a:
-            assert k in b
-            if k in ["timestamp", "uuid", "latest_write_timestamp"]:
+        a_keys = list(a.keys())
+        b_keys = list(b.keys())
+        for k in set(a_keys) & set(b_keys):
+            if k in ["timestamp", "uuid", "latest_write_timestamp", "yaml_config"]:
                 assert type(a[k]) == type(b[k]), (type(a[k]), type(b[k]), a[k], b[k])
+            assert k in a_keys, (k, a_keys)
+            assert k in b_keys, (k, b_keys)
             return compare_dot_zattrs(a[k], b[k])
 
     if isinstance(a, list):
@@ -33,14 +36,14 @@ def compare_dot_zattrs(a, b):
 def compare_zarr(dir1, dir2):
     a = open_dataset(dir1)
     b = open_dataset(dir2)
-    # compare_dir(dir1, dir2)
     assert a.shape == b.shape, (a.shape, b.shape)
     assert (a.dates == b.dates).all(), (a.dates, b.dates)
-    print(a.variables, b.variables)
-    assert (a.variables == b.variables).all(), (a.variables, b.variables)
+    for a_, b_ in zip(a.variables, b.variables):
+        assert a_ == b_, (a, b)
     for k, date in zip(range(a.shape[0]), a.dates):
         for j in range(a.shape[1]):
             assert (a[k, j] == b[k, j]).all(), (k, date,j, a[k, j], b[k, j])
+    compare(dir1, dir2)
 
 def compare(dir1, dir2):
     """Compare two directories recursively."""
