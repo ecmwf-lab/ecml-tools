@@ -3,13 +3,6 @@ dataset_status: testing
 purpose: aifs
 name: test-small
 
-loop:
-- dates:
-    start: 2020-12-30 00:00:00
-    end: 2021-01-03 12:00:00
-    frequency: 12h
-    group_by: monthly
-
 common:
   mars_request: &mars_request
     name: mars
@@ -20,13 +13,19 @@ common:
     type: an
     date: $datetime_format($dates,%Y%m%d)
     time: $datetime_format($dates,%H%M)
-
-
-input:
-  dates:
+  dates: &dates_anchor
     start: 2020-12-30 00:00:00
     end: 2021-01-03 12:00:00
     frequency: 12h
+
+loop:
+- dates:
+    "<<": *dates_anchor
+    group_by: monthly
+
+input:
+  dates:
+    "<<": *dates_anchor
     join:
     - label:
         name: previous_data
