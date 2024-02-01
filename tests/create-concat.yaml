@@ -2,6 +2,7 @@ description: "develop version of the dataset for a few days and a few variables,
 dataset_status: testing
 purpose: aifs
 name: test-small
+config_format_version: 2
 
 loop:
 - dates:
