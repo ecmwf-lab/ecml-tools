@@ -165,6 +165,10 @@ class Dataset:
     def __repr__(self):
         return self.__class__.__name__ + "()"
 
+    def _get_tuple(self, n):
+        first, rest = n[0], n[1:]
+        return self[first][rest]
+
 
 class Source:
     def __init__(self, dataset, index, source=None, info=None):
@@ -288,12 +292,16 @@ class Zarr(Dataset):
         return self.data[n]
 
     @cached_property
+    def chunks(self):
+        return self.z.data.chunks
+
+    @cached_property
     def shape(self):
         return self.data.shape
 
     @cached_property
     def dtype(self):
-        return self.data.dtype
+        return self.z.data.dtype
 
     @cached_property
     def dates(self):
@@ -361,7 +369,11 @@ class Zarr(Dataset):
         return self.dates[-1]
 
     def metadata_specific(self):
-        return super().metadata_specific(attrs=dict(self.z.attrs))
+        return super().metadata_specific(
+            attrs=dict(self.z.attrs),
+            chunks=self.chunks,
+            dtype=str(self.dtype),
+        )
 
     def source(self, index):
         return Source(self, index, info=self.path)
@@ -528,6 +540,9 @@ class Concat(Combined):
         return sum(len(i) for i in self.datasets)
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         if isinstance(n, slice):
             return self._get_slice(n)
 
@@ -609,8 +624,12 @@ class GivenAxis(Combined):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         if isinstance(n, slice):
             return self._get_slice(n)
+
         return np.concatenate([d[n] for d in self.datasets], axis=self.axis - 1)
 
 
@@ -658,8 +677,12 @@ class Join(Combined):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         if isinstance(n, slice):
             return self._get_slice(n)
+
         return np.concatenate([d[n] for d in self.datasets])
 
     @cached_property
@@ -743,8 +766,12 @@ class Subset(Forwards):
         super().__init__(dataset)
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         if isinstance(n, slice):
             return self._get_slice(n)
+
         n = self.indices[n]
         return self.dataset[n]
 
@@ -794,9 +821,13 @@ class Select(Forwards):
         super().__init__(dataset)
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         row = self.dataset[n]
         if isinstance(n, slice):
             return row[:, self.indices]
+
         return row[self.indices]
 
     @cached_property
