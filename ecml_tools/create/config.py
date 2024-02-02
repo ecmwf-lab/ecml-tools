@@ -59,6 +59,8 @@ class Config(DictObj):
         if isinstance(config, str):
             self.config_path = os.path.realpath(config)
             config = load_json_or_yaml(config)
+        else:
+            config = deepcopy(config)
         config = resolve_includes(config)
         super().__init__(config)
 
