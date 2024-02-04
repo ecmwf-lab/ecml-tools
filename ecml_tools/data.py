@@ -10,6 +10,7 @@ import datetime
 import logging
 import os
 import re
+import warnings
 from functools import cached_property
 from pathlib import PurePath
 
@@ -23,12 +24,29 @@ LOG = logging.getLogger(__name__)
 
 __all__ = ["open_dataset", "open_zarr", "debug_zarr_loading"]
 
-DEBUG_ZARR_LOADING = False
+DEBUG_ZARR_LOADING = int(os.environ.get("DEBUG_ZARR_LOADING", "0"))
 
 
 def debug_zarr_loading(on_off):
     global DEBUG_ZARR_LOADING
     DEBUG_ZARR_LOADING = on_off
+
+
+def _make_slice_or_index_from_list_or_tuple(indices):
+    """
+    Convert a list or tuple of indices to a slice or an index, if possible.
+    """
+    if len(indices) == 1:
+        return indices[0]
+
+    step = indices[1] - indices[0]
+
+    if step > 0 and all(
+        indices[i] - indices[i - 1] == step for i in range(1, len(indices))
+    ):
+        return slice(indices[0], indices[-1] + step, step)
+
+    return indices
 
 
 class Dataset:
@@ -173,6 +191,7 @@ class Dataset:
         return self.__class__.__name__ + "()"
 
     def _get_tuple(self, n):
+        warnings.warn(f"Naive tuple indexing used with {self}, likely to be slow.")
         first, rest = n[0], n[1:]
         return self[first][rest]
 
@@ -267,17 +286,24 @@ class S3Store(ReadOnlyStore):
 
 class DebugStore(ReadOnlyStore):
     def __init__(self, store):
+        assert not isinstance(store, DebugStore)
         self.store = store
 
     def __getitem__(self, key):
-        print("GET", key)
+        # print()
+        print("GET", key, self)
+        # traceback.print_stack(file=sys.stdout)
         return self.store[key]
 
     def __len__(self):
         return len(self.store)
 
     def __iter__(self):
+        warnings.warn("DebugStore: iterating over the store")
         return iter(self.store)
+
+    def __contains__(self, key):
+        return key in self.store
 
 
 def open_zarr(path):
@@ -317,10 +343,10 @@ class Zarr(Dataset):
         return self.data.shape[0]
 
     def __getitem__(self, n):
-        try:
-            return self.data[n]
-        except IndexError:
+        if isinstance(n, tuple) and any(not isinstance(i, (int, slice)) for i in n):
             return self._getitem_extended(n)
+
+        return self.data[n]
 
     def _getitem_extended(self, index):
         """
@@ -336,14 +362,12 @@ class Zarr(Dataset):
         axes = []
         data = []
         for n in self._unwind(index[0], index[1:], shape, 0, axes):
-            data.append(self[n])
+            data.append(self.data[n])
 
-        assert len(axes) == 1, axes
+        assert len(axes) == 1, axes  # Not implemented for more than one axis
         return np.concatenate(data, axis=axes[0])
 
     def _unwind(self, index, rest, shape, axis, axes):
-        # print(' ' * axis, '====>', index, '+', rest)
-
         if not isinstance(index, (int, slice, list, tuple)):
             try:
                 # NumPy arrays, TensorFlow tensors, etc.
@@ -855,6 +879,19 @@ class Subset(Forwards):
         # using a slice
         indices = [self.indices[i] for i in range(*s.indices(self._len))]
         return np.stack([self.dataset[i] for i in indices])
+
+    def _get_tuple(self, n):
+        first, rest = n[0], n[1:]
+
+        if isinstance(first, int):
+            return self.dataset[(self.indices[first],) + rest]
+
+        if isinstance(first, slice):
+            indices = tuple(self.indices[i] for i in range(*first.indices(self._len)))
+            indices = _make_slice_or_index_from_list_or_tuple(indices)
+            return self.dataset[(indices,) + rest]
+
+        raise NotImplementedError(f"Only int and slice supported not {type(first)}")
 
     def __len__(self):
         return len(self.indices)

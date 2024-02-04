@@ -193,7 +193,7 @@ def slices(ds, start=None, end=None, step=None):
     for i, n in enumerate(range(start, end, step)):
         assert (s[i] == ds[n]).all()
 
-    x = ds[0:10, :, 0]
+    ds[0:10, :, 0]
 
     if ds.shape[2] > 1:
         ds[0:10, :, np.array([1, 0])]
