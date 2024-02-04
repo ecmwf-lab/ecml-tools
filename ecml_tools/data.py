@@ -191,9 +191,7 @@ class Dataset:
         return self.__class__.__name__ + "()"
 
     def _get_tuple(self, n):
-        warnings.warn(f"Naive tuple indexing used with {self}, likely to be slow.")
-        first, rest = n[0], n[1:]
-        return self[first][rest]
+        raise NotImplementedError(f"Tuple not supported: {n} (class {self.__class__.__name__})")
 
 
 class Source:
@@ -932,11 +930,11 @@ class Select(Forwards):
         super().__init__(dataset)
 
     def __getitem__(self, n):
-        if isinstance(n, tuple):
-            return self._get_tuple(n)
+        # if isinstance(n, tuple):
+        #     return self._get_tuple(n)
 
         row = self.dataset[n]
-        if isinstance(n, slice):
+        if isinstance(n, (slice, tuple)):
             return row[:, self.indices]
 
         return row[self.indices]

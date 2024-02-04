@@ -173,6 +173,15 @@ def same_stats(ds1, ds2, vars1, vars2=None):
         ).all()
 
 
+class IndexTester:
+    def __init__(self, ds):
+        self.ds = ds
+        self.np = ds[:]  # Numpy array
+
+    def __getitem__(self, index):
+        assert (self.ds[index] == self.np[index]).all()
+
+
 def slices(ds, start=None, end=None, step=None):
     if start is None:
         start = 5
@@ -181,22 +190,18 @@ def slices(ds, start=None, end=None, step=None):
     if step is None:
         step = len(ds) // 10
 
-    s = ds[start:end:step]
+    t = IndexTester(ds)
 
-    assert s[0].shape == ds[0].shape, (
-        s.shape,
-        ds.shape,
-        len(list(range(start, end, step))),
-        list(range(start, end, step)),
-    )
+    t[start:end:step]
+    t[start:end]
+    t[start:]
+    t[:end]
+    t[::step]
 
-    for i, n in enumerate(range(start, end, step)):
-        assert (s[i] == ds[n]).all()
+    t[0:10, :, 0]
 
-    ds[0:10, :, 0]
-
-    if ds.shape[2] > 1:
-        ds[0:10, :, np.array([1, 0])]
+    if ds.shape[2] > 1:  # Ensemble dimension
+        t[0:10, :, (0, 1)]
 
 
 def make_row(args, ensemble=False, grid=False):
