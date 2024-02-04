@@ -317,7 +317,53 @@ class Zarr(Dataset):
         return self.data.shape[0]
 
     def __getitem__(self, n):
-        return self.data[n]
+        try:
+            return self.data[n]
+        except IndexError:
+            return self._getitem_extended(n)
+
+    def _getitem_extended(self, index):
+        """
+        Allows to use slices, lists, and tuples to select data from the dataset.
+        Zarr does not support indexing with lists/arrays directly, so we need to implement it ourselves.
+        """
+
+        if not isinstance(index, tuple):
+            return self[index]
+
+        shape = self.data.shape
+
+        axes = []
+        data = []
+        for n in self._unwind(index[0], index[1:], shape, 0, axes):
+            data.append(self[n])
+
+        assert len(axes) == 1, axes
+        return np.concatenate(data, axis=axes[0])
+
+    def _unwind(self, index, rest, shape, axis, axes):
+        # print(' ' * axis, '====>', index, '+', rest)
+
+        if not isinstance(index, (int, slice, list, tuple)):
+            try:
+                # NumPy arrays, TensorFlow tensors, etc.
+                index = tuple(index.tolist())
+                assert not isinstance(index, bool), "Mask not supported"
+            except AttributeError:
+                pass
+
+        if isinstance(index, (list, tuple)):
+            axes.append(axis)  # Dimension of the concatenation
+            for i in index:
+                yield from self._unwind(i, rest, shape, axis, axes)
+            return
+
+        if len(rest) == 0:
+            yield (index,)
+            return
+
+        for n in self._unwind(rest[0], rest[1:], shape, axis + 1, axes):
+            yield (index,) + n
 
     @cached_property
     def chunks(self):
