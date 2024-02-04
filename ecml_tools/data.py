@@ -21,7 +21,14 @@ import ecml_tools
 
 LOG = logging.getLogger(__name__)
 
-__all__ = ["open_dataset", "open_zarr"]
+__all__ = ["open_dataset", "open_zarr", "debug_zarr_loading"]
+
+DEBUG_ZARR_LOADING = False
+
+
+def debug_zarr_loading(on_off):
+    global DEBUG_ZARR_LOADING
+    DEBUG_ZARR_LOADING = on_off
 
 
 class Dataset:
@@ -258,14 +265,35 @@ class S3Store(ReadOnlyStore):
         return response["Body"].read()
 
 
+class DebugStore(ReadOnlyStore):
+    def __init__(self, store):
+        self.store = store
+
+    def __getitem__(self, key):
+        print("GET", key)
+        return self.store[key]
+
+    def __len__(self):
+        return len(self.store)
+
+    def __iter__(self):
+        return iter(self.store)
+
+
 def open_zarr(path):
     try:
         store = path
+
         if store.startswith("http://") or store.startswith("https://"):
             store = HTTPStore(store)
 
         elif store.startswith("s3://"):
             store = S3Store(store)
+
+        if DEBUG_ZARR_LOADING:
+            if isinstance(store, str):
+                store = zarr.storage.DirectoryStore(store)
+            store = DebugStore(store)
 
         return zarr.convenience.open(store, "r")
     except Exception:
