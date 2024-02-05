@@ -51,26 +51,6 @@ def _make_slice_or_index_from_list_or_tuple(indices):
     return indices
 
 
-def _tuple_with_slices(t):
-    """
-    Replace all integers in a tuple with slices, so we preserve the dimensionality.
-    """
-
-    result = tuple(slice(i, i + 1) if isinstance(i, int) else i for i in t)
-    changes = tuple(j for (j, i) in enumerate(t) if isinstance(i, int))
-
-    return result, changes
-
-
-def _apply_tuple_changes(result, changes):
-    if changes:
-        shape = result.shape
-        for i in changes:
-            assert shape[i] == 1, shape
-        result = np.squeeze(result, axis=changes)
-    return result
-
-
 class Dataset:
     arguments = {}
 
