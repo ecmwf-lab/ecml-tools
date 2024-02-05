@@ -597,9 +597,10 @@ def action_factory(config, context):
     if not isinstance(config, dict):
         raise ValueError(f"Invalid input config {config}")
 
-    config = deepcopy(config)
-    assert len(config) == 1, config
+    if len(config) != 1:
+        raise ValueError(f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}")
 
+    config = deepcopy(config)
     key = list(config.keys())[0]
     cls = dict(
         concat=ConcatAction,
