@@ -799,7 +799,7 @@ class Join(Combined):
         print("Join._get_tuple", index)
         assert len(index) > 1, index
 
-        index, changed = _tuple_with_slices(index)
+        index, changes = index_to_slices(index)
 
         selected_variables = index[1]
 
@@ -816,7 +816,7 @@ class Join(Combined):
             self.shape,
             [r.shape for r in result],
             selected_variables,
-            changed,
+            changes,
         )
         result = np.concatenate(result, axis=1)
         print("Join._get_tuple", result.shape)
@@ -826,7 +826,7 @@ class Join(Combined):
         # result = np.concatenate(result)
         # result = np.stack(result)
 
-        return _apply_tuple_changes(result[:, selected_variables], changed)
+        return apply_index_to_slices_changes(result[:, selected_variables], changes)
 
     def _get_slice(self, s):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
