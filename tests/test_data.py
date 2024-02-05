@@ -303,7 +303,7 @@ def test_concat():
 
     same_stats(ds, open_dataset("test-2021-2022-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -353,7 +353,7 @@ def test_join_1():
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -401,7 +401,7 @@ def test_join_2():
         "abcdef",
     )
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -441,7 +441,7 @@ def test_join_3():
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -476,7 +476,7 @@ def test_subset_1():
     assert ds.shape == (365 * 3 * 2, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -512,7 +512,7 @@ def test_subset_2():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -553,7 +553,7 @@ def test_subset_3():
     assert ds.shape == (365 * 2, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -589,7 +589,7 @@ def test_subset_4():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -625,7 +625,7 @@ def test_subset_5():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -665,7 +665,7 @@ def test_subset_6():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -701,7 +701,7 @@ def test_subset_7():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -744,7 +744,7 @@ def test_subset_8():
 
     same_stats(ds, open_dataset("test-2021-2021-1h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -772,7 +772,7 @@ def test_select_1():
     assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -800,7 +800,7 @@ def test_select_2():
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -828,7 +828,7 @@ def test_select_3():
     assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -856,7 +856,7 @@ def test_rename():
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -883,7 +883,7 @@ def test_drop():
     assert ds.shape == (365 * 4, 3, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -911,7 +911,7 @@ def test_reorder_1():
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -939,7 +939,7 @@ def test_reorder_2():
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -971,7 +971,7 @@ def test_constructor_1():
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -1001,7 +1001,7 @@ def test_constructor_2():
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -1031,7 +1031,7 @@ def test_constructor_3():
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -1062,7 +1062,7 @@ def test_constructor_4():
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -1106,7 +1106,7 @@ def test_constructor_5():
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -1187,7 +1187,7 @@ def test_slice_6():
     ds = open_dataset([f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)])
 
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
     slices(ds, 0, len(ds), 1)
     slices(ds, 0, len(ds), 10)
@@ -1209,7 +1209,7 @@ def test_slice_7():
     )
 
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
     slices(ds, 0, len(ds), 1)
     slices(ds, 0, len(ds), 10)
@@ -1228,7 +1228,7 @@ def test_slice_8():
     )
 
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
     slices(ds, 0, len(ds), 1)
     slices(ds, 0, len(ds), 10)
@@ -1248,7 +1248,7 @@ def test_slice_9():
     )
 
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
     slices(ds, 0, len(ds), 1)
     slices(ds, 0, len(ds), 10)
@@ -1299,7 +1299,7 @@ def test_ensemble_1():
     assert ds.shape == (365 * 4, 4, 11, VALUES)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -1349,7 +1349,7 @@ def test_ensemble_2():
     assert ds.shape == (365 * 4, 4, 16, VALUES)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
 
@@ -1404,7 +1404,7 @@ def test_grids():
     assert ds.shape == (365 * 4, 4, 1, VALUES + 25)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing
+    indexing(ds)
     metadata(ds)
 
     ds1 = open_dataset("test-2021-2021-6h-o96-abcd-1-1")

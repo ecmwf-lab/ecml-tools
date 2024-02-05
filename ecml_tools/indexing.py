@@ -61,8 +61,50 @@ def apply_index_to_slices_changes(result, changes):
     if changes:
         shape = result.shape
         for i in changes:
-            assert shape[i] == 1, shape
+            assert shape[i] == 1, (i, changes, shape)
         result = np.squeeze(result, axis=changes)
+    return result
+
+
+def update_tuple(t, index, value):
+    """
+    Replace the elements of a tuple at the given index with a new value.
+    """
+    t = list(t)
+    prev = t[index]
+    t[index] = value
+    return tuple(t), prev
+
+
+def length_to_slices(index, lengths):
+    """
+    Convert an index to a list of slices, given the lengths of the dimensions.
+    """
+    total = sum(lengths)
+    start, stop, step = index.indices(total)
+    print(start, stop, step)
+
+    # TODO: combine loops
+    p = []
+    pos = 0
+    for length in lengths:
+        end = pos + length
+        p.append((pos, end))
+        pos = end
+
+    result = []
+
+    for i, (s, e) in enumerate(p):
+        pos = s
+        if s % step:
+            s = s + step - s % step
+            assert s % step == 0
+            assert s >= pos
+        if max(s, start) <= min(e, stop):
+            result.append((i, slice(s - pos, e - pos, step)))
+        else:
+            result.append(None)
+
     return result
 
 
@@ -76,9 +118,11 @@ class IndexTester:
 
 if __name__ == "__main__":
     t = IndexTester((1000, 8, 10, 20000))
+    i = t[0, 1, 2, 3]
+    print(i)
 
-    print(t[0])
-    print(t[0, 1, 2, 3])
-    print(t[0:10])
-    print(t[...])
-    print(t[:-1])
+    # print(t[0])
+    # print(t[0, 1, 2, 3])
+    # print(t[0:10])
+    # print(t[...])
+    # print(t[:-1])

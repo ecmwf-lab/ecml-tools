@@ -20,7 +20,7 @@ import zarr
 
 import ecml_tools
 
-from .indexing import apply_index_to_slices_changes, index_to_slices
+from .indexing import apply_index_to_slices_changes, index_to_slices, length_to_slices
 
 LOG = logging.getLogger(__name__)
 
@@ -742,6 +742,21 @@ class GivenAxis(Combined):
         assert False not in result, result
         return result
 
+    def _get_tuple(self, index):
+        index, changes = index_to_slices(index, self.shape)
+        selected = index[self.axis]
+        lengths = [d.shape[self.axis] for d in self.datasets]
+        slices = length_to_slices(selected, lengths)
+        print("per_dataset_index", slices)
+
+        result = [d[i] for (d, i) in zip(self.datasets, slices) if i is not None]
+
+        x = tuple([slice(None)] * self.axis + [selected])
+
+        return apply_index_to_slices_changes(
+            np.concatenate(result, axis=self.axis)[x], changes
+        )
+
     def _get_slice(self, s):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
 
@@ -799,7 +814,7 @@ class Join(Combined):
         print("Join._get_tuple", index)
         assert len(index) > 1, index
 
-        index, changes = index_to_slices(index)
+        index, changes = index_to_slices(index, self.shape)
 
         selected_variables = index[1]
 
