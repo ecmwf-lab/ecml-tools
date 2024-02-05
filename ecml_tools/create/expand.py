@@ -150,34 +150,30 @@ class IntegerStartStopExpand(StartStopExpand):
         }[group_by](x)
 
 
+def build_conditions(config):
+    return [
+    (isinstance(config.get("values"), list) and len(config) == 1, ValuesExpand),
+    (config.get("group_by") in ["monthly","daily","weekly",],DateStartStopExpand),
+    (isinstance(config.get("start"), datetime.datetime),DateStartStopExpand),
+    (isinstance(config.get("end"), datetime.datetime),DateStartStopExpand),
+    ("frequency" in config,DateStartStopExpand),
+    (config.get("kind") == "dates" and "start" in config,DateStartStopExpand),
+    (isinstance(config.get("start"), int) or isinstance(config.get("end"), int),IntegerStartStopExpand)]
+
+
 def expand_class(config):
-    if isinstance(config, list):
-        config = {"values": config}
-
-    assert isinstance(config, dict), config
-
-    if "start" not in config and "values" not in config:
+    base_dict_builder = {
+        list: lambda x:  {"values": x},
+        dict: lambda x: x,
+    }
+    try: 
+        base_dict=base_dict_builder[type(config)](config)
+        if "start" not in config and "values" not in config:
+            raise ValueError(f"Cannot expand loop from {config}")
+        else:
+            conditions_and_rules=build_conditions(base_dict)
+            for condition, expanded_dict_class in conditions_and_rules:
+                if condition:
+                    return expanded_dict_class
+    except:
         raise ValueError(f"Cannot expand loop from {config}")
-
-    if isinstance(config.get("values"), list):
-        assert len(config) == 1, f"No other config keys implemented. {config}"
-        return ValuesExpand
-
-    if (
-        config.get("group_by")
-        in [
-            "monthly",
-            "daily",
-            "weekly",
-        ]
-        or isinstance(config["start"], datetime.datetime)
-        or isinstance(config["end"], datetime.datetime)
-        or "frequency" in config
-        or (config.get("kind") == "dates" and "start" in config)
-    ):
-        return DateStartStopExpand
-
-    if isinstance(config["start"], int) or isinstance(config["end"], int):
-        return IntegerStartStopExpand
-
-    raise ValueError(f"Cannot expand loop from {config}")

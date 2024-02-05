@@ -8,6 +8,7 @@
 #
 import datetime
 from functools import cached_property
+from .config import DictObj
 
 from .expand import expand_class
 
@@ -19,7 +20,6 @@ class Group(list):
 
     def __repr__(self):
         content = ",".join([str(_.strftime("%Y-%m-%d:%H")) for _ in self])
-        # content = ",".join([str(_.strftime("%Y-%m-%d:%H")) for _ in self[:10]]) + "..."
         return f"Group({len(self)}, {content})"
 
 
@@ -59,15 +59,16 @@ class BaseGroups:
 
 class Groups(BaseGroups):
     def __init__(self, config):
+        # Assert config input is ad dict but not a nested dict
         assert isinstance(config, dict), config
         for k, v in config.items():
             assert not isinstance(v, dict), (k, v)
 
         self._config = config
-        self.cls = expand_class(config)
+        self.cls = expand_class(config) #This is just an Object class (not instantiated)
 
     @cached_property
-    def values(self):
+    def values(self) -> list:
         dates = list(self.cls(self._config).values)
         assert isinstance(dates[0], datetime.datetime), dates[0]
         return dates
@@ -89,16 +90,14 @@ class EmptyGroups(BaseGroups):
 
 class GroupsIntersection(BaseGroups):
     def __init__(self, a, b):
+        assert isinstance(a,Groups), a #!TODO double-check if that assumption is right
+        assert isinstance(b,Groups), b
         self.a = a
         self.b = b
 
     @cached_property
     def values(self):
-        intersection = []
-        for e in self.a.values:
-            if e in self.b.values:
-                intersection.append(e)
-        return intersection
+        return list(set(self.a.values) & set(self.b.values))
 
 
 def build_groups(*objs):
@@ -106,18 +105,12 @@ def build_groups(*objs):
         raise NotImplementedError()
     obj = objs[0]
 
-    if isinstance(obj, GroupsIntersection):
-        return obj
-
-    if isinstance(obj, Groups):
-        return obj
-
-    if isinstance(obj, list):
-        return Groups(dict(values=obj))
-
-    assert isinstance(obj, dict), obj
-    if "dates" in obj:
-        assert len(obj) == 1, obj
-        return Groups(dict(obj["dates"]))
-
-    return Groups(obj)
+    type_actions = {
+        GroupsIntersection: lambda x: x,
+        Groups: lambda x: x,
+        list: lambda x: Groups(dict(values=x)),
+        Group: lambda x: Groups(dict(values=x)),
+        DictObj: lambda x: Groups(dict(x["dates"])) if "dates" in x and len(x) == 1 else Groups(x),
+        dict: lambda x: Groups(dict(x["dates"])) if "dates" in x and len(x) == 1 else Groups(x),
+    }
+    return type_actions[type(obj)](obj)
