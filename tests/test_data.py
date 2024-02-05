@@ -178,6 +178,8 @@ class IndexTester:
         self.ds = ds
         self.np = ds[:]  # Numpy array
 
+        assert self.ds.shape == self.np.shape
+
     def __getitem__(self, index):
         assert (self.ds[index] == self.np[index]).all()
 
@@ -199,6 +201,13 @@ def slices(ds, start=None, end=None, step=None):
     t[::step]
 
     t[0:10, :, 0]
+    t[:, 0:3, 0]
+    t[:, :, 0]
+    t[0:10, 0:3, 0]
+    t[:, :, :]
+
+    # t[:,(1,3),:]
+    # t[:,(1,3)]
 
     if ds.shape[2] > 1:  # Ensemble dimension
         t[0:10, :, (0, 1)]

@@ -191,7 +191,9 @@ class Dataset:
         return self.__class__.__name__ + "()"
 
     def _get_tuple(self, n):
-        raise NotImplementedError(f"Tuple not supported: {n} (class {self.__class__.__name__})")
+        raise NotImplementedError(
+            f"Tuple not supported: {n} (class {self.__class__.__name__})"
+        )
 
 
 class Source:
@@ -768,6 +770,21 @@ class Join(Combined):
 
     def __len__(self):
         return len(self.datasets[0])
+
+    def _get_tuple(self, n):
+
+        p = (n[0], slice(None), n[2:])
+        result = [d[p] for d in self.datasets]
+
+        print([type(s) for s in p], p)
+        print(self.shape, [r.shape for r in result])
+
+        raise NotImplementedError()
+
+        result = np.concatenate(result)
+        # result = np.stack(result)
+
+        return result[n[1]]
 
     def _get_slice(self, s):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
