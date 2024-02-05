@@ -20,6 +20,8 @@ import zarr
 
 import ecml_tools
 
+from .indexing import apply_index_to_slices_changes, index_to_slices
+
 LOG = logging.getLogger(__name__)
 
 __all__ = ["open_dataset", "open_zarr", "debug_zarr_loading"]
@@ -55,9 +57,18 @@ def _tuple_with_slices(t):
     """
 
     result = tuple(slice(i, i + 1) if isinstance(i, int) else i for i in t)
-    changes = [j for (j, i) in enumerate(t) if isinstance(i, int)]
+    changes = tuple(j for (j, i) in enumerate(t) if isinstance(i, int))
 
     return result, changes
+
+
+def _apply_tuple_changes(result, changes):
+    if changes:
+        shape = result.shape
+        for i in changes:
+            assert shape[i] == 1, shape
+        result = np.squeeze(result, axis=changes)
+    return result
 
 
 class Dataset:
@@ -367,7 +378,6 @@ class Zarr(Dataset):
 
         assert False, index
 
-
         shape = self.data.shape
 
         axes = []
@@ -648,6 +658,29 @@ class Concat(Combined):
     def __len__(self):
         return sum(len(i) for i in self.datasets)
 
+    def _get_tuple(self, index):
+        index, changes = index_to_slices(index, self.shape)
+        result = []
+
+        first, rest = index[0], index[1:]
+        start, stop, step = first.start, first.stop, first.step
+
+        for d in self.datasets:
+            length = d._len
+
+            result.append(d[(slice(start, stop, step),) + rest])
+
+            start -= length
+            while start < 0:
+                start += step
+
+            stop -= length
+
+            if start > stop:
+                break
+
+        return apply_index_to_slices_changes(np.concatenate(result, axis=0), changes)
+
     def __getitem__(self, n):
         if isinstance(n, tuple):
             return self._get_tuple(n)
@@ -783,28 +816,37 @@ class Join(Combined):
         return len(self.datasets[0])
 
     def _get_tuple(self, index):
+        print("Join._get_tuple", index)
         assert len(index) > 1, index
 
-        selected_variables = index[1]
-
         index, changed = _tuple_with_slices(index)
+
+        selected_variables = index[1]
 
         index = list(index)
         index[1] = slice(None)
         index = tuple(index)
+        print("Join._get_tuple", index)
 
+        # TODO: optimize if index does not access all datasets, so we don't load chunks we don't need
         result = [d[index] for d in self.datasets]
 
-        print(self.shape, [r.shape for r in result], selected_variables, changed)
-        result = np.stack(result)
-        print(result.shape)
+        print(
+            "Join._get_tuple",
+            self.shape,
+            [r.shape for r in result],
+            selected_variables,
+            changed,
+        )
+        result = np.concatenate(result, axis=1)
+        print("Join._get_tuple", result.shape)
 
-        raise NotImplementedError()
+        # raise NotImplementedError()
 
-        result = np.concatenate(result)
+        # result = np.concatenate(result)
         # result = np.stack(result)
 
-        return result[index[1]]
+        return _apply_tuple_changes(result[:, selected_variables], changed)
 
     def _get_slice(self, s):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
@@ -967,11 +1009,11 @@ class Select(Forwards):
         super().__init__(dataset)
 
     def __getitem__(self, n):
-        # if isinstance(n, tuple):
-        #     return self._get_tuple(n)
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
 
         row = self.dataset[n]
-        if isinstance(n, (slice, tuple)):
+        if isinstance(n, slice):
             return row[:, self.indices]
 
         return row[self.indices]

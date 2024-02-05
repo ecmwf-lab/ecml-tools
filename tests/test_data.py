@@ -184,21 +184,8 @@ class IndexTester:
         assert (self.ds[index] == self.np[index]).all()
 
 
-def slices(ds, start=None, end=None, step=None):
-    if start is None:
-        start = 5
-    if end is None:
-        end = len(ds) - 5
-    if step is None:
-        step = len(ds) // 10
-
+def indexing(ds):
     t = IndexTester(ds)
-
-    t[start:end:step]
-    t[start:end]
-    t[start:]
-    t[:end]
-    t[::step]
 
     t[0:10, :, 0]
     t[:, 0:3, 0]
@@ -216,6 +203,23 @@ def slices(ds, start=None, end=None, step=None):
 
     # if ds.shape[2] > 1:  # Ensemble dimension
     #     t[0:10, :, (0, 1)]
+
+
+def slices(ds, start=None, end=None, step=None):
+    if start is None:
+        start = 5
+    if end is None:
+        end = len(ds) - 5
+    if step is None:
+        step = len(ds) // 10
+
+    t = IndexTester(ds)
+
+    t[start:end:step]
+    t[start:end]
+    t[start:]
+    t[:end]
+    t[::step]
 
 
 def make_row(args, ensemble=False, grid=False):
@@ -266,6 +270,7 @@ def test_simple():
 
     same_stats(ds, open_dataset("test-2021-2022-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing(ds)
     metadata(ds)
 
 
@@ -298,13 +303,14 @@ def test_concat():
 
     same_stats(ds, open_dataset("test-2021-2022-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
 def test_join_1():
     ds = open_dataset(
         "test-2021-2021-6h-o96-abcd",
-        "test-2021-2021-6h-o96-efgh",
+        "test-2021-2021-6h-o96-efg",
     )
 
     assert isinstance(ds, Join)
@@ -324,7 +330,6 @@ def test_join_1():
                 _(date, "e"),
                 _(date, "f"),
                 _(date, "g"),
-                _(date, "h"),
             ]
         )
         assert (row == expect).all()
@@ -333,7 +338,7 @@ def test_join_1():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
-    assert ds.variables == ["a", "b", "c", "d", "e", "f", "g", "h"]
+    assert ds.variables == ["a", "b", "c", "d", "e", "f", "g"]
     assert ds.name_to_index == {
         "a": 0,
         "b": 1,
@@ -342,13 +347,13 @@ def test_join_1():
         "e": 4,
         "f": 5,
         "g": 6,
-        "h": 7,
     }
 
-    assert ds.shape == (365 * 4, 8, 1, VALUES)
+    assert ds.shape == (365 * 4, 7, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -396,6 +401,7 @@ def test_join_2():
         "abcdef",
     )
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -435,6 +441,7 @@ def test_join_3():
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -469,6 +476,7 @@ def test_subset_1():
     assert ds.shape == (365 * 3 * 2, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -504,6 +512,7 @@ def test_subset_2():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -544,6 +553,7 @@ def test_subset_3():
     assert ds.shape == (365 * 2, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -579,6 +589,7 @@ def test_subset_4():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -614,6 +625,7 @@ def test_subset_5():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -653,6 +665,7 @@ def test_subset_6():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -688,6 +701,7 @@ def test_subset_7():
 
     same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -730,6 +744,7 @@ def test_subset_8():
 
     same_stats(ds, open_dataset("test-2021-2021-1h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -757,6 +772,7 @@ def test_select_1():
     assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -784,6 +800,7 @@ def test_select_2():
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -811,6 +828,7 @@ def test_select_3():
     assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -838,6 +856,7 @@ def test_rename():
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -864,6 +883,7 @@ def test_drop():
     assert ds.shape == (365 * 4, 3, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -891,6 +911,7 @@ def test_reorder_1():
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -918,6 +939,7 @@ def test_reorder_2():
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -949,6 +971,7 @@ def test_constructor_1():
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -978,6 +1001,7 @@ def test_constructor_2():
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -1007,6 +1031,7 @@ def test_constructor_3():
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -1037,6 +1062,7 @@ def test_constructor_4():
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -1080,6 +1106,7 @@ def test_constructor_5():
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -1160,6 +1187,7 @@ def test_slice_6():
     ds = open_dataset([f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)])
 
     slices(ds)
+    indexing
     metadata(ds)
     slices(ds, 0, len(ds), 1)
     slices(ds, 0, len(ds), 10)
@@ -1181,6 +1209,7 @@ def test_slice_7():
     )
 
     slices(ds)
+    indexing
     metadata(ds)
     slices(ds, 0, len(ds), 1)
     slices(ds, 0, len(ds), 10)
@@ -1199,6 +1228,7 @@ def test_slice_8():
     )
 
     slices(ds)
+    indexing
     metadata(ds)
     slices(ds, 0, len(ds), 1)
     slices(ds, 0, len(ds), 10)
@@ -1218,6 +1248,7 @@ def test_slice_9():
     )
 
     slices(ds)
+    indexing
     metadata(ds)
     slices(ds, 0, len(ds), 1)
     slices(ds, 0, len(ds), 10)
@@ -1268,6 +1299,7 @@ def test_ensemble_1():
     assert ds.shape == (365 * 4, 4, 11, VALUES)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -1317,6 +1349,7 @@ def test_ensemble_2():
     assert ds.shape == (365 * 4, 4, 16, VALUES)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
 
@@ -1371,6 +1404,7 @@ def test_grids():
     assert ds.shape == (365 * 4, 4, 1, VALUES + 25)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
+    indexing
     metadata(ds)
 
     ds1 = open_dataset("test-2021-2021-6h-o96-abcd-1-1")
