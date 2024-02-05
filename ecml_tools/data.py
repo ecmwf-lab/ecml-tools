@@ -49,6 +49,17 @@ def _make_slice_or_index_from_list_or_tuple(indices):
     return indices
 
 
+def _tuple_with_slices(t):
+    """
+    Replace all integers in a tuple with slices, so we preserve the dimensionality.
+    """
+
+    result = tuple(slice(i, i + 1) if isinstance(i, int) else i for i in t)
+    changes = [j for (j, i) in enumerate(t) if isinstance(i, int)]
+
+    return result, changes
+
+
 class Dataset:
     arguments = {}
 
@@ -354,8 +365,8 @@ class Zarr(Dataset):
         Zarr does not support indexing with lists/arrays directly, so we need to implement it ourselves.
         """
 
-        if not isinstance(index, tuple):
-            return self[index]
+        assert False, index
+
 
         shape = self.data.shape
 
@@ -379,7 +390,7 @@ class Zarr(Dataset):
         if isinstance(index, (list, tuple)):
             axes.append(axis)  # Dimension of the concatenation
             for i in index:
-                yield from self._unwind(i, rest, shape, axis, axes)
+                yield from self._unwind((slice(i, i + 1),), rest, shape, axis, axes)
             return
 
         if len(rest) == 0:
@@ -771,20 +782,29 @@ class Join(Combined):
     def __len__(self):
         return len(self.datasets[0])
 
-    def _get_tuple(self, n):
+    def _get_tuple(self, index):
+        assert len(index) > 1, index
 
-        p = (n[0], slice(None), n[2:])
-        result = [d[p] for d in self.datasets]
+        selected_variables = index[1]
 
-        print([type(s) for s in p], p)
-        print(self.shape, [r.shape for r in result])
+        index, changed = _tuple_with_slices(index)
+
+        index = list(index)
+        index[1] = slice(None)
+        index = tuple(index)
+
+        result = [d[index] for d in self.datasets]
+
+        print(self.shape, [r.shape for r in result], selected_variables, changed)
+        result = np.stack(result)
+        print(result.shape)
 
         raise NotImplementedError()
 
         result = np.concatenate(result)
         # result = np.stack(result)
 
-        return result[n[1]]
+        return result[index[1]]
 
     def _get_slice(self, s):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
