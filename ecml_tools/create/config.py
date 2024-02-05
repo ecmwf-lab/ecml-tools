@@ -83,13 +83,15 @@ class OutputSpecs:
         return [{k: v} for k, v in self.config.order_by.items()]
 
     def get_chunking(self, coords):
-        user = self.config.chunking
+        user = deepcopy(self.config.chunking)
         chunks = []
         for k, v in coords.items():
             if k in user:
-                chunks.append(user[k])
+                chunks.append(user.pop(k))
             else:
                 chunks.append(len(v))
+        if user:
+            raise ValueError(f"Unused chunking keys from config: {list(user.keys())}, not in known keys : {list(coords.keys())}")
         return tuple(chunks)
 
     @property
