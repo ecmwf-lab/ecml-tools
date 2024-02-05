@@ -68,7 +68,7 @@ class StartStopExpand(Expand):
         self.end = self._config["end"]
 
     @property
-    def values(self):
+    def values(self): 
         x = self.start
         all = []
         while x <= self.end:
@@ -94,26 +94,35 @@ class DateStartStopExpand(StartStopExpand):
 
         self.start = to_datetime(self.start)
         self.end = to_datetime(self.end)
-        assert isinstance(self.start, datetime.date), (type(self.start), self.start)
-        assert isinstance(self.end, datetime.date), (type(self.end), self.end)
 
-        frequency = self._config.get("frequency", "24h")
+        self._validate_date_range()
 
-        if frequency.lower().endswith("h"):
-            freq = int(frequency[:-1])
-        elif frequency.lower().endswith("d"):
-            freq = int(frequency[:-1]) * 24
-        else:
+        _frequency_str = self._config.get("frequency", "24h")
+        _freq = self._extract_frequency(_frequency_str)
+        self._validate_frequency(_freq,_frequency_str)
+        self.step = datetime.timedelta(hours=_freq)
+
+    def _extract_frequency(self,frequency_str):
+        freq_ending=frequency_str.lower()[-1]
+        freq_mapping ={"h":int(frequency_str[:-1]),
+                       "d":int(frequency_str[:-1])*24}
+        try:
+            return freq_mapping[freq_ending]
+        except:
             raise ValueError(
-                f"Frequency must be in hours or days (12h or 2d). {frequency}"
+                f"Frequency must be in hours or days (12h or 2d). {frequency_str}"
             )
 
+    def _validate_frequency(self,freq,frequency_str):
         if freq > 24 and freq % 24 != 0:
             raise ValueError(
-                f"Frequency must be less than 24h or a multiple of 24h. {frequency}"
+                f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}"
             )
 
-        self.step = datetime.timedelta(hours=freq)
+    def _validate_date_range(self):
+        assert isinstance(self.start, datetime.date), (type(self.start), self.start)
+        assert isinstance(self.end, datetime.date), (type(self.end), self.end)
+        assert self.end >= self.start, "End date must be greater than or equal to start date."
 
     @property
     def grouper_key(self):

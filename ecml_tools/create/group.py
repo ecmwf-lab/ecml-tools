@@ -14,6 +14,9 @@ from .expand import expand_class
 
 
 class Group(list):
+    """
+    Interface wrapper for List objects
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert len(self) >= 1, self
@@ -33,9 +36,15 @@ class BaseGroups:
         except:
             return f"{self.__class__.__name__}({len(self.values)} dates)"
 
+    @cached_property
+    def values(self):
+        raise NotImplementedError()
+
     def intersect(self, dates):
         if dates is None:
             return self
+        # before creating GroupsIntersection
+        # we make sure that dates it's also a Groups Instance
         if not isinstance(dates, Groups):
             dates = build_groups(dates)
         return GroupsIntersection(self, dates)
@@ -49,6 +58,7 @@ class BaseGroups:
 
     @property
     def frequency(self):
+        print(self)
         datetimes = self.values
         freq = (datetimes[1] - datetimes[0]).total_seconds() / 3600
         assert round(freq) == freq, freq
