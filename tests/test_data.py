@@ -33,6 +33,10 @@ VALUES = 10
 
 @cache
 def _(date, var, k=0, e=0, values=VALUES):
+    """
+    Create a simple array of values based on the date and variable name, ensemble, grid
+    and a few other parameters.
+    """
     d = date.year * 10000 + date.month * 100 + date.day
     v = ord(var) - ord("a") + 1
     assert 0 <= k <= 9
@@ -44,7 +48,7 @@ def _(date, var, k=0, e=0, values=VALUES):
 
 
 def create_zarr(
-    vars=["a", "b", "c", "d"],
+    vars="abcd",
     start=2021,
     end=2021,
     frequency=6,
@@ -119,7 +123,7 @@ def create_zarr(
 
 
 def zarr_from_str(name, mode):
-    # test-2021-2021-6h-o96-abcd-0
+    # Format: test-2021-2021-6h-o96-abcd-0
 
     args = dict(
         test="test",
@@ -155,25 +159,6 @@ zarr.convenience.open = zarr_from_str
 ecml_tools.data._name_to_path = lambda name, zarr_root: name
 
 
-def same_stats(ds1, ds2, vars1, vars2=None):
-    if vars2 is None:
-        vars2 = vars1
-
-    vars1 = [v for v in vars1]
-    vars2 = [v for v in vars2]
-    for v1, v2 in zip(vars1, vars2):
-        idx1 = ds1.name_to_index[v1]
-        idx2 = ds2.name_to_index[v2]
-        assert (ds1.statistics["mean"][idx1] == ds2.statistics["mean"][idx2]).all()
-        assert (ds1.statistics["stdev"][idx1] == ds2.statistics["stdev"][idx2]).all()
-        assert (
-            ds1.statistics["maximum"][idx1] == ds2.statistics["maximum"][idx2]
-        ).all()
-        assert (
-            ds1.statistics["minimum"][idx1] == ds2.statistics["minimum"][idx2]
-        ).all()
-
-
 class IndexTester:
     def __init__(self, ds):
         self.ds = ds
@@ -192,38 +177,6 @@ class IndexTester:
             assert (self.ds[index] == self.np[index]).all()
 
 
-def indexing(ds):
-    t = IndexTester(ds)
-
-    t[0:10, :, 0]
-    t[:, 0:3, 0]
-    t[:, :, 0]
-    t[0:10, 0:3, 0]
-    t[:, :, :]
-
-    if ds.shape[1] > 2:  # Variable dimension
-        t[:, (1, 2), :]
-        t[:, (1, 2)]
-
-    t[0]
-    t[0, :]
-    t[0, 0, :]
-    t[0, 0, 0, :]
-
-    if ds.shape[2] > 1:  # Ensemble dimension
-        t[0:10, :, (0, 1)]
-
-    start = 5
-    end = len(ds) - 5
-    step = len(ds) // 10
-
-    t[start:end:step]
-    t[start:end]
-    t[start:]
-    t[:end]
-    t[::step]
-
-
 def make_row(*args, ensemble=False, grid=False):
     # assert not isinstance(args[0], (list, tuple))
     if grid:
@@ -238,11 +191,6 @@ def make_row(*args, ensemble=False, grid=False):
     else:
         args = [np.array(a).reshape(1, -1) for a in args]  # Add ensemble dimension
     return np.array(args)
-
-
-def metadata(ds):
-    metadata = ds.metadata()
-    assert isinstance(metadata, dict)
 
 
 class DatasetTester:
@@ -267,7 +215,9 @@ class DatasetTester:
             expected_variables = [v for v in expected_variables]
 
         if isinstance(expected_name_to_index, str):
-            expected_name_to_index = {v: i for i, v in enumerate(expected_name_to_index)}
+            expected_name_to_index = {
+                v: i for i, v in enumerate(expected_name_to_index)
+            }
 
         assert isinstance(self.ds, expected_class)
         assert len(self.ds) == expected_length
@@ -290,14 +240,71 @@ class DatasetTester:
         assert (self.ds.dates == np.array(dates, dtype="datetime64")).all()
 
         if statistics_reference_dataset is not None:
-            same_stats(
+            self.same_stats(
                 self.ds,
                 open_dataset(statistics_reference_dataset),
                 statistics_reference_variables,
             )
 
-        indexing(self.ds)
-        metadata(self.ds)
+        self.indexing(self.ds)
+        self.metadata(self.ds)
+
+    def metadata(self, ds):
+        metadata = ds.metadata()
+        assert isinstance(metadata, dict)
+
+    def same_stats(self, ds1, ds2, vars1, vars2=None):
+        if vars2 is None:
+            vars2 = vars1
+
+        vars1 = [v for v in vars1]
+        vars2 = [v for v in vars2]
+        for v1, v2 in zip(vars1, vars2):
+            idx1 = ds1.name_to_index[v1]
+            idx2 = ds2.name_to_index[v2]
+            assert (ds1.statistics["mean"][idx1] == ds2.statistics["mean"][idx2]).all()
+            assert (
+                ds1.statistics["stdev"][idx1] == ds2.statistics["stdev"][idx2]
+            ).all()
+            assert (
+                ds1.statistics["maximum"][idx1] == ds2.statistics["maximum"][idx2]
+            ).all()
+            assert (
+                ds1.statistics["minimum"][idx1] == ds2.statistics["minimum"][idx2]
+            ).all()
+
+    def indexing(self, ds):
+        t = IndexTester(ds)
+
+        t[0:10, :, 0]
+        t[:, 0:3, 0]
+        t[:, :, 0]
+        t[0:10, 0:3, 0]
+        t[:, :, :]
+
+        if ds.shape[1] > 2:  # Variable dimension
+            t[:, (1, 2), :]
+            t[:, (1, 2)]
+
+        t[0]
+        t[0, :]
+        t[0, 0, :]
+        t[0, 0, 0, :]
+
+        if ds.shape[2] > 1:  # Ensemble dimension
+            t[0:10, :, (0, 1)]
+
+        for i in range(10):
+            t[i]
+            start = 5 * i
+            end = len(ds) - 5 * i
+            step = len(ds) // 10
+
+            t[start:end:step]
+            t[start:end]
+            t[start:]
+            t[:end]
+            t[::step]
 
 
 def simple_row(date, vars):
@@ -314,7 +321,7 @@ def test_simple():
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 2 * 4, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -333,7 +340,7 @@ def test_concat():
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 3 * 4, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
@@ -415,7 +422,7 @@ def test_join_3():
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 4, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: make_row(
             _(date, "a", 2),
@@ -437,7 +444,7 @@ def test_subset_1():
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=12),
         expected_shape=(365 * 3 * 2, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
@@ -451,7 +458,7 @@ def test_subset_2():
         expected_class=Subset,
         expected_length=365 * 24,
         expected_shape=(365 * 24, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2022, 1, 1),
@@ -472,7 +479,7 @@ def test_subset_3():
         expected_class=Subset,
         expected_length=365 * 2,
         expected_shape=(365 * 2, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2022, 1, 1),
@@ -490,7 +497,7 @@ def test_subset_4():
         start_date=datetime.datetime(2022, 6, 1),
         time_increment=datetime.timedelta(hours=1),
         expected_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
@@ -506,7 +513,7 @@ def test_subset_5():
         start_date=datetime.datetime(2022, 6, 1),
         time_increment=datetime.timedelta(hours=1),
         expected_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
@@ -527,7 +534,7 @@ def test_subset_6():
         start_date=datetime.datetime(2022, 6, 1),
         time_increment=datetime.timedelta(hours=1),
         expected_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
@@ -543,7 +550,7 @@ def test_subset_7():
         start_date=datetime.datetime(2022, 6, 1),
         time_increment=datetime.timedelta(hours=1),
         expected_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
@@ -561,7 +568,7 @@ def test_subset_8():
         expected_class=Subset,
         expected_length=365 * 4,
         expected_shape=(365 * 4, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2021, 1, 1, 3, 0, 0),
@@ -589,175 +596,106 @@ def test_select_1():
 
 def test_select_2():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", select=["c", "a"])
-    ds = test.ds
-
-    assert isinstance(ds, Select)
-    assert len(ds) == 365 * 4
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "c"), _(date, "a"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["c", "a"]
-    assert ds.name_to_index == {"c": 0, "a": 1}
-
-    assert ds.shape == (365 * 4, 2, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Select,
+        expected_length=365 * 4,
+        expected_shape=(365 * 4, 2, 1, VALUES),
+        expected_variables=["c", "a"],
+        expected_name_to_index={"c": 0, "a": 1},
+        date_to_row=lambda date: simple_row(date, "ca"),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="ca",
+    )
 
 
 def test_select_3():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", select={"c", "a"})
-    ds = test.ds
-
-    assert isinstance(ds, Select)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "a"), _(date, "c"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "c"]
-    assert ds.name_to_index == {"a": 0, "c": 1}
-
-    assert ds.shape == (365 * 4, 2, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Select,
+        expected_length=365 * 4,
+        expected_shape=(365 * 4, 2, 1, VALUES),
+        expected_variables=["a", "c"],
+        expected_name_to_index={"a": 0, "c": 1},
+        date_to_row=lambda date: simple_row(date, "ac"),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="ac",
+    )
 
 
 def test_rename():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", rename={"a": "x", "c": "y"})
-    ds = test.ds
+    test.run(
+        expected_class=Rename,
+        expected_length=365 * 4,
+        expected_shape=(365 * 4, 4, 1, VALUES),
+        expected_variables=["x", "b", "y", "d"],
+        expected_name_to_index={"x": 0, "b": 1, "y": 2, "d": 3},
+        date_to_row=lambda date: make_row(
+            _(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")
+        ),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables=None,
+    )
 
-    assert isinstance(ds, Rename)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["x", "b", "y", "d"]
-    assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3}
-
-    assert ds.shape == (365 * 4, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.same_stats(test.ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
 
 
 def test_drop():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", drop="a")
-    ds = test.ds
-
-    assert isinstance(ds, Select)
-    assert len(ds) == 365 * 4
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "b"), _(date, "c"), _(date, "d"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["b", "c", "d"]
-    assert ds.name_to_index == {"b": 0, "c": 1, "d": 2}
-
-    assert ds.shape == (365 * 4, 3, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Select,
+        expected_length=365 * 4,
+        expected_shape=(365 * 4, 3, 1, VALUES),
+        expected_variables=["b", "c", "d"],
+        expected_name_to_index={"b": 0, "c": 1, "d": 2},
+        date_to_row=lambda date: make_row(_(date, "b"), _(date, "c"), _(date, "d")),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="bcd",
+    )
 
 
 def test_reorder_1():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", reorder=["d", "c", "b", "a"])
-    ds = test.ds
-
-    assert isinstance(ds, Select)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["d", "c", "b", "a"]
-    assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
-
-    assert ds.shape == (365 * 4, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Select,
+        expected_length=365 * 4,
+        expected_shape=(365 * 4, 4, 1, VALUES),
+        expected_variables=["d", "c", "b", "a"],
+        expected_name_to_index={"d": 0, "c": 1, "b": 2, "a": 3},
+        date_to_row=lambda date: make_row(
+            _(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")
+        ),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="dcba",
+    )
 
 
 def test_reorder_2():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", reorder=dict(a=3, b=2, c=1, d=0))
-    ds = test.ds
-
-    assert isinstance(ds, Select)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["d", "c", "b", "a"]
-    assert ds.name_to_index == {"a": 3, "b": 2, "c": 1, "d": 0}
-
-    assert ds.shape == (365 * 4, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Select,
+        expected_length=365 * 4,
+        expected_shape=(365 * 4, 4, 1, VALUES),
+        expected_variables=["d", "c", "b", "a"],
+        expected_name_to_index={"d": 0, "c": 1, "b": 2, "a": 3},
+        date_to_row=lambda date: make_row(
+            _(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")
+        ),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="dcba",
+    )
 
 
 def test_constructor_1():
@@ -766,93 +704,59 @@ def test_constructor_1():
     ds2 = open_dataset("test-2022-2022-6h-o96-abcd")
 
     test = DatasetTester(ds1, ds2)
-    ds = test.ds
-
-    assert isinstance(ds, Concat)
-    assert len(ds) == 365 * 2 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Concat,
+        expected_length=365 * 2 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        expected_shape=(365 * 2 * 4, 4, 1, VALUES),
+        expected_variables="abcd",
+        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_constructor_2():
     test = DatasetTester(
         datasets=["test-2021-2021-6h-o96-abcd", "test-2022-2022-6h-o96-abcd"]
     )
-    ds = test.ds
-
-    assert isinstance(ds, Concat)
-    assert len(ds) == 365 * 2 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Concat,
+        expected_length=365 * 2 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        expected_shape=(365 * 2 * 4, 4, 1, VALUES),
+        expected_variables="abcd",
+        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_constructor_3():
     test = DatasetTester(
-        {"datasets": ["test-2021-2021-6h-o96-abcd", "test-2022-2022-6h-o96-abcd"]}
+        {
+            "datasets": [
+                "test-2021-2021-6h-o96-abcd",
+                "test-2022-2022-6h-o96-abcd",
+            ]
+        }
     )
-    ds = test.ds
-
-    assert isinstance(ds, Concat)
-    assert len(ds) == 365 * 2 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Concat,
+        expected_length=365 * 2 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        expected_shape=(365 * 2 * 4, 4, 1, VALUES),
+        expected_variables="abcd",
+        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_constructor_4():
@@ -860,31 +764,18 @@ def test_constructor_4():
         "test-2021-2021-6h-o96-abcd",
         {"dataset": "test-2022-2022-1h-o96-abcd", "frequency": 6},
     )
-    ds = test.ds
-
-    assert isinstance(ds, Concat)
-    assert len(ds) == 365 * 2 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Concat,
+        expected_length=365 * 2 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        expected_shape=(365 * 2 * 4, 4, 1, VALUES),
+        expected_variables="abcd",
+        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_constructor_5():
@@ -892,19 +783,15 @@ def test_constructor_5():
         {"dataset": "test-2021-2021-6h-o96-abcd-1", "rename": {"a": "x", "c": "y"}},
         {"dataset": "test-2021-2021-6h-o96-abcd-2", "rename": {"c": "z", "d": "t"}},
     )
-    ds = test.ds
-
-    assert isinstance(ds, Select)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    print(ds.variables)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(
+    test.run(
+        expected_class=Select,
+        expected_length=365 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        expected_shape=(365 * 4, 7, 1, VALUES),
+        expected_variables=["x", "b", "y", "d", "a", "z", "t"],
+        expected_name_to_index={"x": 0, "b": 1, "y": 2, "d": 3, "a": 4, "z": 5, "t": 6},
+        date_to_row=lambda date: make_row(
             _(date, "a", 1),
             _(date, "b", 2),
             _(date, "c", 1),
@@ -912,22 +799,15 @@ def test_constructor_5():
             _(date, "a", 2),
             _(date, "c", 2),
             _(date, "d", 2),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
+        ),
+        statistics_reference_dataset=None,
+        statistics_reference_variables=None,
+    )
 
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["x", "b", "y", "d", "a", "z", "t"]
-    assert ds.name_to_index == {"x": 0, "b": 1, "y": 2, "d": 3, "a": 4, "z": 5, "t": 6}
-
-    assert ds.shape == (365 * 4, 7, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
-
-    indexing(ds)
-    metadata(ds)
+    test.same_stats(test.ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
+    test.same_stats(
+        test.ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd"
+    )
 
 
 def test_dates():
@@ -958,7 +838,7 @@ def test_slice_1():
         expected_class=Zarr,
         expected_length=365 * 1 * 4,
         expected_shape=(365 * 1 * 4, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2021, 1, 1),
@@ -976,7 +856,7 @@ def test_slice_2():
         expected_class=Concat,
         expected_length=60632,
         expected_shape=(60632, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(1940, 1, 1),
@@ -1072,7 +952,7 @@ def test_slice_4():
         start_date=datetime.datetime(2020, 1, 1),
         time_increment=datetime.timedelta(hours=1),
         expected_shape=(8784, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         statistics_reference_dataset=None,
         statistics_reference_variables=None,
@@ -1091,7 +971,7 @@ def test_slice_5():
         start_date=datetime.datetime(2010, 1, 1),
         time_increment=datetime.timedelta(hours=18),
         expected_shape=(4870, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         statistics_reference_dataset=None,
         statistics_reference_variables=None,
@@ -1109,7 +989,7 @@ def test_ensemble_1():
         expected_class=Ensemble,
         expected_length=365 * 1 * 4,
         expected_shape=(365 * 1 * 4, 4, 11, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: make_row(
             [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)],
@@ -1137,7 +1017,7 @@ def test_ensemble_2():
         expected_class=Ensemble,
         expected_length=365 * 1 * 4,
         expected_shape=(365 * 1 * 4, 4, 16, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         date_to_row=lambda date: make_row(
             [_(date, "a", 1, i) for i in range(10)]
@@ -1168,19 +1048,13 @@ def test_grids():
             "test-2021-2021-6h-o96-abcd-2-1-25",  # 25 gridpoints
         ]
     )
-    ds = test.ds
-
-    # test = DatasetTester("test-2021-2021-6h-o96-abcd-2-1-10")
-
-    assert isinstance(ds, Grids)
-    assert len(ds) == 365 * 1 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(
+    test.run(
+        expected_class=Grids,
+        expected_length=365 * 1 * 4,
+        expected_shape=(365 * 1 * 4, 4, 1, VALUES + 25),
+        expected_variables="abcd",
+        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: make_row(
             [
                 _(date, "a", 1),
                 _(date, "a", 2, values=25),
@@ -1198,30 +1072,20 @@ def test_grids():
                 _(date, "d", 2, values=25),
             ],
             grid=True,
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 4, 4, 1, VALUES + 25)
-    # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-
-    indexing(ds)
-    metadata(ds)
+        ),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd-1-1",
+        statistics_reference_variables="abcd",
+    )
 
     ds1 = open_dataset("test-2021-2021-6h-o96-abcd-1-1")
     ds2 = open_dataset("test-2021-2021-6h-o96-abcd-2-1-25")
 
-    assert (ds.longitudes == np.concatenate([ds1.longitudes, ds2.longitudes])).all()
-    assert (ds.latitudes == np.concatenate([ds1.latitudes, ds2.latitudes])).all()
-
-    # For now
-    same_stats(ds, ds1, "abcd")
+    assert (
+        test.ds.longitudes == np.concatenate([ds1.longitudes, ds2.longitudes])
+    ).all()
+    assert (test.ds.latitudes == np.concatenate([ds1.latitudes, ds2.latitudes])).all()
 
 
 def test_statistics():
@@ -1236,7 +1100,7 @@ def test_statistics():
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 4, 4, 1, VALUES),
-        expected_variables=["a", "b", "c", "d"],
+        expected_variables="abcd",
         expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
         statistics_reference_dataset="test-2000-2010-6h-o96-abcd",
         statistics_reference_variables="abcd",
