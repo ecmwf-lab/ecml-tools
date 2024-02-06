@@ -66,17 +66,31 @@ def create_zarr(
     ensembles = ensemble if ensemble is not None else 1
     values = grids if grids is not None else VALUES
 
-    data = np.zeros((len(dates), len(vars), ensembles, values))
+    data = np.zeros(shape=(len(dates), len(vars), ensembles, values))
 
     for i, date in enumerate(dates):
         for j, var in enumerate(vars):
             for e in range(ensembles):
                 data[i, j, e] = _(date.astype(object), var, k, e, values)
 
-    root.data = data
-    root.dates = dates
-    root.latitudes = np.array([x + values for x in range(values)])
-    root.longitudes = np.array([x + values for x in range(values)])
+    root.create_dataset(
+        "data",
+        data=data,
+        dtype=data.dtype,
+        chunks=data.shape,
+    )
+    root.create_dataset(
+        "dates",
+        data=dates,
+    )
+    root.create_dataset(
+        "latitudes",
+        data=np.array([x + values for x in range(values)]),
+    )
+    root.create_dataset(
+        "longitudes",
+        data=np.array([x + values for x in range(values)]),
+    )
 
     root.attrs["frequency"] = frequency
     root.attrs["resolution"] = resolution
@@ -84,10 +98,22 @@ def create_zarr(
 
     root.attrs["data_request"] = {"grid": 1, "area": "g", "param_level": {}}
 
-    root.mean = np.mean(data, axis=0)
-    root.stdev = np.std(data, axis=0)
-    root.maximum = np.max(data, axis=0)
-    root.minimum = np.min(data, axis=0)
+    root.create_dataset(
+        "mean",
+        data=np.mean(data, axis=0),
+    )
+    root.create_dataset(
+        "stdev",
+        data=np.std(data, axis=0),
+    )
+    root.create_dataset(
+        "maximum",
+        data=np.max(data, axis=0),
+    )
+    root.create_dataset(
+        "minimum",
+        data=np.min(data, axis=0),
+    )
 
     return root
 
@@ -147,6 +173,15 @@ def same_stats(ds1, ds2, vars1, vars2=None):
         ).all()
 
 
+class IndexTester:
+    def __init__(self, ds):
+        self.ds = ds
+        self.np = ds[:]  # Numpy array
+
+    def __getitem__(self, index):
+        assert (self.ds[index] == self.np[index]).all()
+
+
 def slices(ds, start=None, end=None, step=None):
     if start is None:
         start = 5
@@ -155,17 +190,18 @@ def slices(ds, start=None, end=None, step=None):
     if step is None:
         step = len(ds) // 10
 
-    s = ds[start:end:step]
+    t = IndexTester(ds)
 
-    assert s[0].shape == ds[0].shape, (
-        s.shape,
-        ds.shape,
-        len(list(range(start, end, step))),
-        list(range(start, end, step)),
-    )
+    t[start:end:step]
+    t[start:end]
+    t[start:]
+    t[:end]
+    t[::step]
 
-    for i, n in enumerate(range(start, end, step)):
-        assert (s[i] == ds[n]).all()
+    t[0:10, :, 0]
+
+    if ds.shape[2] > 1:  # Ensemble dimension
+        t[0:10, :, (0, 1)]
 
 
 def make_row(args, ensemble=False, grid=False):

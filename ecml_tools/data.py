@@ -10,6 +10,7 @@ import datetime
 import logging
 import os
 import re
+import warnings
 from functools import cached_property
 from pathlib import PurePath
 
@@ -21,7 +22,31 @@ import ecml_tools
 
 LOG = logging.getLogger(__name__)
 
-__all__ = ["open_dataset", "open_zarr"]
+__all__ = ["open_dataset", "open_zarr", "debug_zarr_loading"]
+
+DEBUG_ZARR_LOADING = int(os.environ.get("DEBUG_ZARR_LOADING", "0"))
+
+
+def debug_zarr_loading(on_off):
+    global DEBUG_ZARR_LOADING
+    DEBUG_ZARR_LOADING = on_off
+
+
+def _make_slice_or_index_from_list_or_tuple(indices):
+    """
+    Convert a list or tuple of indices to a slice or an index, if possible.
+    """
+    if len(indices) == 1:
+        return indices[0]
+
+    step = indices[1] - indices[0]
+
+    if step > 0 and all(
+        indices[i] - indices[i - 1] == step for i in range(1, len(indices))
+    ):
+        return slice(indices[0], indices[-1] + step, step)
+
+    return indices
 
 
 class Dataset:
@@ -109,9 +134,11 @@ class Dataset:
             vars = {k: i for i, k in enumerate(vars)}
 
         indices = []
-        for k, v in sorted(self.name_to_index.items(), key=lambda x: x[1]):
-            indices.append(vars[k])
 
+        for k, v in sorted(vars.items(), key=lambda x: x[1]):
+            indices.append(self.name_to_index[k])
+
+        # Make sure we don't forget any variables
         assert set(indices) == set(range(len(self.name_to_index)))
 
         return indices
@@ -159,6 +186,42 @@ class Dataset:
             frequency=self.frequency,
             **kwargs,
         )
+
+    def __repr__(self):
+        return self.__class__.__name__ + "()"
+
+    def _get_tuple(self, n):
+        raise NotImplementedError(f"Tuple not supported: {n} (class {self.__class__.__name__})")
+
+
+class Source:
+    def __init__(self, dataset, index, source=None, info=None):
+        self.dataset = dataset
+        self.index = index
+        self.source = source
+        self.info = info
+
+    def __repr__(self):
+        p = s = self.source
+        while s is not None:
+            p = s
+            s = s.source
+
+        return (
+            f"{self.dataset}[{self.index}, {self.dataset.variables[self.index]}] ({p})"
+        )
+
+    def target(self):
+        p = s = self.source
+        while s is not None:
+            p = s
+            s = s.source
+        return p
+
+    def dump(self, depth=0):
+        print(" " * depth, self)
+        if self.source is not None:
+            self.source.dump(depth + 1)
 
 
 class ReadOnlyStore(zarr.storage.BaseStore):
@@ -219,15 +282,47 @@ class S3Store(ReadOnlyStore):
         return response["Body"].read()
 
 
+class DebugStore(ReadOnlyStore):
+    def __init__(self, store):
+        assert not isinstance(store, DebugStore)
+        self.store = store
+
+    def __getitem__(self, key):
+        # print()
+        print("GET", key, self)
+        # traceback.print_stack(file=sys.stdout)
+        return self.store[key]
+
+    def __len__(self):
+        return len(self.store)
+
+    def __iter__(self):
+        warnings.warn("DebugStore: iterating over the store")
+        return iter(self.store)
+
+    def __contains__(self, key):
+        return key in self.store
+
+
 def open_zarr(path):
-    store = path
-    if store.startswith("http://") or store.startswith("https://"):
-        store = HTTPStore(store)
+    try:
+        store = path
 
-    elif store.startswith("s3://"):
-        store = S3Store(store)
+        if store.startswith("http://") or store.startswith("https://"):
+            store = HTTPStore(store)
 
-    return zarr.convenience.open(store, "r")
+        elif store.startswith("s3://"):
+            store = S3Store(store)
+
+        if DEBUG_ZARR_LOADING:
+            if isinstance(store, str):
+                store = zarr.storage.DirectoryStore(store)
+            store = DebugStore(store)
+
+        return zarr.convenience.open(store, "r")
+    except Exception:
+        LOG.exception("Failed to open %r", path)
+        raise
 
 
 class Zarr(Dataset):
@@ -246,7 +341,55 @@ class Zarr(Dataset):
         return self.data.shape[0]
 
     def __getitem__(self, n):
+        if isinstance(n, tuple) and any(not isinstance(i, (int, slice)) for i in n):
+            return self._getitem_extended(n)
+
         return self.data[n]
+
+    def _getitem_extended(self, index):
+        """
+        Allows to use slices, lists, and tuples to select data from the dataset.
+        Zarr does not support indexing with lists/arrays directly, so we need to implement it ourselves.
+        """
+
+        if not isinstance(index, tuple):
+            return self[index]
+
+        shape = self.data.shape
+
+        axes = []
+        data = []
+        for n in self._unwind(index[0], index[1:], shape, 0, axes):
+            data.append(self.data[n])
+
+        assert len(axes) == 1, axes  # Not implemented for more than one axis
+        return np.concatenate(data, axis=axes[0])
+
+    def _unwind(self, index, rest, shape, axis, axes):
+        if not isinstance(index, (int, slice, list, tuple)):
+            try:
+                # NumPy arrays, TensorFlow tensors, etc.
+                index = tuple(index.tolist())
+                assert not isinstance(index, bool), "Mask not supported"
+            except AttributeError:
+                pass
+
+        if isinstance(index, (list, tuple)):
+            axes.append(axis)  # Dimension of the concatenation
+            for i in index:
+                yield from self._unwind(i, rest, shape, axis, axes)
+            return
+
+        if len(rest) == 0:
+            yield (index,)
+            return
+
+        for n in self._unwind(rest[0], rest[1:], shape, axis + 1, axes):
+            yield (index,) + n
+
+    @cached_property
+    def chunks(self):
+        return self.z.data.chunks
 
     @cached_property
     def shape(self):
@@ -254,7 +397,7 @@ class Zarr(Dataset):
 
     @cached_property
     def dtype(self):
-        return self.data.dtype
+        return self.z.data.dtype
 
     @cached_property
     def dates(self):
@@ -322,7 +465,14 @@ class Zarr(Dataset):
         return self.dates[-1]
 
     def metadata_specific(self):
-        return super().metadata_specific(attrs=dict(self.z.attrs))
+        return super().metadata_specific(
+            attrs=dict(self.z.attrs),
+            chunks=self.chunks,
+            dtype=str(self.dtype),
+        )
+
+    def source(self, index):
+        return Source(self, index, info=self.path)
 
 
 class Forwards(Dataset):
@@ -486,6 +636,9 @@ class Concat(Combined):
         return sum(len(i) for i in self.datasets)
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         if isinstance(n, slice):
             return self._get_slice(n)
 
@@ -567,8 +720,12 @@ class GivenAxis(Combined):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         if isinstance(n, slice):
             return self._get_slice(n)
+
         return np.concatenate([d[n] for d in self.datasets], axis=self.axis - 1)
 
 
@@ -597,6 +754,10 @@ class Grids(GivenAxis):
 
 
 class Join(Combined):
+    """
+    Join the datasets along the variables axis.
+    """
+
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)
         self.check_same_sub_shapes(d1, d2, drop_axis=1)
@@ -612,8 +773,12 @@ class Join(Combined):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         if isinstance(n, slice):
             return self._get_slice(n)
+
         return np.concatenate([d[n] for d in self.datasets])
 
     @cached_property
@@ -671,8 +836,20 @@ class Join(Combined):
             for k in self.datasets[0].statistics
         }
 
+    def source(self, index):
+        i = index
+        for dataset in self.datasets:
+            if i < dataset.shape[1]:
+                return Source(self, index, dataset.source(i))
+            i -= dataset.shape[1]
+        assert False
+
 
 class Subset(Forwards):
+    """
+    Select a subset of the dates.
+    """
+
     def __init__(self, dataset, indices):
         while isinstance(dataset, Subset):
             indices = [dataset.indices[i] for i in indices]
@@ -685,8 +862,12 @@ class Subset(Forwards):
         super().__init__(dataset)
 
     def __getitem__(self, n):
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
+
         if isinstance(n, slice):
             return self._get_slice(n)
+
         n = self.indices[n]
         return self.dataset[n]
 
@@ -696,6 +877,19 @@ class Subset(Forwards):
         # using a slice
         indices = [self.indices[i] for i in range(*s.indices(self._len))]
         return np.stack([self.dataset[i] for i in indices])
+
+    def _get_tuple(self, n):
+        first, rest = n[0], n[1:]
+
+        if isinstance(first, int):
+            return self.dataset[(self.indices[first],) + rest]
+
+        if isinstance(first, slice):
+            indices = tuple(self.indices[i] for i in range(*first.indices(self._len)))
+            indices = _make_slice_or_index_from_list_or_tuple(indices)
+            return self.dataset[(indices,) + rest]
+
+        raise NotImplementedError(f"Only int and slice supported not {type(first)}")
 
     def __len__(self):
         return len(self.indices)
@@ -714,8 +908,15 @@ class Subset(Forwards):
         delta = dates[1].astype(object) - dates[0].astype(object)
         return int(delta.total_seconds() / 3600)
 
+    def source(self, index):
+        return Source(self, index, self.forward.source(index))
+
 
 class Select(Forwards):
+    """
+    Select a subset of the variables.
+    """
+
     def __init__(self, dataset, indices):
         while isinstance(dataset, Select):
             indices = [dataset.indices[i] for i in indices]
@@ -729,9 +930,13 @@ class Select(Forwards):
         super().__init__(dataset)
 
     def __getitem__(self, n):
+        # if isinstance(n, tuple):
+        #     return self._get_tuple(n)
+
         row = self.dataset[n]
-        if isinstance(n, slice):
+        if isinstance(n, (slice, tuple)):
             return row[:, self.indices]
+
         return row[self.indices]
 
     @cached_property
@@ -752,6 +957,9 @@ class Select(Forwards):
 
     def metadata_specific(self, **kwargs):
         return super().metadata_specific(indices=self.indices, **kwargs)
+
+    def source(self, index):
+        return Source(self, index, self.dataset.source(self.indices[index]))
 
 
 class Rename(Forwards):
