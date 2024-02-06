@@ -252,8 +252,8 @@ def metadata(ds):
 
 
 class DatasetTester:
-    def __init__(self, dataset_spec):
-        self.ds = open_dataset(dataset_spec)
+    def __init__(self, *args, **kwargs):
+        self.ds = open_dataset(*args, **kwargs)
 
     def run(
         self,
@@ -321,10 +321,8 @@ def test_simple():
 
 def test_concat():
     test = DatasetTester(
-        [
-            "test-2021-2022-6h-o96-abcd",
-            "test-2023-2023-6h-o96-abcd",
-        ]
+        "test-2021-2022-6h-o96-abcd",
+        "test-2023-2023-6h-o96-abcd",
     )
 
     test.run(
@@ -343,10 +341,8 @@ def test_concat():
 
 def test_join_1():
     test = DatasetTester(
-        [
-            "test-2021-2021-6h-o96-abcd",
-            "test-2021-2021-6h-o96-efgh",
-        ]
+        "test-2021-2021-6h-o96-abcd",
+        "test-2021-2021-6h-o96-efgh",
     )
 
     test.run(
@@ -375,10 +371,8 @@ def test_join_1():
 
 def test_join_2():
     test = DatasetTester(
-        [
-            "test-2021-2021-6h-o96-abcd-1",
-            "test-2021-2021-6h-o96-bdef-2",
-        ]
+        "test-2021-2021-6h-o96-abcd-1",
+        "test-2021-2021-6h-o96-bdef-2",
     )
 
     test.run(
@@ -406,295 +400,162 @@ def test_join_2():
 
 
 def test_join_3():
-    ds = open_dataset(
+    test = DatasetTester(
         "test-2021-2021-6h-o96-abcd-1",
         "test-2021-2021-6h-o96-abcd-2",
     )
 
     # TODO: This should trigger a warning about occulted dataset
 
-    assert isinstance(ds, Select)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(
+    test.run(
+        expected_class=Select,
+        expected_length=365 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: make_row(
             _(date, "a", 2),
             _(date, "b", 2),
             _(date, "c", 2),
             _(date, "d", 2),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 4, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+        ),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd-2",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_subset_1():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd", frequency=12)
+    test = DatasetTester("test-2021-2023-1h-o96-abcd", frequency=12)
 
-    assert isinstance(ds, Subset)
-    assert len(ds) == 365 * 3 * 2
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=12)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 3 * 2, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Subset,
+        expected_length=365 * 3 * 2,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=12),
+        excepted_shape=(365 * 3 * 2, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_subset_2():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=2022, end=2022)
-
-    assert isinstance(ds, Subset)
-    assert len(ds) == 365 * 24
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2022, 1, 1)
-
-    for row in ds:
-        expect = make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=1)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 24, 4, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test = DatasetTester("test-2021-2023-1h-o96-abcd", start=2022, end=2022)
+    test.run(
+        expected_class=Subset,
+        expected_length=365 * 24,
+        excepted_shape=(365 * 24, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        start_date=datetime.datetime(2022, 1, 1),
+        time_increment=datetime.timedelta(hours=1),
+        statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_subset_3():
-    ds = open_dataset(
+    test = DatasetTester(
         "test-2021-2023-1h-o96-abcd",
         start=2022,
         end=2022,
         frequency=12,
     )
-
-    assert isinstance(ds, Subset)
-    assert not isinstance(ds.dataset, Subset)
-    assert len(ds) == 365 * 2
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2022, 1, 1)
-
-    for row in ds:
-        expect = make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=12)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 2, 4, 1, VALUES)
-    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Subset,
+        expected_length=365 * 2,
+        excepted_shape=(365 * 2, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        start_date=datetime.datetime(2022, 1, 1),
+        time_increment=datetime.timedelta(hours=12),
+        statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_subset_4():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=202206, end=202208)
-
-    assert isinstance(ds, Subset)
-    assert len(ds) == (30 + 31 + 31) * 24
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2022, 6, 1)
-
-    for row in ds:
-        expect = make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=1)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test = DatasetTester("test-2021-2023-1h-o96-abcd", start=202206, end=202208)
+    test.run(
+        expected_class=Subset,
+        expected_length=(30 + 31 + 31) * 24,
+        start_date=datetime.datetime(2022, 6, 1),
+        time_increment=datetime.timedelta(hours=1),
+        excepted_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_subset_5():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd", start=20220601, end=20220831)
-
-    assert isinstance(ds, Subset)
-    assert len(ds) == (30 + 31 + 31) * 24
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2022, 6, 1)
-
-    for row in ds:
-        expect = make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=1)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test = DatasetTester("test-2021-2023-1h-o96-abcd", start=20220601, end=20220831)
+    test.run(
+        expected_class=Subset,
+        expected_length=(30 + 31 + 31) * 24,
+        start_date=datetime.datetime(2022, 6, 1),
+        time_increment=datetime.timedelta(hours=1),
+        excepted_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_subset_6():
-    ds = open_dataset(
+    test = DatasetTester(
         "test-2021-2023-1h-o96-abcd",
         start="2022-06-01",
         end="2022-08-31",
     )
 
-    assert isinstance(ds, Subset)
-    assert len(ds) == (30 + 31 + 31) * 24
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2022, 6, 1)
-
-    for row in ds:
-        expect = make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=1)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Subset,
+        expected_length=(30 + 31 + 31) * 24,
+        start_date=datetime.datetime(2022, 6, 1),
+        time_increment=datetime.timedelta(hours=1),
+        excepted_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_subset_7():
-    ds = open_dataset("test-2021-2023-1h-o96-abcd", start="2022-06", end="2022-08")
-
-    assert isinstance(ds, Subset)
-    assert len(ds) == (30 + 31 + 31) * 24
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2022, 6, 1)
-
-    for row in ds:
-        expect = make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=1)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == ((30 + 31 + 31) * 24, 4, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2023-1h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test = DatasetTester("test-2021-2023-1h-o96-abcd", start="2022-06", end="2022-08")
+    test.run(
+        expected_class=Subset,
+        expected_length=(30 + 31 + 31) * 24,
+        start_date=datetime.datetime(2022, 6, 1),
+        time_increment=datetime.timedelta(hours=1),
+        excepted_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_subset_8():
-    ds = open_dataset(
+    test = DatasetTester(
         "test-2021-2021-1h-o96-abcd",
         start="03:00",
         frequency="6h",
     )
+    ds = test.ds
 
     assert isinstance(ds, Subset)
     assert len(ds) == 365 * 4
@@ -731,7 +592,8 @@ def test_subset_8():
 
 
 def test_select_1():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd", select=["b", "d"])
+    test = DatasetTester("test-2021-2021-6h-o96-abcd", select=["b", "d"])
+    ds = test.ds
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -759,7 +621,8 @@ def test_select_1():
 
 
 def test_select_2():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd", select=["c", "a"])
+    test = DatasetTester("test-2021-2021-6h-o96-abcd", select=["c", "a"])
+    ds = test.ds
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -787,7 +650,8 @@ def test_select_2():
 
 
 def test_select_3():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd", select={"c", "a"})
+    test = DatasetTester("test-2021-2021-6h-o96-abcd", select={"c", "a"})
+    ds = test.ds
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -815,7 +679,8 @@ def test_select_3():
 
 
 def test_rename():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd", rename={"a": "x", "c": "y"})
+    test = DatasetTester("test-2021-2021-6h-o96-abcd", rename={"a": "x", "c": "y"})
+    ds = test.ds
 
     assert isinstance(ds, Rename)
     assert len(ds) == 365 * 4
@@ -843,7 +708,8 @@ def test_rename():
 
 
 def test_drop():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd", drop="a")
+    test = DatasetTester("test-2021-2021-6h-o96-abcd", drop="a")
+    ds = test.ds
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -870,7 +736,8 @@ def test_drop():
 
 
 def test_reorder_1():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd", reorder=["d", "c", "b", "a"])
+    test = DatasetTester("test-2021-2021-6h-o96-abcd", reorder=["d", "c", "b", "a"])
+    ds = test.ds
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -898,7 +765,8 @@ def test_reorder_1():
 
 
 def test_reorder_2():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd", reorder=dict(a=3, b=2, c=1, d=0))
+    test = DatasetTester("test-2021-2021-6h-o96-abcd", reorder=dict(a=3, b=2, c=1, d=0))
+    ds = test.ds
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -930,7 +798,8 @@ def test_constructor_1():
 
     ds2 = open_dataset("test-2022-2022-6h-o96-abcd")
 
-    ds = open_dataset(ds1, ds2)
+    test = DatasetTester(ds1, ds2)
+    ds = test.ds
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
@@ -958,9 +827,10 @@ def test_constructor_1():
 
 
 def test_constructor_2():
-    ds = open_dataset(
+    test = DatasetTester(
         datasets=["test-2021-2021-6h-o96-abcd", "test-2022-2022-6h-o96-abcd"]
     )
+    ds = test.ds
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
@@ -988,9 +858,10 @@ def test_constructor_2():
 
 
 def test_constructor_3():
-    ds = open_dataset(
+    test = DatasetTester(
         {"datasets": ["test-2021-2021-6h-o96-abcd", "test-2022-2022-6h-o96-abcd"]}
     )
+    ds = test.ds
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
@@ -1018,10 +889,11 @@ def test_constructor_3():
 
 
 def test_constructor_4():
-    ds = open_dataset(
+    test = DatasetTester(
         "test-2021-2021-6h-o96-abcd",
         {"dataset": "test-2022-2022-1h-o96-abcd", "frequency": 6},
     )
+    ds = test.ds
 
     assert isinstance(ds, Concat)
     assert len(ds) == 365 * 2 * 4
@@ -1049,10 +921,11 @@ def test_constructor_4():
 
 
 def test_constructor_5():
-    ds = open_dataset(
+    test = DatasetTester(
         {"dataset": "test-2021-2021-6h-o96-abcd-1", "rename": {"a": "x", "c": "y"}},
         {"dataset": "test-2021-2021-6h-o96-abcd-2", "rename": {"c": "z", "d": "t"}},
     )
+    ds = test.ds
 
     assert isinstance(ds, Select)
     assert len(ds) == 365 * 4
@@ -1113,7 +986,8 @@ def test_dates():
 
 
 def test_slice_1():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+    test = DatasetTester("test-2021-2021-6h-o96-abcd")
+    ds = test.ds
 
     s = ds[0:10:2]
     assert len(s) == 5
@@ -1125,7 +999,8 @@ def test_slice_1():
 
 
 def test_slice_2():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+    test = DatasetTester("test-2021-2021-6h-o96-abcd")
+    ds = test.ds
     s = ds[2:5]
     assert len(s) == 3
     assert (s[0] == ds[2]).all()
@@ -1134,7 +1009,8 @@ def test_slice_2():
 
 
 def test_slice_3():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+    test = DatasetTester("test-2021-2021-6h-o96-abcd")
+    ds = test.ds
 
     s = ds[:5:2]
     assert len(s) == 3
@@ -1144,7 +1020,8 @@ def test_slice_3():
 
 
 def test_slice_4():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+    test = DatasetTester("test-2021-2021-6h-o96-abcd")
+    ds = test.ds
 
     n = len(ds)
     s = ds[2:]
@@ -1154,7 +1031,8 @@ def test_slice_4():
 
 
 def test_slice_5():
-    ds = open_dataset("test-2021-2021-6h-o96-abcd")
+    test = DatasetTester("test-2021-2021-6h-o96-abcd")
+    ds = test.ds
 
     n = len(ds)
     s = ds[2 : (n + 10)]  # slice too large
@@ -1164,7 +1042,10 @@ def test_slice_5():
 
 
 def test_slice_6():
-    ds = open_dataset([f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)])
+    test = DatasetTester(
+        [f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)]
+    )
+    ds = test.ds
 
     slices(ds)
     indexing(ds)
@@ -1181,12 +1062,13 @@ def test_slice_6():
 
 
 def test_slice_7():
-    ds = open_dataset(
+    test = DatasetTester(
         [
             f"test-2020-2020-1h-o96-{vars}"
             for vars in ("abcd", "efgh", "ijkl", "mnop", "qrst", "uvwx", "yz")
         ]
     )
+    ds = test.ds
 
     slices(ds)
     indexing(ds)
@@ -1203,9 +1085,10 @@ def test_slice_7():
 
 
 def test_slice_8():
-    ds = open_dataset(
+    test = DatasetTester(
         [f"test-2020-2020-1h-o96-{vars}" for vars in ("abcd", "cd", "a", "c")]
     )
+    ds = test.ds
 
     slices(ds)
     indexing(ds)
@@ -1222,10 +1105,11 @@ def test_slice_8():
 
 
 def test_slice_9():
-    ds = open_dataset(
+    test = DatasetTester(
         [f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)],
         frequency=18,
     )
+    ds = test.ds
 
     slices(ds)
     indexing(ds)
@@ -1242,12 +1126,13 @@ def test_slice_9():
 
 
 def test_ensemble_1():
-    ds = open_dataset(
+    test = DatasetTester(
         ensemble=[
             "test-2021-2021-6h-o96-abcd-1-10",
             "test-2021-2021-6h-o96-abcd-2-1",
         ]
     )
+    ds = test.ds
 
     assert isinstance(ds, Ensemble)
     assert len(ds) == 365 * 1 * 4
@@ -1283,13 +1168,14 @@ def test_ensemble_1():
 
 
 def test_ensemble_2():
-    ds = open_dataset(
+    test = DatasetTester(
         ensemble=[
             "test-2021-2021-6h-o96-abcd-1-10",
             "test-2021-2021-6h-o96-abcd-2-1",
             "test-2021-2021-6h-o96-abcd-3-5",
         ]
     )
+    ds = test.ds
 
     assert isinstance(ds, Ensemble)
     assert len(ds) == 365 * 1 * 4
@@ -1331,14 +1217,15 @@ def test_ensemble_2():
 
 
 def test_grids():
-    ds = open_dataset(
+    test = DatasetTester(
         grids=[
             "test-2021-2021-6h-o96-abcd-1-1",  # Default is 10 gridpoints
             "test-2021-2021-6h-o96-abcd-2-1-25",  # 25 gridpoints
         ]
     )
+    ds = test.ds
 
-    # ds = open_dataset("test-2021-2021-6h-o96-abcd-2-1-10")
+    # test = DatasetTester("test-2021-2021-6h-o96-abcd-2-1-10")
 
     assert isinstance(ds, Grids)
     assert len(ds) == 365 * 1 * 4
@@ -1393,10 +1280,11 @@ def test_grids():
 
 
 def test_statistics():
-    ds = open_dataset(
+    test = DatasetTester(
         "test-2021-2021-6h-o96-abcd",
         statistics="test-2000-2010-6h-o96-abcd",
     )
+    ds = test.ds
 
     assert isinstance(ds, Statistics)
     same_stats(ds, open_dataset("test-2000-2010-6h-o96-abcd"), "abcd")
