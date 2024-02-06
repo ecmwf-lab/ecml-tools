@@ -8,9 +8,10 @@
 #
 
 import warnings
-import climetlab as cml
+
 import numpy as np
 import tqdm
+from climetlab import load_source
 from climetlab.core.temporary import temp_file
 from climetlab.readers.grib.output import new_grib_output
 
@@ -44,11 +45,11 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
     n_ensembles = len(normalise_number(ensembles["number"]))
 
     print(f"Retrieving ensemble data with {ensembles}")
-    ensembles = cml.load_source(**ensembles)
+    ensembles = load_source(**ensembles)
     print(f"Retrieving center data with {center}")
-    center = cml.load_source(**center)
+    center = load_source(**center)
     print(f"Retrieving mean data with {mean}")
-    mean = cml.load_source(**mean)
+    mean = load_source(**mean)
 
     assert len(mean) * n_ensembles == len(ensembles), (
         len(mean),
@@ -82,7 +83,11 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
             center_coords[k],
             ensembles_coords[k],
         )
-        assert set(center_coords[k]) == set(mean_coords[k]), (k, center_coords[k], mean_coords[k])
+        assert set(center_coords[k]) == set(mean_coords[k]), (
+            k,
+            center_coords[k],
+            mean_coords[k],
+        )
 
     for field in tqdm.tqdm(center):
         param = field.metadata("param")
@@ -105,7 +110,10 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
 
         for number in ensembles_coords["number"]:
             ensembles_field = get_unique_field(ensembles.sel(number=number), selection)
-            assert ensembles_field.metadata("grid") == grid, (ensembles_field.metadata("grid"), grid)
+            assert ensembles_field.metadata("grid") == grid, (
+                ensembles_field.metadata("grid"),
+                grid,
+            )
 
             e = ensembles_field.to_numpy()
             assert c.shape == e.shape, (c.shape, e.shape)
@@ -122,7 +130,7 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
 
     out.close()
 
-    ds = cml.load_source("file", path)
+    ds = load_source("file", path)
     assert len(ds) == len(ensembles), (len(ds), len(ensembles))
     ds._tmp = tmp
 

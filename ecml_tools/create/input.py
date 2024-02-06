@@ -6,10 +6,10 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-import os
-from importlib import import_module
 import datetime
+import importlib
 import logging
+import os
 import time
 from collections import defaultdict
 from copy import deepcopy
@@ -339,6 +339,7 @@ class ReferencesSolver(dict):
 class FunctionResult(Result):
     def __init__(self, context, dates, action, previous_sibling=None):
         super().__init__(context, dates)
+        assert isinstance(action, Action), type(action)
         self.action = action
 
         _args = self.action.args
@@ -429,16 +430,14 @@ class FunctionAction(BaseFunctionAction):
 
     @property
     def function(self):
-        from .functions import ensemble_perturbations
-
-        return ensemble_perturbations.execute
-        import os
-
-        here = os.path.dirname(os.path.dirname(__file__))
-        name = self.action.kwargs["name"]
-        proc = import_module(f".functions.{name}", package=__name__).execute
-
-        return proc
+        here = os.path.dirname(__file__)
+        path = os.path.join(here, "functions", f"{self.name}.py")
+        spec = importlib.util.spec_from_file_location(self.name, path)
+        module = spec.loader.load_module()
+        # TODO: this fails here, fix this.
+        #   getattr(module, self.name)
+        #   self.action.kwargs
+        return module.execute
 
 
 class ConcatResult(Result):
