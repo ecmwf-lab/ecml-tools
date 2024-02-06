@@ -201,16 +201,16 @@ def indexing(ds):
     t[0:10, 0:3, 0]
     t[:, :, :]
 
-    # t[:, (1, 3), :]
-    # t[:, (1, 3)]
+    t[:, (1, 3), :]
+    t[:, (1, 3)]
 
     t[0]
     t[0, :]
     t[0, 0, :]
     t[0, 0, 0, :]
 
-    # if ds.shape[2] > 1:  # Ensemble dimension
-    #     t[0:10, :, (0, 1)]
+    if ds.shape[2] > 1:  # Ensemble dimension
+        t[0:10, :, (0, 1)]
 
 
 def slices(ds, start=None, end=None, step=None):
@@ -1133,6 +1133,8 @@ def test_ensemble_1():
         ]
     )
     ds = test.ds
+
+    ds[0:10,:,(1,2)]
 
     assert isinstance(ds, Ensemble)
     assert len(ds) == 365 * 1 * 4

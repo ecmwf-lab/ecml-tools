@@ -6,6 +6,8 @@
 # nor does it submit to any jurisdiction.
 
 
+from functools import wraps
+
 import numpy as np
 
 
@@ -109,21 +111,53 @@ def length_to_slices(index, lengths):
     return result
 
 
-class IndexTester:
-    def __init__(self, shape):
-        self.shape = shape
+def _as_tuples(index):
+    def _(i):
+        if hasattr(i, "tolist"):
+            # NumPy arrays, TensorFlow tensors, etc.
+            i = i.tolist()
+            assert not isinstance(i[0], bool), "Mask not supported"
+            return tuple(i)
 
-    def __getitem__(self, index):
-        return index_to_slices(index, self.shape)
+        if isinstance(i, list):
+            return tuple(i)
+
+        return i
+
+    return tuple(_(i) for i in index)
 
 
-if __name__ == "__main__":
-    t = IndexTester((1000, 8, 10, 20000))
-    i = t[0, 1, 2, 3]
-    print(i)
+def expand_list_indexing(method):
+    """
+    Allows to use slices, lists, and tuples to select data from the dataset.
+    Zarr does not support indexing with lists/arrays directly, so we need to implement it ourselves.
+    """
 
-    # print(t[0])
-    # print(t[0, 1, 2, 3])
-    # print(t[0:10])
-    # print(t[...])
-    # print(t[:-1])
+    @wraps(method)
+    def wrapper(self, index):
+        if not isinstance(index, tuple):
+            return method(self, index)
+
+        if not any(isinstance(i, (list, tuple)) for i in index):
+            return method(self, index)
+
+        which = []
+        for i, idx in enumerate(index):
+            if isinstance(idx, (list, tuple)):
+                which.append(i)
+
+        assert which, "No list index found"
+
+        if len(which) > 1:
+            raise IndexError("Only one list index is allowed")
+
+        which = which[0]
+        index = _as_tuples(index)
+        result = []
+        for i in index[which]:
+            index, _ = update_tuple(index, which, slice(i, i + 1))
+            result.append(method(self, index))
+
+        return np.concatenate(result, axis=which)
+
+    return wrapper

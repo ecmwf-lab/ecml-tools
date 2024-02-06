@@ -11,7 +11,7 @@ import logging
 import os
 import re
 import warnings
-from functools import cached_property
+from functools import cached_property, wraps
 from pathlib import PurePath
 
 import numpy as np
@@ -22,6 +22,7 @@ import ecml_tools
 
 from .indexing import (
     apply_index_to_slices_changes,
+    expand_list_indexing,
     index_to_slices,
     length_to_slices,
     update_tuple,
@@ -37,6 +38,7 @@ DEPTH = 0
 
 
 def _debug_indexing(method):
+    @wraps(method)
     def wrapper(self, index):
         global DEPTH
         if isinstance(index, tuple):
@@ -224,6 +226,7 @@ class Dataset:
         return self.__class__.__name__ + "()"
 
     @debug_indexing
+    @expand_list_indexing
     def _get_tuple(self, n):
         raise NotImplementedError(
             f"Tuple not supported: {n} (class {self.__class__.__name__})"
@@ -381,29 +384,9 @@ class Zarr(Dataset):
         return self.data.shape[0]
 
     @debug_indexing
+    @expand_list_indexing
     def __getitem__(self, n):
-        if isinstance(n, tuple) and any(not isinstance(i, (int, slice)) for i in n):
-            return self._getitem_extended(n)
-
         return self.data[n]
-
-    def _getitem_extended(self, index):
-        """
-        Allows to use slices, lists, and tuples to select data from the dataset.
-        Zarr does not support indexing with lists/arrays directly, so we need to implement it ourselves.
-        """
-
-        assert False, index
-
-        shape = self.data.shape
-
-        axes = []
-        data = []
-        for n in self._unwind(index[0], index[1:], shape, 0, axes):
-            data.append(self.data[n])
-
-        assert len(axes) == 1, axes  # Not implemented for more than one axis
-        return np.concatenate(data, axis=axes[0])
 
     def _unwind(self, index, rest, shape, axis, axes):
         if not isinstance(index, (int, slice, list, tuple)):
@@ -676,28 +659,20 @@ class Concat(Combined):
         return sum(len(i) for i in self.datasets)
 
     @debug_indexing
+    @expand_list_indexing
     def _get_tuple(self, index):
         index, changes = index_to_slices(index, self.shape)
-        result = []
-
-        first, rest = index[0], index[1:]
-        start, stop, step = first.start, first.stop, first.step
-
-        for d in self.datasets:
-            length = d._len
-
-            result.append(d[(slice(start, stop, step),) + rest])
-
-            start -= length
-            while start < 0:
-                start += step
-
-            stop -= length
-
-            if start > stop:
-                break
-
-        return apply_index_to_slices_changes(np.concatenate(result, axis=0), changes)
+        print(index, changes)
+        lengths = [d.shape[0] for d in self.datasets]
+        slices = length_to_slices(index[0], lengths)
+        print("slies", slices)
+        result = [
+            d[update_tuple(index, 0, i)[0]]
+            for (d, i) in zip(self.datasets, slices)
+            if i is not None
+        ]
+        result = np.concatenate(result, axis=0)
+        return apply_index_to_slices_changes(result, changes)
 
     @debug_indexing
     def __getitem__(self, n):
@@ -718,21 +693,10 @@ class Concat(Combined):
     def _get_slice(self, s):
         result = []
 
-        start, stop, step = s.indices(self._len)
+        lengths = [d.shape[0] for d in self.datasets]
+        slices = length_to_slices(s, lengths)
 
-        for d in self.datasets:
-            length = d._len
-
-            result.append(d[start:stop:step])
-
-            start -= length
-            while start < 0:
-                start += step
-
-            stop -= length
-
-            if start > stop:
-                break
+        result = [d[i] for (d, i) in zip(self.datasets, slices) if i is not None]
 
         return np.concatenate(result)
 
@@ -783,13 +747,15 @@ class GivenAxis(Combined):
         return result
 
     @debug_indexing
+    @expand_list_indexing
     def _get_tuple(self, index):
         index, changes = index_to_slices(index, self.shape)
         lengths = [d.shape[self.axis] for d in self.datasets]
         slices = length_to_slices(index[self.axis], lengths)
-        before = index[: self.axis]
         result = [
-            d[before + (i,)] for (d, i) in zip(self.datasets, slices) if i is not None
+            d[update_tuple(index, self.axis, i)[0]]
+            for (d, i) in zip(self.datasets, slices)
+            if i is not None
         ]
         result = np.concatenate(result, axis=self.axis)
         return apply_index_to_slices_changes(result, changes)
@@ -850,6 +816,7 @@ class Join(Combined):
         return len(self.datasets[0])
 
     @debug_indexing
+    @expand_list_indexing
     def _get_tuple(self, index):
         index, changes = index_to_slices(index, self.shape)
         index, previous = update_tuple(index, 1, slice(None))
@@ -977,6 +944,7 @@ class Subset(Forwards):
         return np.stack([self.dataset[i] for i in indices])
 
     @debug_indexing
+    @expand_list_indexing
     def _get_tuple(self, n):
         index, changes = index_to_slices(n, self.shape)
         index, previous = update_tuple(index, 0, self.slice)
@@ -1024,6 +992,7 @@ class Select(Forwards):
         super().__init__(dataset)
 
     @debug_indexing
+    @expand_list_indexing
     def _get_tuple(self, index):
         index, changes = index_to_slices(index, self.shape)
         index, previous = update_tuple(index, 1, slice(None))
