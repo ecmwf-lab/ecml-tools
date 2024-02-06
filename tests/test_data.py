@@ -231,7 +231,7 @@ def slices(ds, start=None, end=None, step=None):
 
 
 def make_row(*args, ensemble=False, grid=False):
-    assert not isinstance(args[0], (list, tuple))
+    # assert not isinstance(args[0], (list, tuple))
     if grid:
 
         def _(x):
@@ -298,17 +298,17 @@ class DatasetTester:
         metadata(self.ds)
 
 
+def simple_row(date, vars):
+    values = [_(date, v) for v in vars]
+    return make_row(*values)
+
+
 def test_simple():
     test = DatasetTester("test-2021-2022-6h-o96-abcd")
     test.run(
         expected_class=Zarr,
         expected_length=365 * 2 * 4,
-        date_to_row=lambda date: make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        ),
+        date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         excepted_shape=(365 * 2 * 4, 4, 1, VALUES),
@@ -335,9 +335,7 @@ def test_concat():
         excepted_shape=(365 * 3 * 4, 4, 1, VALUES),
         excepted_variables=["a", "b", "c", "d"],
         excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
-        date_to_row=lambda date: make_row(
-            _(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")
-        ),
+        date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
         statistics_reference_variables="abcd",
     )
@@ -368,16 +366,7 @@ def test_join_1():
             "g": 6,
             "h": 7,
         },
-        date_to_row=lambda date: make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-            _(date, "e"),
-            _(date, "f"),
-            _(date, "g"),
-            _(date, "h"),
-        ),
+        date_to_row=lambda date: simple_row(date, "abcdefgh"),
         # TODO: test second stats
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -385,49 +374,35 @@ def test_join_1():
 
 
 def test_join_2():
-    ds = open_dataset(
-        "test-2021-2021-6h-o96-abcd-1",
-        "test-2021-2021-6h-o96-bdef-2",
+    test = DatasetTester(
+        [
+            "test-2021-2021-6h-o96-abcd-1",
+            "test-2021-2021-6h-o96-bdef-2",
+        ]
     )
 
-    assert isinstance(ds, Select)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(
+    test.run(
+        expected_class=Select,
+        expected_length=365 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 4, 6, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d", "e", "f"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5},
+        date_to_row=lambda date: make_row(
             _(date, "a", 1),
             _(date, "b", 2),
             _(date, "c", 1),
             _(date, "d", 2),
             _(date, "e", 2),
             _(date, "f", 2),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d", "e", "f"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5}
-
-    assert ds.shape == (365 * 4, 6, 1, VALUES)
-
-    same_stats(
-        ds,
-        open_dataset(
+        ),
+        statistics_reference_dataset=[
             "test-2021-2021-6h-o96-ac-1",
             "test-2021-2021-6h-o96-bdef-2",
-        ),
-        "abcdef",
+        ],
+        statistics_reference_variables="abcdef",
     )
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
 
 
 def test_join_3():
@@ -1432,4 +1407,4 @@ def test_statistics():
 
 
 if __name__ == "__main__":
-    test_simple()
+    test_ensemble_1()

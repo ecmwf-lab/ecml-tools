@@ -784,21 +784,14 @@ class GivenAxis(Combined):
 
     @debug_indexing
     def _get_tuple(self, index):
-        print(index, self.shape)
         index, changes = index_to_slices(index, self.shape)
         lengths = [d.shape[self.axis] for d in self.datasets]
         slices = length_to_slices(index[self.axis], lengths)
-
-        print("SLICES", slices, self.axis, index, lengths)
         before = index[: self.axis]
-
         result = [
             d[before + (i,)] for (d, i) in zip(self.datasets, slices) if i is not None
         ]
-        print([d.shape for d in result])
         result = np.concatenate(result, axis=self.axis)
-        print(result.shape)
-
         return apply_index_to_slices_changes(result, changes)
 
     @debug_indexing
