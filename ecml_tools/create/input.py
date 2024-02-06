@@ -598,7 +598,9 @@ def action_factory(config, context):
         raise ValueError(f"Invalid input config {config}")
 
     if len(config) != 1:
-        raise ValueError(f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}")
+        raise ValueError(
+            f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}"
+        )
 
     config = deepcopy(config)
     key = list(config.keys())[0]
@@ -683,7 +685,8 @@ class InputBuilder:
         return action_factory(self.config, context)
 
     def select(self, dates):
-        """ This changes the context. """
+        """This changes the context."""
         return self._action.select(dates)
+
 
 build_input = InputBuilder
