@@ -77,12 +77,12 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
             assert len(center_coords[k]) == 1
             assert len(ensembles_coords[k]) == n_ensembles
             continue
-        assert center_coords[k] == ensembles_coords[k], (
+        assert set(center_coords[k]) == set(ensembles_coords[k]), (
             k,
-            center_coords,
-            ensembles_coords,
+            center_coords[k],
+            ensembles_coords[k],
         )
-        assert center_coords[k] == mean_coords[k], (k, center_coords, mean_coords)
+        assert set(center_coords[k]) == set(mean_coords[k]), (k, center_coords[k], mean_coords[k])
 
     for field in tqdm.tqdm(center):
         param = field.metadata("param")
