@@ -7,6 +7,7 @@
 # nor does it submit to any jurisdiction.
 #
 
+import warnings
 import climetlab as cml
 import numpy as np
 import tqdm
@@ -42,8 +43,11 @@ def normalise_number(number):
 def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
     n_ensembles = len(normalise_number(ensembles["number"]))
 
+    print(f"Retrieving ensemble data with {ensembles}")
     ensembles = cml.load_source(**ensembles)
+    print(f"Retrieving center data with {center}")
     center = cml.load_source(**center)
+    print(f"Retrieving mean data with {mean}")
     mean = cml.load_source(**mean)
 
     assert len(mean) * n_ensembles == len(ensembles), (
@@ -82,6 +86,8 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
 
     for field in tqdm.tqdm(center):
         param = field.metadata("param")
+        grid = field.metadata("grid")
+
         selection = dict(
             valid_datetime=field.metadata("valid_datetime"),
             param=field.metadata("param"),
@@ -91,6 +97,7 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
             step=field.metadata("step"),
         )
         mean_field = get_unique_field(mean, selection)
+        assert mean_field.metadata("grid") == grid, (mean_field.metadata("grid"), grid)
 
         m = mean_field.to_numpy()
         c = field.to_numpy()
@@ -98,13 +105,17 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
 
         for number in ensembles_coords["number"]:
             ensembles_field = get_unique_field(ensembles.sel(number=number), selection)
+            assert ensembles_field.metadata("grid") == grid, (ensembles_field.metadata("grid"), grid)
+
             e = ensembles_field.to_numpy()
             assert c.shape == e.shape, (c.shape, e.shape)
 
             x = c + m - e
             if param == "q":
-                print("Clipping q")
-                x = np.max(x, 0)
+                warnings.warn("Clipping q")
+                x = np.maximum(x, 0)
+
+            assert x.shape == c.shape, (x.shape, c.shape)
 
             check_data_values(x, name=param)
             out.write(x, template=ensembles_field)
