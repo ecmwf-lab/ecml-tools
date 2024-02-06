@@ -107,7 +107,7 @@ def main():
     if path.endswith(".yaml"):
         with open(path, "r") as f:
             path = yaml.safe_load(f)
-        
+
     ds = open_dataset(path)
 
     total = len(ds)
@@ -124,9 +124,7 @@ def main():
         indexes = indexes[: args.count]
 
     if nworkers > 1:
-        tests = Tests(
-            [SpeedTest(path, indexes[i::nworkers]) for i in range(nworkers)]
-        )
+        tests = Tests([SpeedTest(path, indexes[i::nworkers]) for i in range(nworkers)])
 
         with Pool(nworkers) as pool:
             pool.map(tests, range(nworkers))

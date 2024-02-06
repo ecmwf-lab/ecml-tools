@@ -42,8 +42,9 @@ def compare_zarr(dir1, dir2):
         assert a_ == b_, (a, b)
     for k, date in zip(range(a.shape[0]), a.dates):
         for j in range(a.shape[1]):
-            assert (a[k, j] == b[k, j]).all(), (k, date,j, a[k, j], b[k, j])
+            assert (a[k, j] == b[k, j]).all(), (k, date, j, a[k, j], b[k, j])
     compare(dir1, dir2)
+
 
 def compare(dir1, dir2):
     """Compare two directories recursively."""
