@@ -334,7 +334,7 @@ class ReferencesSolver(dict):
         raise KeyError(key)
 
 
-class SourceResult(Result):
+class BaseSourceResult(Result):
     def __init__(self, context, dates, action, previous_sibling=None):
         super().__init__(context, dates)
         self.action = action
@@ -349,16 +349,30 @@ class SourceResult(Result):
 
     @cached_property
     def datasource(self):
-        from climetlab import load_source
-
         print(f"loading source with {self.args} {self.kwargs}")
-        return load_source(*self.args, **self.kwargs)
+        return self.function(*self.args, **self.kwargs)
 
     def __repr__(self):
         content = " ".join([f"{v}" for v in self.args])
         content += " ".join([f"{k}={v}" for k, v in self.kwargs.items()])
 
         return super().__repr__(content)
+    @property
+    def function(self):
+        raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
+
+class SourceResult(BaseSourceResult):
+    @property
+    def function(self):
+        from climetlab import load_source
+        return load_source
+
+class FunctionResult(BaseSourceResult):
+    @property
+    def function(self):
+        here = os.path.dirname(__file__)
+        proc = import_module(f".functions.{name}", package=__name__).execute
+        return proc
 
 
 class JoinResult(Result):
@@ -396,7 +410,8 @@ class LabelAction(Action):
         return super().__repr__(_inline_=self.name, _indent_=" ")
 
 
-class SourceAction(Action):
+class BaseSourceAction(Action):
+    result_class = None
     def __repr__(self):
         content = ""
         content += ",".join([self._short_str(a) for a in self.args])
@@ -407,7 +422,12 @@ class SourceAction(Action):
         return super().__repr__(_inline_=content, _indent_=" ")
 
     def select(self, dates):
-        return SourceResult(self.context, dates, action=self)
+        return self.result_class(self.context, dates, action=self)
+
+class SourceAction(BaseSourceAction):
+    result_class = SourceResult
+class FunctionAction(BaseSourceAction):
+    result_class = FunctionResult
 
 
 class ConcatResult(Result):
@@ -610,6 +630,7 @@ def action_factory(config, context):
         label=LabelAction,
         pipe=PipeAction,
         source=SourceAction,
+        function=FunctionAction,
         dates=DateAction,
     )[key]
 
