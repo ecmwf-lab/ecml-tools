@@ -179,9 +179,16 @@ class IndexTester:
         self.np = ds[:]  # Numpy array
 
         assert self.ds.shape == self.np.shape
+        assert (self.ds == self.np).all()
 
     def __getitem__(self, index):
-        assert (self.ds[index] == self.np[index]).all()
+        if self.ds[index] is None:
+            assert False, (self.ds, index)
+
+        if not (self.ds[index] == self.np[index]).all():
+            # print("DS", self.ds[index])
+            # print("NP", self.np[index])
+            assert (self.ds[index] == self.np[index]).all()
 
 
 def indexing(ds):
@@ -310,7 +317,7 @@ def test_concat():
 def test_join_1():
     ds = open_dataset(
         "test-2021-2021-6h-o96-abcd",
-        "test-2021-2021-6h-o96-efg",
+        "test-2021-2021-6h-o96-efgh",
     )
 
     assert isinstance(ds, Join)
@@ -330,6 +337,7 @@ def test_join_1():
                 _(date, "e"),
                 _(date, "f"),
                 _(date, "g"),
+                _(date, "h"),
             ]
         )
         assert (row == expect).all()
@@ -338,7 +346,7 @@ def test_join_1():
 
     assert (ds.dates == np.array(dates, dtype="datetime64")).all()
 
-    assert ds.variables == ["a", "b", "c", "d", "e", "f", "g"]
+    assert ds.variables == ["a", "b", "c", "d", "e", "f", "g", "h"]
     assert ds.name_to_index == {
         "a": 0,
         "b": 1,
@@ -347,9 +355,10 @@ def test_join_1():
         "e": 4,
         "f": 5,
         "g": 6,
+        "h": 7,
     }
 
-    assert ds.shape == (365 * 4, 7, 1, VALUES)
+    assert ds.shape == (365 * 4, 8, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
@@ -1275,6 +1284,7 @@ def test_ensemble_1():
 
     dates = []
     date = datetime.datetime(2021, 1, 1)
+    indexing(ds)
 
     for row in ds:
         expect = make_row(
@@ -1299,7 +1309,7 @@ def test_ensemble_1():
     assert ds.shape == (365 * 4, 4, 11, VALUES)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
     slices(ds)
-    indexing(ds)
+
     metadata(ds)
 
 
@@ -1432,4 +1442,4 @@ def test_statistics():
 
 
 if __name__ == "__main__":
-    test_constructor_5()
+    test_ensemble_1()

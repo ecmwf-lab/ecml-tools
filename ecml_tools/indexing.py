@@ -82,28 +82,29 @@ def length_to_slices(index, lengths):
     """
     total = sum(lengths)
     start, stop, step = index.indices(total)
-    print(start, stop, step)
-
-    # TODO: combine loops
-    p = []
-    pos = 0
-    for length in lengths:
-        end = pos + length
-        p.append((pos, end))
-        pos = end
 
     result = []
 
-    for i, (s, e) in enumerate(p):
-        pos = s
-        if s % step:
-            s = s + step - s % step
-            assert s % step == 0
-            assert s >= pos
-        if max(s, start) <= min(e, stop):
-            result.append((i, slice(s - pos, e - pos, step)))
-        else:
-            result.append(None)
+    pos = 0
+    for length in lengths:
+        end = pos + length
+
+        b = max(pos, start)
+        e = min(end, stop)
+
+        p = None
+        if b <= e:
+            if (b - start) % step != 0:
+                b = b + step - (b - start) % step
+            b -= pos
+            e -= pos
+
+            if 0 <= b < e:
+                p = slice(b, e, step)
+
+        result.append(p)
+
+        pos = end
 
     return result
 
