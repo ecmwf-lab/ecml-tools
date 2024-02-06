@@ -5,9 +5,9 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+import json
 import os
 import tempfile
-import json
 
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset

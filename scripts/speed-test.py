@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import argparse
-import yaml
 import random
 import time
 from multiprocessing import Pool
 
+import yaml
 from tqdm import tqdm
 
 from ecml_tools.data import open_dataset
