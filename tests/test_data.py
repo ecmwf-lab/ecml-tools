@@ -150,6 +150,7 @@ def zarr_from_str(name, mode):
     )
 
 
+# Monkey patching
 zarr.convenience.open = zarr_from_str
 ecml_tools.data._name_to_path = lambda name, zarr_root: name
 
@@ -229,7 +230,8 @@ def slices(ds, start=None, end=None, step=None):
     t[::step]
 
 
-def make_row(args, ensemble=False, grid=False):
+def make_row(*args, ensemble=False, grid=False):
+    assert not isinstance(args[0], (list, tuple))
     if grid:
 
         def _(x):
@@ -249,121 +251,137 @@ def metadata(ds):
     assert isinstance(metadata, dict)
 
 
+class DatasetTester:
+    def __init__(self, dataset_spec):
+        self.ds = open_dataset(dataset_spec)
+
+    def run(
+        self,
+        *,
+        expected_class,
+        expected_length,
+        excepted_shape,
+        excepted_variables,
+        excepted_name_to_index,
+        date_to_row,
+        start_date,
+        time_increment,
+        statistics_reference_dataset,
+        statistics_reference_variables,
+    ):
+        assert isinstance(self.ds, expected_class)
+        assert len(self.ds) == expected_length
+        assert len([row for row in self.ds]) == len(self.ds)
+        assert self.ds.shape == excepted_shape
+        assert self.ds.variables == excepted_variables
+        assert self.ds.name_to_index == excepted_name_to_index
+
+        dates = []
+        date = start_date
+
+        for row in self.ds:
+            expect = date_to_row(date)
+            assert (row == expect).all()
+            dates.append(date)
+            date += time_increment
+
+        assert (self.ds.dates == np.array(dates, dtype="datetime64")).all()
+
+        same_stats(
+            self.ds,
+            open_dataset(statistics_reference_dataset),
+            statistics_reference_variables,
+        )
+
+        slices(self.ds)
+        indexing(self.ds)
+        metadata(self.ds)
+
+
 def test_simple():
-    ds = open_dataset(
-        "test-2021-2022-6h-o96-abcd",
+    test = DatasetTester("test-2021-2022-6h-o96-abcd")
+    test.run(
+        expected_class=Zarr,
+        expected_length=365 * 2 * 4,
+        date_to_row=lambda date: make_row(
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+        ),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 2 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
+        statistics_reference_variables="abcd",
     )
-
-    assert isinstance(ds, Zarr)
-    assert len(ds) == 365 * 2 * 4
-
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
-
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-    assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2022-6h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
 
 
 def test_concat():
-    ds = open_dataset(
-        "test-2021-2022-6h-o96-abcd",
-        "test-2023-2023-6h-o96-abcd",
+    test = DatasetTester(
+        [
+            "test-2021-2022-6h-o96-abcd",
+            "test-2023-2023-6h-o96-abcd",
+        ]
     )
 
-    assert isinstance(ds, Concat)
-    assert len(ds) == 365 * 3 * 4
-
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
-
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-    assert ds.shape == (365 * 3 * 4, 4, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2022-6h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Concat,
+        expected_length=365 * 3 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 3 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: make_row(
+            _(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")
+        ),
+        statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_join_1():
-    ds = open_dataset(
-        "test-2021-2021-6h-o96-abcd",
-        "test-2021-2021-6h-o96-efgh",
+    test = DatasetTester(
+        [
+            "test-2021-2021-6h-o96-abcd",
+            "test-2021-2021-6h-o96-efgh",
+        ]
     )
 
-    assert isinstance(ds, Join)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1)
-
-    for row in ds:
-        expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-                _(date, "e"),
-                _(date, "f"),
-                _(date, "g"),
-                _(date, "h"),
-            ]
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d", "e", "f", "g", "h"]
-    assert ds.name_to_index == {
-        "a": 0,
-        "b": 1,
-        "c": 2,
-        "d": 3,
-        "e": 4,
-        "f": 5,
-        "g": 6,
-        "h": 7,
-    }
-
-    assert ds.shape == (365 * 4, 8, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Join,
+        expected_length=365 * 4,
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 4, 8, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d", "e", "f", "g", "h"],
+        excepted_name_to_index={
+            "a": 0,
+            "b": 1,
+            "c": 2,
+            "d": 3,
+            "e": 4,
+            "f": 5,
+            "g": 6,
+            "h": 7,
+        },
+        date_to_row=lambda date: make_row(
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
+            _(date, "e"),
+            _(date, "f"),
+            _(date, "g"),
+            _(date, "h"),
+        ),
+        # TODO: test second stats
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_join_2():
@@ -381,14 +399,12 @@ def test_join_2():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a", 1),
-                _(date, "b", 2),
-                _(date, "c", 1),
-                _(date, "d", 2),
-                _(date, "e", 2),
-                _(date, "f", 2),
-            ]
+            _(date, "a", 1),
+            _(date, "b", 2),
+            _(date, "c", 1),
+            _(date, "d", 2),
+            _(date, "e", 2),
+            _(date, "f", 2),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -431,12 +447,10 @@ def test_join_3():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a", 2),
-                _(date, "b", 2),
-                _(date, "c", 2),
-                _(date, "d", 2),
-            ]
+            _(date, "a", 2),
+            _(date, "b", 2),
+            _(date, "c", 2),
+            _(date, "d", 2),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -466,12 +480,10 @@ def test_subset_1():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-            ]
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -501,12 +513,10 @@ def test_subset_2():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-            ]
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -543,12 +553,10 @@ def test_subset_3():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-            ]
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -578,12 +586,10 @@ def test_subset_4():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-            ]
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -614,12 +620,10 @@ def test_subset_5():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-            ]
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -654,12 +658,10 @@ def test_subset_6():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-            ]
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -690,12 +692,10 @@ def test_subset_7():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-            ]
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -733,12 +733,10 @@ def test_subset_8():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a"),
-                _(date, "b"),
-                _(date, "c"),
-                _(date, "d"),
-            ]
+            _(date, "a"),
+            _(date, "b"),
+            _(date, "c"),
+            _(date, "d"),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -768,7 +766,7 @@ def test_select_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "b"), _(date, "d")])
+        expect = make_row(_(date, "b"), _(date, "d"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -795,7 +793,7 @@ def test_select_2():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "c"), _(date, "a")])
+        expect = make_row(_(date, "c"), _(date, "a"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -824,7 +822,7 @@ def test_select_3():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "a"), _(date, "c")])
+        expect = make_row(_(date, "a"), _(date, "c"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -852,7 +850,7 @@ def test_rename():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
+        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -879,7 +877,7 @@ def test_drop():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "b"), _(date, "c"), _(date, "d")])
+        expect = make_row(_(date, "b"), _(date, "c"), _(date, "d"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -907,7 +905,7 @@ def test_reorder_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")])
+        expect = make_row(_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -935,7 +933,7 @@ def test_reorder_2():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")])
+        expect = make_row(_(date, "d"), _(date, "c"), _(date, "b"), _(date, "a"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -967,7 +965,7 @@ def test_constructor_1():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
+        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -997,7 +995,7 @@ def test_constructor_2():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
+        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -1027,7 +1025,7 @@ def test_constructor_3():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
+        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -1058,7 +1056,7 @@ def test_constructor_4():
     date = datetime.datetime(2021, 1, 1)
 
     for row in ds:
-        expect = make_row([_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")])
+        expect = make_row(_(date, "a"), _(date, "b"), _(date, "c"), _(date, "d"))
         assert (row == expect).all()
         dates.append(date)
         date += datetime.timedelta(hours=6)
@@ -1092,15 +1090,13 @@ def test_constructor_5():
 
     for row in ds:
         expect = make_row(
-            [
-                _(date, "a", 1),
-                _(date, "b", 2),
-                _(date, "c", 1),
-                _(date, "d", 1),
-                _(date, "a", 2),
-                _(date, "c", 2),
-                _(date, "d", 2),
-            ]
+            _(date, "a", 1),
+            _(date, "b", 2),
+            _(date, "c", 1),
+            _(date, "d", 1),
+            _(date, "a", 2),
+            _(date, "c", 2),
+            _(date, "d", 2),
         )
         assert (row == expect).all()
         dates.append(date)
@@ -1288,12 +1284,10 @@ def test_ensemble_1():
 
     for row in ds:
         expect = make_row(
-            [
-                [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)],
-                [_(date, "b", 1, i) for i in range(10)] + [_(date, "b", 2, 0)],
-                [_(date, "c", 1, i) for i in range(10)] + [_(date, "c", 2, 0)],
-                [_(date, "d", 1, i) for i in range(10)] + [_(date, "d", 2, 0)],
-            ],
+            [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)],
+            [_(date, "b", 1, i) for i in range(10)] + [_(date, "b", 2, 0)],
+            [_(date, "c", 1, i) for i in range(10)] + [_(date, "c", 2, 0)],
+            [_(date, "d", 1, i) for i in range(10)] + [_(date, "d", 2, 0)],
             ensemble=True,
         )
         # print(row.shape, expect.shape)
@@ -1331,20 +1325,18 @@ def test_ensemble_2():
 
     for row in ds:
         expect = make_row(
-            [
-                [_(date, "a", 1, i) for i in range(10)]
-                + [_(date, "a", 2, 0)]
-                + [_(date, "a", 3, i) for i in range(5)],
-                [_(date, "b", 1, i) for i in range(10)]
-                + [_(date, "b", 2, 0)]
-                + [_(date, "b", 3, i) for i in range(5)],
-                [_(date, "c", 1, i) for i in range(10)]
-                + [_(date, "c", 2, 0)]
-                + [_(date, "c", 3, i) for i in range(5)],
-                [_(date, "d", 1, i) for i in range(10)]
-                + [_(date, "d", 2, 0)]
-                + [_(date, "d", 3, i) for i in range(5)],
-            ],
+            [_(date, "a", 1, i) for i in range(10)]
+            + [_(date, "a", 2, 0)]
+            + [_(date, "a", 3, i) for i in range(5)],
+            [_(date, "b", 1, i) for i in range(10)]
+            + [_(date, "b", 2, 0)]
+            + [_(date, "b", 3, i) for i in range(5)],
+            [_(date, "c", 1, i) for i in range(10)]
+            + [_(date, "c", 2, 0)]
+            + [_(date, "c", 3, i) for i in range(5)],
+            [_(date, "d", 1, i) for i in range(10)]
+            + [_(date, "d", 2, 0)]
+            + [_(date, "d", 3, i) for i in range(5)],
             ensemble=True,
         )
         assert (row == expect).all()
@@ -1383,22 +1375,20 @@ def test_grids():
     for row in ds:
         expect = make_row(
             [
-                [
-                    _(date, "a", 1),
-                    _(date, "a", 2, values=25),
-                ],
-                [
-                    _(date, "b", 1),
-                    _(date, "b", 2, values=25),
-                ],
-                [
-                    _(date, "c", 1),
-                    _(date, "c", 2, values=25),
-                ],
-                [
-                    _(date, "d", 1),
-                    _(date, "d", 2, values=25),
-                ],
+                _(date, "a", 1),
+                _(date, "a", 2, values=25),
+            ],
+            [
+                _(date, "b", 1),
+                _(date, "b", 2, values=25),
+            ],
+            [
+                _(date, "c", 1),
+                _(date, "c", 2, values=25),
+            ],
+            [
+                _(date, "d", 1),
+                _(date, "d", 2, values=25),
             ],
             grid=True,
         )
@@ -1442,4 +1432,4 @@ def test_statistics():
 
 
 if __name__ == "__main__":
-    test_ensemble_1()
+    test_simple()

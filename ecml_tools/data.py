@@ -36,7 +36,7 @@ DEBUG_ZARR_LOADING = int(os.environ.get("DEBUG_ZARR_LOADING", "0"))
 DEPTH = 0
 
 
-def debug_indexing(method):
+def _debug_indexing(method):
     def wrapper(self, index):
         global DEPTH
         if isinstance(index, tuple):
@@ -49,6 +49,15 @@ def debug_indexing(method):
         return result
 
     return wrapper
+
+
+if True:
+
+    def debug_indexing(x):
+        return x
+
+else:
+    debug_indexing = _debug_indexing
 
 
 def debug_zarr_loading(on_off):
@@ -222,6 +231,10 @@ class Dataset:
 
 
 class Source:
+    """
+    Class used to follow the provenance of a data point.
+    """
+
     def __init__(self, dataset, index, source=None, info=None):
         self.dataset = dataset
         self.index = index
