@@ -11,7 +11,7 @@ import logging
 import os
 import re
 import warnings
-from functools import cached_property
+from functools import cached_property, wraps
 from pathlib import PurePath
 
 import numpy as np
@@ -20,11 +20,46 @@ import zarr
 
 import ecml_tools
 
+from .indexing import (
+    apply_index_to_slices_changes,
+    expand_list_indexing,
+    index_to_slices,
+    length_to_slices,
+    update_tuple,
+)
+
 LOG = logging.getLogger(__name__)
 
 __all__ = ["open_dataset", "open_zarr", "debug_zarr_loading"]
 
 DEBUG_ZARR_LOADING = int(os.environ.get("DEBUG_ZARR_LOADING", "0"))
+
+DEPTH = 0
+
+
+def _debug_indexing(method):
+    @wraps(method)
+    def wrapper(self, index):
+        global DEPTH
+        if isinstance(index, tuple):
+            print("  " * DEPTH, "->", self, method.__name__, index)
+        DEPTH += 1
+        result = method(self, index)
+        DEPTH -= 1
+        if isinstance(index, tuple):
+            print("  " * DEPTH, "<-", self, method.__name__, result.shape)
+        return result
+
+    return wrapper
+
+
+if True:
+
+    def debug_indexing(x):
+        return x
+
+else:
+    debug_indexing = _debug_indexing
 
 
 def debug_zarr_loading(on_off):
@@ -190,11 +225,19 @@ class Dataset:
     def __repr__(self):
         return self.__class__.__name__ + "()"
 
+    @debug_indexing
+    @expand_list_indexing
     def _get_tuple(self, n):
-        raise NotImplementedError(f"Tuple not supported: {n} (class {self.__class__.__name__})")
+        raise NotImplementedError(
+            f"Tuple not supported: {n} (class {self.__class__.__name__})"
+        )
 
 
 class Source:
+    """
+    Class used to follow the provenance of a data point.
+    """
+
     def __init__(self, dataset, index, source=None, info=None):
         self.dataset = dataset
         self.index = index
@@ -340,30 +383,10 @@ class Zarr(Dataset):
     def __len__(self):
         return self.data.shape[0]
 
+    @debug_indexing
+    @expand_list_indexing
     def __getitem__(self, n):
-        if isinstance(n, tuple) and any(not isinstance(i, (int, slice)) for i in n):
-            return self._getitem_extended(n)
-
         return self.data[n]
-
-    def _getitem_extended(self, index):
-        """
-        Allows to use slices, lists, and tuples to select data from the dataset.
-        Zarr does not support indexing with lists/arrays directly, so we need to implement it ourselves.
-        """
-
-        if not isinstance(index, tuple):
-            return self[index]
-
-        shape = self.data.shape
-
-        axes = []
-        data = []
-        for n in self._unwind(index[0], index[1:], shape, 0, axes):
-            data.append(self.data[n])
-
-        assert len(axes) == 1, axes  # Not implemented for more than one axis
-        return np.concatenate(data, axis=axes[0])
 
     def _unwind(self, index, rest, shape, axis, axes):
         if not isinstance(index, (int, slice, list, tuple)):
@@ -377,7 +400,7 @@ class Zarr(Dataset):
         if isinstance(index, (list, tuple)):
             axes.append(axis)  # Dimension of the concatenation
             for i in index:
-                yield from self._unwind(i, rest, shape, axis, axes)
+                yield from self._unwind((slice(i, i + 1),), rest, shape, axis, axes)
             return
 
         if len(rest) == 0:
@@ -635,6 +658,23 @@ class Concat(Combined):
     def __len__(self):
         return sum(len(i) for i in self.datasets)
 
+    @debug_indexing
+    @expand_list_indexing
+    def _get_tuple(self, index):
+        index, changes = index_to_slices(index, self.shape)
+        print(index, changes)
+        lengths = [d.shape[0] for d in self.datasets]
+        slices = length_to_slices(index[0], lengths)
+        print("slies", slices)
+        result = [
+            d[update_tuple(index, 0, i)[0]]
+            for (d, i) in zip(self.datasets, slices)
+            if i is not None
+        ]
+        result = np.concatenate(result, axis=0)
+        return apply_index_to_slices_changes(result, changes)
+
+    @debug_indexing
     def __getitem__(self, n):
         if isinstance(n, tuple):
             return self._get_tuple(n)
@@ -649,24 +689,14 @@ class Concat(Combined):
             k += 1
         return self.datasets[k][n]
 
+    @debug_indexing
     def _get_slice(self, s):
         result = []
 
-        start, stop, step = s.indices(self._len)
+        lengths = [d.shape[0] for d in self.datasets]
+        slices = length_to_slices(s, lengths)
 
-        for d in self.datasets:
-            length = d._len
-
-            result.append(d[start:stop:step])
-
-            start -= length
-            while start < 0:
-                start += step
-
-            stop -= length
-
-            if start > stop:
-                break
+        result = [d[i] for (d, i) in zip(self.datasets, slices) if i is not None]
 
         return np.concatenate(result)
 
@@ -716,9 +746,25 @@ class GivenAxis(Combined):
         assert False not in result, result
         return result
 
+    @debug_indexing
+    @expand_list_indexing
+    def _get_tuple(self, index):
+        index, changes = index_to_slices(index, self.shape)
+        lengths = [d.shape[self.axis] for d in self.datasets]
+        slices = length_to_slices(index[self.axis], lengths)
+        result = [
+            d[update_tuple(index, self.axis, i)[0]]
+            for (d, i) in zip(self.datasets, slices)
+            if i is not None
+        ]
+        result = np.concatenate(result, axis=self.axis)
+        return apply_index_to_slices_changes(result, changes)
+
+    @debug_indexing
     def _get_slice(self, s):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
 
+    @debug_indexing
     def __getitem__(self, n):
         if isinstance(n, tuple):
             return self._get_tuple(n)
@@ -769,9 +815,23 @@ class Join(Combined):
     def __len__(self):
         return len(self.datasets[0])
 
+    @debug_indexing
+    @expand_list_indexing
+    def _get_tuple(self, index):
+        index, changes = index_to_slices(index, self.shape)
+        index, previous = update_tuple(index, 1, slice(None))
+
+        # TODO: optimize if index does not access all datasets, so we don't load chunks we don't need
+        result = [d[index] for d in self.datasets]
+
+        result = np.concatenate(result, axis=1)
+        return apply_index_to_slices_changes(result[:, previous], changes)
+
+    @debug_indexing
     def _get_slice(self, s):
         return np.stack([self[i] for i in range(*s.indices(self._len))])
 
+    @debug_indexing
     def __getitem__(self, n):
         if isinstance(n, tuple):
             return self._get_tuple(n)
@@ -857,10 +917,14 @@ class Subset(Forwards):
 
         self.dataset = dataset
         self.indices = list(indices)
+        self.slice = _make_slice_or_index_from_list_or_tuple(self.indices)
+        assert isinstance(self.slice, slice)
+        print("SUBSET", self.slice)
 
         # Forward other properties to the super dataset
         super().__init__(dataset)
 
+    @debug_indexing
     def __getitem__(self, n):
         if isinstance(n, tuple):
             return self._get_tuple(n)
@@ -871,6 +935,7 @@ class Subset(Forwards):
         n = self.indices[n]
         return self.dataset[n]
 
+    @debug_indexing
     def _get_slice(self, s):
         # TODO: check if the indices can be simplified to a slice
         # the time checking maybe be longer than the time saved
@@ -878,18 +943,15 @@ class Subset(Forwards):
         indices = [self.indices[i] for i in range(*s.indices(self._len))]
         return np.stack([self.dataset[i] for i in indices])
 
+    @debug_indexing
+    @expand_list_indexing
     def _get_tuple(self, n):
-        first, rest = n[0], n[1:]
-
-        if isinstance(first, int):
-            return self.dataset[(self.indices[first],) + rest]
-
-        if isinstance(first, slice):
-            indices = tuple(self.indices[i] for i in range(*first.indices(self._len)))
-            indices = _make_slice_or_index_from_list_or_tuple(indices)
-            return self.dataset[(indices,) + rest]
-
-        raise NotImplementedError(f"Only int and slice supported not {type(first)}")
+        index, changes = index_to_slices(n, self.shape)
+        index, previous = update_tuple(index, 0, self.slice)
+        result = self.dataset[index]
+        result = result[previous]
+        result = apply_index_to_slices_changes(result, changes)
+        return result
 
     def __len__(self):
         return len(self.indices)
@@ -929,12 +991,24 @@ class Select(Forwards):
         # Forward other properties to the main dataset
         super().__init__(dataset)
 
+    @debug_indexing
+    @expand_list_indexing
+    def _get_tuple(self, index):
+        index, changes = index_to_slices(index, self.shape)
+        index, previous = update_tuple(index, 1, slice(None))
+        result = self.dataset[index]
+        result = result[:, self.indices]
+        result = result[:, previous]
+        result = apply_index_to_slices_changes(result, changes)
+        return result
+
+    @debug_indexing
     def __getitem__(self, n):
-        # if isinstance(n, tuple):
-        #     return self._get_tuple(n)
+        if isinstance(n, tuple):
+            return self._get_tuple(n)
 
         row = self.dataset[n]
-        if isinstance(n, (slice, tuple)):
+        if isinstance(n, slice):
             return row[:, self.indices]
 
         return row[self.indices]
