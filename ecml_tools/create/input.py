@@ -6,6 +6,8 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
+import os
+from importlib import import_module
 import datetime
 import logging
 import time
@@ -334,7 +336,7 @@ class ReferencesSolver(dict):
         raise KeyError(key)
 
 
-class BaseSourceResult(Result):
+class FunctionResult(Result):
     def __init__(self, context, dates, action, previous_sibling=None):
         super().__init__(context, dates)
         self.action = action
@@ -350,29 +352,17 @@ class BaseSourceResult(Result):
     @cached_property
     def datasource(self):
         print(f"loading source with {self.args} {self.kwargs}")
-        return self.function(*self.args, **self.kwargs)
+        return self.action.function(*self.args, **self.kwargs)
 
     def __repr__(self):
         content = " ".join([f"{v}" for v in self.args])
         content += " ".join([f"{k}={v}" for k, v in self.kwargs.items()])
 
         return super().__repr__(content)
+
     @property
     def function(self):
         raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
-
-class SourceResult(BaseSourceResult):
-    @property
-    def function(self):
-        from climetlab import load_source
-        return load_source
-
-class FunctionResult(BaseSourceResult):
-    @property
-    def function(self):
-        here = os.path.dirname(__file__)
-        proc = import_module(f".functions.{name}", package=__name__).execute
-        return proc
 
 
 class JoinResult(Result):
@@ -410,8 +400,7 @@ class LabelAction(Action):
         return super().__repr__(_inline_=self.name, _indent_=" ")
 
 
-class BaseSourceAction(Action):
-    result_class = None
+class BaseFunctionAction(Action):
     def __repr__(self):
         content = ""
         content += ",".join([self._short_str(a) for a in self.args])
@@ -422,12 +411,34 @@ class BaseSourceAction(Action):
         return super().__repr__(_inline_=content, _indent_=" ")
 
     def select(self, dates):
-        return self.result_class(self.context, dates, action=self)
+        return FunctionResult(self.context, dates, action=self)
 
-class SourceAction(BaseSourceAction):
-    result_class = SourceResult
-class FunctionAction(BaseSourceAction):
-    result_class = FunctionResult
+
+class SourceAction(BaseFunctionAction):
+    @property
+    def function(self):
+        from climetlab import load_source
+
+        return load_source
+
+
+class FunctionAction(BaseFunctionAction):
+    def __init__(self, context, name, **kwargs):
+        super().__init__(context, **kwargs)
+        self.name = name
+
+    @property
+    def function(self):
+        from .functions import ensemble_perturbations
+
+        return ensemble_perturbations.execute
+        import os
+
+        here = os.path.dirname(os.path.dirname(__file__))
+        name = self.action.kwargs["name"]
+        proc = import_module(f".functions.{name}", package=__name__).execute
+
+        return proc
 
 
 class ConcatResult(Result):
@@ -708,6 +719,9 @@ class InputBuilder:
     def select(self, dates):
         """This changes the context."""
         return self._action.select(dates)
+
+    def __repr__(self):
+        return repr(self._action)
 
 
 build_input = InputBuilder
