@@ -201,8 +201,8 @@ def indexing(ds):
     t[0:10, 0:3, 0]
     t[:, :, :]
 
-    t[:, (1, 3), :]
-    t[:, (1, 3)]
+    t[:, (1, 2), :]
+    t[:, (1, 2)]
 
     t[0]
     t[0, :]
@@ -212,16 +212,9 @@ def indexing(ds):
     if ds.shape[2] > 1:  # Ensemble dimension
         t[0:10, :, (0, 1)]
 
-
-def slices(ds, start=None, end=None, step=None):
-    if start is None:
-        start = 5
-    if end is None:
-        end = len(ds) - 5
-    if step is None:
-        step = len(ds) // 10
-
-    t = IndexTester(ds)
+    start = 5
+    end = len(ds) - 5
+    step = len(ds) // 10
 
     t[start:end:step]
     t[start:end]
@@ -287,13 +280,13 @@ class DatasetTester:
 
         assert (self.ds.dates == np.array(dates, dtype="datetime64")).all()
 
-        same_stats(
-            self.ds,
-            open_dataset(statistics_reference_dataset),
-            statistics_reference_variables,
-        )
+        if statistics_reference_dataset is not None:
+            same_stats(
+                self.ds,
+                open_dataset(statistics_reference_dataset),
+                statistics_reference_variables,
+            )
 
-        slices(self.ds)
         indexing(self.ds)
         metadata(self.ds)
 
@@ -555,40 +548,18 @@ def test_subset_8():
         start="03:00",
         frequency="6h",
     )
-    ds = test.ds
-
-    assert isinstance(ds, Subset)
-    assert len(ds) == 365 * 4
-    assert len([row for row in ds]) == len(ds)
-
-    print(ds.dates)
-
-    dates = []
-    date = datetime.datetime(2021, 1, 1, 3, 0, 0)
-    assert ds.dates[0].astype(object) == date, (ds.dates[0], date)
-
-    for row in ds:
-        expect = make_row(
-            _(date, "a"),
-            _(date, "b"),
-            _(date, "c"),
-            _(date, "d"),
-        )
-        assert (row == expect).all()
-        dates.append(date)
-        date += datetime.timedelta(hours=6)
-
-    assert (ds.dates == np.array(dates, dtype="datetime64")).all()
-
-    assert ds.variables == ["a", "b", "c", "d"]
-    assert ds.name_to_index == {"a": 0, "b": 1, "c": 2, "d": 3}
-
-    assert ds.shape == (365 * 4, 4, 1, VALUES)
-
-    same_stats(ds, open_dataset("test-2021-2021-1h-o96-abcd"), "abcd")
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Subset,
+        expected_length=365 * 4,
+        excepted_shape=(365 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        start_date=datetime.datetime(2021, 1, 1, 3, 0, 0),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_select_1():
@@ -615,7 +586,7 @@ def test_select_1():
 
     assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -644,7 +615,7 @@ def test_select_2():
     assert ds.shape == (365 * 4, 2, 1, VALUES)
 
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -673,7 +644,7 @@ def test_select_3():
 
     assert ds.shape == (365 * 4, 2, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "ac")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -702,7 +673,7 @@ def test_rename():
 
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -730,7 +701,7 @@ def test_drop():
 
     assert ds.shape == (365 * 4, 3, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "bcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -759,7 +730,7 @@ def test_reorder_1():
 
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -788,7 +759,7 @@ def test_reorder_2():
 
     assert ds.shape == (365 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -821,7 +792,7 @@ def test_constructor_1():
 
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -852,7 +823,7 @@ def test_constructor_2():
 
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -883,7 +854,7 @@ def test_constructor_3():
 
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -915,7 +886,7 @@ def test_constructor_4():
 
     assert ds.shape == (365 * 2 * 4, 4, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -958,7 +929,7 @@ def test_constructor_5():
     assert ds.shape == (365 * 4, 7, 1, VALUES)
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
     same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -987,142 +958,83 @@ def test_dates():
 
 def test_slice_1():
     test = DatasetTester("test-2021-2021-6h-o96-abcd")
-    ds = test.ds
-
-    s = ds[0:10:2]
-    assert len(s) == 5
-    assert (s[0] == ds[0]).all()
-    assert (s[1] == ds[2]).all()
-    assert (s[2] == ds[4]).all()
-    assert (s[3] == ds[6]).all()
-    assert (s[4] == ds[8]).all()
+    test.run()
 
 
 def test_slice_2():
-    test = DatasetTester("test-2021-2021-6h-o96-abcd")
-    ds = test.ds
-    s = ds[2:5]
-    assert len(s) == 3
-    assert (s[0] == ds[2]).all()
-    assert (s[1] == ds[3]).all()
-    assert (s[2] == ds[5]).all()
-
-
-def test_slice_3():
-    test = DatasetTester("test-2021-2021-6h-o96-abcd")
-    ds = test.ds
-
-    s = ds[:5:2]
-    assert len(s) == 3
-    assert (s[0] == ds[0]).all()
-    assert (s[1] == ds[2]).all()
-    assert (s[2] == ds[4]).all()
-
-
-def test_slice_4():
-    test = DatasetTester("test-2021-2021-6h-o96-abcd")
-    ds = test.ds
-
-    n = len(ds)
-    s = ds[2:]
-    assert len(s) == n - 2
-    assert (s[0] == ds[2]).all()
-    assert (s[n - 3] == ds[n - 1]).all()
-
-
-def test_slice_5():
-    test = DatasetTester("test-2021-2021-6h-o96-abcd")
-    ds = test.ds
-
-    n = len(ds)
-    s = ds[2 : (n + 10)]  # slice too large
-    assert len(s) == n - 2
-    assert (s[0] == ds[2]).all()
-    assert (s[n - 3] == ds[n - 1]).all()
-
-
-def test_slice_6():
     test = DatasetTester(
         [f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)]
     )
-    ds = test.ds
-
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
-    slices(ds, 0, len(ds), 1)
-    slices(ds, 0, len(ds), 10)
-    slices(ds, 7, -123, 13)
-
-    for i in range(0, len(ds), len(ds) // 10):
-        for s in range(1, 3):
-            slices(ds, i, i + s, 1)
-            slices(ds, i, i + s, 10)
-            slices(ds, i, i + s, 13)
+    test.run(
+        expected_class=Statistics,
+        expected_length=365 * 1 * 4,
+        excepted_shape=(365 * 1 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        statistics_reference_dataset=None,
+        statistics_reference_variables=None,
+    )
 
 
-def test_slice_7():
+def test_slice_3():
     test = DatasetTester(
         [
             f"test-2020-2020-1h-o96-{vars}"
             for vars in ("abcd", "efgh", "ijkl", "mnop", "qrst", "uvwx", "yz")
         ]
     )
-    ds = test.ds
-
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
-    slices(ds, 0, len(ds), 1)
-    slices(ds, 0, len(ds), 10)
-    slices(ds, 7, -123, 13)
-
-    for i in range(0, len(ds), len(ds) // 10):
-        for s in range(1, 3):
-            slices(ds, i, i + s, 1)
-            slices(ds, i, i + s, 10)
-            slices(ds, i, i + s, 13)
+    test.run(
+        expected_class=Statistics,
+        expected_length=365 * 2 * 4,
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 2 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
-def test_slice_8():
+def test_slice_4():
     test = DatasetTester(
         [f"test-2020-2020-1h-o96-{vars}" for vars in ("abcd", "cd", "a", "c")]
     )
-    ds = test.ds
-
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
-    slices(ds, 0, len(ds), 1)
-    slices(ds, 0, len(ds), 10)
-    slices(ds, 7, -123, 13)
-
-    for i in range(0, len(ds), len(ds) // 10):
-        for s in range(1, 3):
-            slices(ds, i, i + s, 1)
-            slices(ds, i, i + s, 10)
-            slices(ds, i, i + s, 13)
+    test.run(
+        expected_class=Statistics,
+        expected_length=365 * 2 * 4,
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 2 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
-def test_slice_9():
+def test_slice_5():
     test = DatasetTester(
         [f"test-{year}-{year}-1h-o96-abcd" for year in range(1940, 2023)],
         frequency=18,
     )
-    ds = test.ds
-
-    slices(ds)
-    indexing(ds)
-    metadata(ds)
-    slices(ds, 0, len(ds), 1)
-    slices(ds, 0, len(ds), 10)
-    slices(ds, 7, -123, 13)
-
-    for i in range(0, len(ds), len(ds) // 10):
-        for s in range(1, 3):
-            slices(ds, i, i + s, 1)
-            slices(ds, i, i + s, 10)
-            slices(ds, i, i + s, 13)
+    test.run(
+        expected_class=Statistics,
+        expected_length=365 * 2 * 4,
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 2 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 def test_ensemble_1():
@@ -1134,7 +1046,7 @@ def test_ensemble_1():
     )
     ds = test.ds
 
-    ds[0:10,:,(1,2)]
+    ds[0:10, :, (1, 2)]
 
     assert isinstance(ds, Ensemble)
     assert len(ds) == 365 * 1 * 4
@@ -1164,7 +1076,6 @@ def test_ensemble_1():
 
     assert ds.shape == (365 * 4, 4, 11, VALUES)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
 
     metadata(ds)
 
@@ -1213,7 +1124,7 @@ def test_ensemble_2():
 
     assert ds.shape == (365 * 4, 4, 16, VALUES)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -1267,7 +1178,7 @@ def test_grids():
 
     assert ds.shape == (365 * 4, 4, 1, VALUES + 25)
     # same_stats(ds, open_dataset("test-2021-2021-6h-o96-abcd"), "abcd")
-    slices(ds)
+
     indexing(ds)
     metadata(ds)
 
@@ -1286,14 +1197,18 @@ def test_statistics():
         "test-2021-2021-6h-o96-abcd",
         statistics="test-2000-2010-6h-o96-abcd",
     )
-    ds = test.ds
-
-    assert isinstance(ds, Statistics)
-    same_stats(ds, open_dataset("test-2000-2010-6h-o96-abcd"), "abcd")
-
-    assert len(ds) == 365 * 1 * 4
-    assert len([row for row in ds]) == len(ds)
-    metadata(ds)
+    test.run(
+        expected_class=Statistics,
+        expected_length=365 * 2 * 4,
+        date_to_row=lambda date: simple_row(date, "abcd"),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=6),
+        excepted_shape=(365 * 2 * 4, 4, 1, VALUES),
+        excepted_variables=["a", "b", "c", "d"],
+        excepted_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
+        statistics_reference_variables="abcd",
+    )
 
 
 if __name__ == "__main__":
