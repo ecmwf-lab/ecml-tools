@@ -7,7 +7,6 @@
 
 import json
 import os
-import tempfile
 
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
@@ -19,7 +18,12 @@ def compare_dot_zattrs(a, b):
         b_keys = list(b.keys())
         for k in set(a_keys) & set(b_keys):
             if k in ["timestamp", "uuid", "latest_write_timestamp", "yaml_config"]:
-                assert type(a[k]) == type(b[k]), (type(a[k]), type(b[k]), a[k], b[k])
+                assert type(a[k]) == type(b[k]), (  # noqa: E721
+                    type(a[k]),
+                    type(b[k]),
+                    a[k],
+                    b[k],
+                )
             assert k in a_keys, (k, a_keys)
             assert k in b_keys, (k, b_keys)
             return compare_dot_zattrs(a[k], b[k])
@@ -29,7 +33,7 @@ def compare_dot_zattrs(a, b):
         for v, w in zip(a, b):
             return compare_dot_zattrs(v, w)
 
-    assert type(a) == type(b), (type(a), type(b), a, b)
+    assert type(a) == type(b), (type(a), type(b), a, b)  # noqa: E721
     return a == b, (a, b)
 
 
