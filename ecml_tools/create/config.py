@@ -135,7 +135,7 @@ class LoadersConfig(Config):
 
         if self.config_format_version != 2:
             raise ValueError(
-                f"Config format has changed. Must provide config with format version >= 2."
+                "Config format has changed. Must provide config with format version >= 2."
             )
 
         if "dates" in self.output:

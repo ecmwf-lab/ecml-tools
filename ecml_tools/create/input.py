@@ -15,7 +15,7 @@ from functools import cached_property
 
 from climetlab.core.order import build_remapping
 
-from .group import Groups, build_groups
+from .group import build_groups
 from .template import substitute
 from .utils import seconds
 
