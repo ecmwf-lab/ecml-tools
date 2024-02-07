@@ -82,18 +82,22 @@ def create_zarr(
         data=data,
         dtype=data.dtype,
         chunks=data.shape,
+        compressor=None,
     )
     root.create_dataset(
         "dates",
         data=dates,
+        compressor=None,
     )
     root.create_dataset(
         "latitudes",
         data=np.array([x + values for x in range(values)]),
+        compressor=None,
     )
     root.create_dataset(
         "longitudes",
         data=np.array([x + values for x in range(values)]),
+        compressor=None,
     )
 
     root.attrs["frequency"] = frequency
@@ -105,18 +109,22 @@ def create_zarr(
     root.create_dataset(
         "mean",
         data=np.mean(data, axis=0),
+        compressor=None,
     )
     root.create_dataset(
         "stdev",
         data=np.std(data, axis=0),
+        compressor=None,
     )
     root.create_dataset(
         "maximum",
         data=np.max(data, axis=0),
+        compressor=None,
     )
     root.create_dataset(
         "minimum",
         data=np.min(data, axis=0),
+        compressor=None,
     )
 
     return root
