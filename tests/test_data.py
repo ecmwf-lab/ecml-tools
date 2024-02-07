@@ -639,7 +639,7 @@ def test_rename():
         ),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
-        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_dataset=None,
         statistics_reference_variables=None,
     )
 
@@ -1144,4 +1144,4 @@ def test_statistics():
 
 
 if __name__ == "__main__":
-    test_ensemble_1()
+    test_subset_1()

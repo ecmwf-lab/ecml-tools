@@ -69,8 +69,9 @@ def _make_slice_or_index_from_list_or_tuple(indices):
     """
     Convert a list or tuple of indices to a slice or an index, if possible.
     """
-    if len(indices) == 1:
-        return indices[0]
+
+    if len(indices) < 2:
+        return indices
 
     step = indices[1] - indices[0]
 
@@ -660,10 +661,10 @@ class Concat(Combined):
     @expand_list_indexing
     def _get_tuple(self, index):
         index, changes = index_to_slices(index, self.shape)
-        print(index, changes)
+        # print(index, changes)
         lengths = [d.shape[0] for d in self.datasets]
         slices = length_to_slices(index[0], lengths)
-        print("slies", slices)
+        # print("slies", slices)
         result = [
             d[update_tuple(index, 0, i)[0]]
             for (d, i) in zip(self.datasets, slices)
@@ -942,12 +943,12 @@ class Subset(Forwards):
     @expand_list_indexing
     def _get_tuple(self, n):
         index, changes = index_to_slices(n, self.shape)
+        # print('INDEX', index, changes)
         indices = [self.indices[i] for i in range(*index[0].indices(self._len))]
-        index, previous = update_tuple(
-            index, 0, _make_slice_or_index_from_list_or_tuple(indices)
-        )
+        indices = _make_slice_or_index_from_list_or_tuple(indices)
+        # print('INDICES', indices)
+        index, _ = update_tuple(index, 0, indices)
         result = self.dataset[index]
-        result = result[previous]
         result = apply_index_to_slices_changes(result, changes)
         return result
 
