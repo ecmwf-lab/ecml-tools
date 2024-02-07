@@ -6,7 +6,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-
 import warnings
 
 import numpy as np
@@ -102,7 +101,7 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
 
         #################################
         # Actual computation happens here
-        x = c + m - e
+        x = c - m + e
         if param == "q":
             warnings.warn("Clipping q")
             x = np.maximum(x, 0)
