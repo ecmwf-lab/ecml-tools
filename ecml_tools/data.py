@@ -947,9 +947,8 @@ class Subset(Forwards):
         indices = [self.indices[i] for i in range(*index[0].indices(self._len))]
         indices = _make_slice_or_index_from_list_or_tuple(indices)
         # print('INDICES', indices)
-        index, previous = update_tuple(index, 0, indices)
+        index, _ = update_tuple(index, 0, indices)
         result = self.dataset[index]
-        result = result[previous]
         result = apply_index_to_slices_changes(result, changes)
         return result
 
