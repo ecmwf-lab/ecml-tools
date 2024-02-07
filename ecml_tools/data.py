@@ -33,6 +33,7 @@ LOG = logging.getLogger(__name__)
 __all__ = ["open_dataset", "open_zarr", "debug_zarr_loading"]
 
 DEBUG_ZARR_LOADING = int(os.environ.get("DEBUG_ZARR_LOADING", "0"))
+DEBUG_ZARR_INDEXING = int(os.environ.get("DEBUG_ZARR_INDEXING", "0"))
 
 DEPTH = 0
 
@@ -41,25 +42,22 @@ def _debug_indexing(method):
     @wraps(method)
     def wrapper(self, index):
         global DEPTH
-        if isinstance(index, tuple):
-            print("  " * DEPTH, "->", self, method.__name__, index)
+        # if isinstance(index, tuple):
+        print("  " * DEPTH, "->", self, method.__name__, index)
         DEPTH += 1
         result = method(self, index)
         DEPTH -= 1
-        if isinstance(index, tuple):
-            print("  " * DEPTH, "<-", self, method.__name__, result.shape)
+        # if isinstance(index, tuple):
+        print("  " * DEPTH, "<-", self, method.__name__, result.shape)
         return result
 
     return wrapper
 
 
-if True:
-
-    def debug_indexing(x):
-        return x
-
-else:
+if DEBUG_ZARR_INDEXING:
     debug_indexing = _debug_indexing
+else:
+    debug_indexing = lambda x: x  # noqa
 
 
 def debug_zarr_loading(on_off):
@@ -917,9 +915,6 @@ class Subset(Forwards):
 
         self.dataset = dataset
         self.indices = list(indices)
-        self.slice = _make_slice_or_index_from_list_or_tuple(self.indices)
-        assert isinstance(self.slice, slice)
-        print("SUBSET", self.slice)
 
         # Forward other properties to the super dataset
         super().__init__(dataset)
@@ -947,7 +942,10 @@ class Subset(Forwards):
     @expand_list_indexing
     def _get_tuple(self, n):
         index, changes = index_to_slices(n, self.shape)
-        index, previous = update_tuple(index, 0, self.slice)
+        indices = [self.indices[i] for i in range(*index[0].indices(self._len))]
+        index, previous = update_tuple(
+            index, 0, _make_slice_or_index_from_list_or_tuple(indices)
+        )
         result = self.dataset[index]
         result = result[previous]
         result = apply_index_to_slices_changes(result, changes)
