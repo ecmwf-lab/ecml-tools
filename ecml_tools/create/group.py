@@ -10,8 +10,23 @@ import datetime
 from functools import cached_property
 from .config import DictObj
 
-from .expand import expand_class, ValuesExpand
 
+import datetime
+import itertools
+from functools import cached_property
+
+from .utils import to_datetime
+
+
+class GroupByDays:
+    def __init__(self, days):
+        self.days = days
+
+    def __call__(self, dt):
+        year = dt.year
+        days = (dt - datetime.datetime(year, 1, 1)).days
+        x = (year, days // self.days)
+        return x
 
 class Group(list):
     """
@@ -65,24 +80,117 @@ class BaseGroups:
 class Groups(BaseGroups):
     def __init__(self, config):
         # Assert config input is ad dict but not a nested dict
-        assert isinstance(config, dict), config
+        if not isinstance(config, dict):
+            raise ValueError(f"Config must be a dict. {config}")        
         for k, v in config.items():
-            assert not isinstance(v, dict), (k, v)
+            if isinstance(v, dict):
+                raise ValueError(f"Values can't be a dictionary. {k,v}")
 
-        self._config = config
-        
-        self._cls = expand_class(self._config)
-        self._expanded_config_cls = expand_class(self._config)(self._config) 
+        self._config=config
+        self._expanded_config = self._expand_config()
 
+    def _expand_config(self):
+        base_dict_builder = {
+            list: lambda x:  {"values": x},
+            dict: lambda x: x,
+        }
+        return base_dict_builder[type(self._config)](self._config)
+    
     @cached_property
-    def values(self) -> list:
-        dates = list(self._expanded_config_cls.values)
+    def start(self):
+        return self._get_date('start')
+    
+    @cached_property
+    def end(self):
+        return self._get_date('end')
+
+    def _get_date(self,date_key):
+        date = self._expanded_config[date_key]
+        if type(date)==str:
+            try:
+                # Attempt to parse the date string with timestamp format
+                check_timestamp=datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S')
+                if check_timestamp:
+                    return to_datetime(date)
+            except ValueError:
+                raise ValueError(f"{date_key}  must include timestamp not just date {date,type(date)}")
+        elif type(date)==datetime.date:
+            raise ValueError(f"{date_key}  must include timestamp not just date {date,type(date)}")
+        else:
+            return date
+
+    def _validate_date_range(self):
+        assert self.end >= self.start, "End date must be greater than or equal to start date."
+        
+    def _extract_frequency(self,frequency_str):
+        freq_ending=frequency_str.lower()[-1]
+        freq_mapping ={"h":int(frequency_str[:-1]),
+                       "d":int(frequency_str[:-1])*24}
+        try:
+            return freq_mapping[freq_ending]
+        except:
+            raise ValueError(
+                f"Frequency must be in hours or days (12h or 2d). {frequency_str}"
+            )
+
+    def _validate_frequency(self,freq,frequency_str):
+        if freq > 24 and freq % 24 != 0:
+            raise ValueError(
+                f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}"
+            )
+    @cached_property
+    def step(self):
+        _frequency_str = self._expanded_config.get("frequency", "24h")
+        _freq = self._extract_frequency(_frequency_str)
+        self._validate_frequency(_freq,_frequency_str)
+        return datetime.timedelta(hours=_freq)
+
+    def _get_expand_values(self): 
+        return self._expanded_config.get("values")
+    
+    def _get_StartEndDate_values(self): 
+        # Return a list with all the dates
+        # between start and end, given a defined step/frequency
+        x = self.start
+        all = []
+        while x <= self.end:
+            all.append(x)
+            yield x
+            x += self.step
+        return all
+
+    def conditions(self):
+        return isinstance(self._expanded_config.get("values"), list) and len(self._expanded_config) == 1
+    
+    @property
+    def values(self):
+        values_builder = {
+            False: self._get_StartEndDate_values(),
+            True: self._get_expand_values(),
+        }
+        dates =list(values_builder[self.conditions()])
         assert isinstance(dates[0], datetime.datetime), dates[0]
         return dates
 
     @property
+    def grouper_key(self):
+        group_by = self._config.get("group_by")
+        if isinstance(group_by, int) and group_by > 0:
+            return GroupByDays(group_by)
+        return {
+            None: lambda dt: 0,  # only one group
+            0: lambda dt: 0,  # only one group
+            "monthly": lambda dt: (dt.year, dt.month),
+            "daily": lambda dt: (dt.year, dt.month, dt.day),
+            "weekly": lambda dt: (dt.weekday(),),
+            "MMDD": lambda dt: (dt.month, dt.day),
+        }[group_by]
+
+    @property
     def groups(self):
-        return [Group(g) for g in self._expanded_config_cls.groups]
+        # Return a list where each sublist contain the subgroups
+        # of values according to the grouper_key
+        return [Group(g) for _,g in itertools.groupby(self.values, key=self.grouper_key)]
 
     @cached_property
     def n_groups(self):

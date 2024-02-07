@@ -90,10 +90,6 @@ def _test_create(name):
     )
     c.create()
 
-    # ds = open_dataset(zarr_path)
-    # assert ds.shape ==
-    # assert ds.variables ==
-
     compare_zarr(reference, output)
 
 
