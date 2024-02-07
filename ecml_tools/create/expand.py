@@ -54,7 +54,6 @@ class Expand(list):
 class ValuesExpand(Expand):
     def __init__(self, config):
         super().__init__(config)
-        print('ValuesExpand BASE CONFIG',self._config)
         if not isinstance(self._config["values"], list):
             raise ValueError(f"Values must be a list. {self._config}")
 
@@ -72,7 +71,6 @@ class DateStartStopExpand(Expand):
         if "stop" in self._config:
             raise ValueError(f"Use 'end' not 'stop' in loop. {self._config}")
 
-        print('DateStartStopExpand BASE CONFIG',self._config)
         self.start = self._get_date('start')
         self.end = self._get_date('end')
 
@@ -101,22 +99,6 @@ class DateStartStopExpand(Expand):
     def _validate_date_range(self):
         assert self.end >= self.start, "End date must be greater than or equal to start date."
 
-    @property
-    def values(self): 
-        x = self.start
-        all = []
-        while x <= self.end:
-            all.append(x)
-            yield x
-            x += self.step
-
-    @cached_property
-    def groups(self):
-        groups = []
-        for _, g in itertools.groupby(self.values, key=self.grouper_key):
-            g = [self.format(x) for x in g]
-            groups.append(g)
-        return groups
 
     def _extract_frequency(self,frequency_str):
         freq_ending=frequency_str.lower()[-1]
@@ -134,15 +116,17 @@ class DateStartStopExpand(Expand):
             raise ValueError(
                 f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}"
             )
-        
-    @staticmethod
-    def conditions(config):
-        return [
-            config.get("group_by") in ["monthly","daily","weekly",],
-            isinstance(config.get("start"), datetime.datetime),
-            isinstance(config.get("end"), datetime.datetime),
-            "frequency" in config,
-            config.get("kind") == "dates" and "start" in config]
+
+    @property
+    def values(self): 
+        # Return a generator with all the dates
+        # between start and end, given a defined step/frequency
+        x = self.start
+        all = []
+        while x <= self.end:
+            all.append(x)
+            yield x
+            x += self.step
 
     @property
     def grouper_key(self):
@@ -158,11 +142,20 @@ class DateStartStopExpand(Expand):
             "MMDD": lambda dt: (dt.month, dt.day),
         }[group_by]
 
-    def format(self, x):
-        assert isinstance(x, datetime.date), (type(x), x)
-        return x
+    @cached_property
+    def groups(self):
+        # Return a list where each sublist contain the subgroups
+        # of values according to the grouper_key
+        return [list(g) for _,g in itertools.groupby(self.values, key=self.grouper_key)]
 
-
+    @staticmethod
+    def conditions(config):
+        return [
+            config.get("group_by") in ["monthly","daily","weekly",],
+            isinstance(config.get("start"), datetime.datetime),
+            isinstance(config.get("end"), datetime.datetime),
+            "frequency" in config,
+            config.get("kind") == "dates" and "start" in config]
 
 def expand_class(config):
     base_dict_builder = {

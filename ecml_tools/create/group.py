@@ -52,13 +52,8 @@ class BaseGroups:
     def empty(self):
         return len(self.values) == 0
 
-    @cached_property
-    def n_groups(self):
-        return len(self.groups)
-
     @property
     def frequency(self):
-        print(self)
         datetimes = self.values
         freq = (datetimes[1] - datetimes[0]).total_seconds() / 3600
         assert round(freq) == freq, freq
@@ -75,17 +70,21 @@ class Groups(BaseGroups):
             assert not isinstance(v, dict), (k, v)
 
         self._config = config
-        self.cls = expand_class(config) #This is just an Object class (not instantiated)
+        self._expanded_config_cls = expand_class(self._config)(self._config) 
 
     @cached_property
     def values(self) -> list:
-        dates = list(self.cls(self._config).values)
+        dates = list(self._expanded_config_cls.values)
         assert isinstance(dates[0], datetime.datetime), dates[0]
         return dates
 
     @property
     def groups(self):
-        return [Group(g) for g in self.cls(self._config).groups]
+        return [Group(g) for g in self._expanded_config_cls.groups]
+
+    @cached_property
+    def n_groups(self):
+        return len(self.groups)
 
 
 class EmptyGroups(BaseGroups):
@@ -100,7 +99,7 @@ class EmptyGroups(BaseGroups):
 
 class GroupsIntersection(BaseGroups):
     def __init__(self, a, b):
-        assert isinstance(a,Groups), a #!TODO double-check if that assumption is right
+        assert isinstance(a,Groups), a 
         assert isinstance(b,Groups), b
         self.a = a
         self.b = b
