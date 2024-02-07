@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import argparse
-import yaml
 import random
 import time
 from multiprocessing import Pool
 
+import yaml
 from tqdm import tqdm
 
 from ecml_tools.data import open_dataset
@@ -107,7 +107,7 @@ def main():
     if path.endswith(".yaml"):
         with open(path, "r") as f:
             path = yaml.safe_load(f)
-        
+
     ds = open_dataset(path)
 
     total = len(ds)
@@ -124,9 +124,7 @@ def main():
         indexes = indexes[: args.count]
 
     if nworkers > 1:
-        tests = Tests(
-            [SpeedTest(path, indexes[i::nworkers]) for i in range(nworkers)]
-        )
+        tests = Tests([SpeedTest(path, indexes[i::nworkers]) for i in range(nworkers)])
 
         with Pool(nworkers) as pool:
             pool.map(tests, range(nworkers))
