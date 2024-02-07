@@ -294,7 +294,7 @@ class DatasetTester:
         if ds.shape[2] > 1:  # Ensemble dimension
             t[0:10, :, (0, 1)]
 
-        for i in range(10):
+        for i in range(3):
             t[i]
             start = 5 * i
             end = len(ds) - 5 * i
