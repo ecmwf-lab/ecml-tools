@@ -15,7 +15,7 @@ from functools import cached_property
 
 from climetlab.core.order import build_remapping
 
-from .group import Groups, build_groups
+from .group import build_groups
 from .template import substitute
 from .utils import seconds
 
@@ -528,19 +528,6 @@ class FilterResult(StepResult):
 class FilterAction(StepAction):
     result_class = FilterResult
 
-
-# class RenameResult(StepResult):
-#    @property
-#    def datasource(self):
-#        ds = self.content.datasource
-#        assert_is_fieldset(ds)
-#        ds = ds.rename(**self.action.kwargs)
-#        assert_is_fieldset(ds)
-#        return ds
-#
-#
-# class RenameAction(StepAction):
-#    result_class = RenameResult
 
 
 class ConcatAction(ActionWithList):

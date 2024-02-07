@@ -145,17 +145,18 @@ class InitialiseLoader(Loader):
 
         self.statistics_registry.delete()
 
+
         self.groups = build_groups(*self.main_config.loop)
+        print("✅ GROUPS")
+        print(self.groups,self.main_config.loop)
+
         self.output = build_output(self.main_config.output, parent=self)
         self.input = self.build_input()
 
-        print(self.input)
         self.inputs = self.input.select(dates=None)
         all_dates = self.inputs.dates
-        self.minimal_input = self.input.select(dates=[all_dates[0]])
+        self.minimal_input = self.input.select(dates=[all_dates[0]]) #This trigger building Grpups with ValueExpand 
 
-        print("✅ GROUPS")
-        print(self.groups)
         print("✅ ALL INPUTS")
         print(self.inputs)
         print("✅ MINIMAL INPUT")
@@ -169,9 +170,12 @@ class InitialiseLoader(Loader):
         print("-------------------------")
 
         dates = self.inputs.dates
-        if self.groups.frequency != self.inputs.frequency:
+        frequency = self.inputs.frequency #This trigger building Groups with ValueExpand 
+        assert isinstance(frequency, int), frequency
+
+        if self.groups.frequency != frequency: #This trigger building Grpups with ValueExpand 
             raise ValueError(
-                f"Frequency mismatch: {self.groups.frequency} != {self.inputs.frequency}"
+                f"Frequency mismatch: {self.groups.frequency} != {frequency}"
             )
         if self.groups.values[0] != self.inputs.dates[0]:
             raise ValueError(
@@ -179,8 +183,6 @@ class InitialiseLoader(Loader):
             )
         print("-------------------------")
 
-        frequency = self.inputs.frequency
-        assert isinstance(frequency, int), frequency
 
         self.print(f"Found {len(dates)} datetimes.")
         print(
@@ -250,9 +252,6 @@ class InitialiseLoader(Loader):
         metadata["frequency"] = frequency
         metadata["start_date"] = dates[0].isoformat()
         metadata["end_date"] = dates[-1].isoformat()
-
-        # metadata["statistics_start_date"]=self.output.get("statistics_start")
-        # metadata["statistics_end_date"]=self.output.get("statistics_end")
 
         if check_name:
             basename, ext = os.path.splitext(os.path.basename(self.path))

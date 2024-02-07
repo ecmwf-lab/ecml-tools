@@ -10,7 +10,7 @@ import datetime
 from functools import cached_property
 from .config import DictObj
 
-from .expand import expand_class
+from .expand import expand_class, ValuesExpand
 
 
 class Group(list):
@@ -39,7 +39,7 @@ class BaseGroups:
     @cached_property
     def values(self):
         raise NotImplementedError()
-
+    
     def intersect(self, dates):
         if dates is None:
             return self
@@ -70,6 +70,8 @@ class Groups(BaseGroups):
             assert not isinstance(v, dict), (k, v)
 
         self._config = config
+        
+        self._cls = expand_class(self._config)
         self._expanded_config_cls = expand_class(self._config)(self._config) 
 
     @cached_property
