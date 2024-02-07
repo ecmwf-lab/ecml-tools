@@ -45,8 +45,10 @@ class BaseGroups:
     def __repr__(self):
         try:
             content = "+".join([str(len(list(g))) for g in self.groups])
+            print(content)
             for g in self.groups:
                 assert isinstance(g[0], datetime.datetime), g[0]
+            print('val',self.values,self.n_groups)
             return f"{self.__class__.__name__}({content}={len(self.values)})({self.n_groups} groups)"
         except:
             return f"{self.__class__.__name__}({len(self.values)} dates)"
@@ -87,15 +89,21 @@ class Groups(BaseGroups):
                 raise ValueError(f"Values can't be a dictionary. {k,v}")
 
         self._config=config
-        self._expanded_config = self._expand_config()
-
-    def _expand_config(self):
-        base_dict_builder = {
-            list: lambda x:  {"values": x},
-            dict: lambda x: x,
-        }
-        return base_dict_builder[type(self._config)](self._config)
     
+class ExpandGroups(Groups):
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    @cached_property
+    def values(self):
+        return self._config.get("values")
+
+class DateStartStopExpandGroups(Groups):
+
+    def __init__(self, config):
+        super().__init__(config)
+
     @cached_property
     def start(self):
         return self._get_date('start')
@@ -105,7 +113,7 @@ class Groups(BaseGroups):
         return self._get_date('end')
 
     def _get_date(self,date_key):
-        date = self._expanded_config[date_key]
+        date = self._config[date_key]
         if type(date)==str:
             try:
                 # Attempt to parse the date string with timestamp format
@@ -138,37 +146,36 @@ class Groups(BaseGroups):
             raise ValueError(
                 f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}"
             )
+        
     @cached_property
     def step(self):
-        _frequency_str = self._expanded_config.get("frequency", "24h")
+        _frequency_str = self._config.get("frequency", "24h")
         _freq = self._extract_frequency(_frequency_str)
         self._validate_frequency(_freq,_frequency_str)
         return datetime.timedelta(hours=_freq)
 
-    def _get_expand_values(self): 
-        return self._expanded_config.get("values")
-    
-    def _get_StartEndDate_values(self): 
-        # Return a list with all the dates
-        # between start and end, given a defined step/frequency
-        x = self.start
-        all = []
-        while x <= self.end:
-            all.append(x)
-            yield x
-            x += self.step
-        return all
-
-    def conditions(self):
-        return isinstance(self._expanded_config.get("values"), list) and len(self._expanded_config) == 1
-    
     @property
+    def grouper_key(self):
+        group_by = self._config.get("group_by")
+        if isinstance(group_by, int) and group_by > 0:
+            return GroupByDays(group_by)
+        return {
+            None: lambda dt: 0,  # only one group
+            0: lambda dt: 0,  # only one group
+            "monthly": lambda dt: (dt.year, dt.month),
+            "daily": lambda dt: (dt.year, dt.month, dt.day),
+            "weekly": lambda dt: (dt.weekday(),),
+            "MMDD": lambda dt: (dt.month, dt.day),
+        }[group_by]
+
+    @cached_property
     def values(self):
-        values_builder = {
-            False: self._get_StartEndDate_values(),
-            True: self._get_expand_values(),
-        }
-        dates =list(values_builder[self.conditions()])
+        x = self.start
+        dates = []
+        while x <= self.end:
+            dates.append(x)
+           
+            x += self.step
         assert isinstance(dates[0], datetime.datetime), dates[0]
         return dates
 
@@ -186,6 +193,7 @@ class Groups(BaseGroups):
             "MMDD": lambda dt: (dt.month, dt.day),
         }[group_by]
 
+
     @property
     def groups(self):
         # Return a list where each sublist contain the subgroups
@@ -195,6 +203,7 @@ class Groups(BaseGroups):
     @cached_property
     def n_groups(self):
         return len(self.groups)
+
 
 
 class EmptyGroups(BaseGroups):
@@ -227,9 +236,10 @@ def build_groups(*objs):
     type_actions = {
         GroupsIntersection: lambda x: x,
         Groups: lambda x: x,
-        list: lambda x: Groups(dict(values=x)),
-        Group: lambda x: Groups(dict(values=x)),
-        DictObj: lambda x: Groups(dict(x["dates"])) if "dates" in x and len(x) == 1 else Groups(x),
-        dict: lambda x: Groups(dict(x["dates"])) if "dates" in x and len(x) == 1 else Groups(x),
+        list: lambda x: ExpandGroups(dict(values=x)), #Expand
+        Group: lambda x: ExpandGroups(dict(values=x)), #Expand
+        DictObj: lambda x: DateStartStopExpandGroups(dict(x["dates"])) if "dates" in x and len(x) == 1 else DateStartStopExpandGroups(x), #StarStoptEnd
+        dict: lambda x: DateStartStopExpandGroups(dict(x["dates"])) if "dates" in x and len(x) == 1 else DateStartStopExpandGroups(x), #StarStoptEnd
     }
+
     return type_actions[type(obj)](obj)
