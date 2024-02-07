@@ -23,7 +23,6 @@ class GroupByDays:
         x = (year, days // self.days)
         return x
 
-
 class Expand(list):
     """
     This class is used to expand loops.
@@ -32,12 +31,13 @@ class Expand(list):
     """
 
     def __init__(self, config):
-        assert isinstance(config, dict), config
+        if not isinstance(config, dict):
+            raise ValueError(f"Config must be a dict. {config}")        
+        # assert it is not a nested dictionary
         for k, v in config.items():
-            assert not isinstance(v, dict), (k, v)
+            if isinstance(v, dict):
+                raise ValueError(f"Values can't be a dictionary. {k,v}")
         self._config = config
-        if "stop" in self._config:
-            raise ValueError(f"Use 'end' not 'stop' in loop. {self._config}")
 
     @property
     def values(self):
@@ -47,25 +47,59 @@ class Expand(list):
     def groups(self):
         raise NotImplementedError(type(self))
 
+    @staticmethod
+    def conditions():
+        raise NotImplementedError()
 
 class ValuesExpand(Expand):
     def __init__(self, config):
         super().__init__(config)
-        if not isinstance(self._config, dict):
-            raise ValueError(f"Config must be a dict. {self._config}")
+        print('ValuesExpand BASE CONFIG',self._config)
         if not isinstance(self._config["values"], list):
             raise ValueError(f"Values must be a list. {self._config}")
 
     @property
     def values(self):
         return self._config["values"]
+    
+    @staticmethod
+    def conditions(config):
+        return [isinstance(config.get("values"), list) and len(config) == 1]
 
-
-class StartStopExpand(Expand):
+class DateStartStopExpand(Expand):
     def __init__(self, config):
         super().__init__(config)
-        self.start = self._config["start"]
-        self.end = self._config["end"]
+        if "stop" in self._config:
+            raise ValueError(f"Use 'end' not 'stop' in loop. {self._config}")
+
+        print('DateStartStopExpand BASE CONFIG',self._config)
+        self.start = self._get_date('start')
+        self.end = self._get_date('end')
+
+        self._validate_date_range()
+
+        _frequency_str = self._config.get("frequency", "24h")
+        _freq = self._extract_frequency(_frequency_str)
+        self._validate_frequency(_freq,_frequency_str)
+        self.step = datetime.timedelta(hours=_freq)
+
+    def _get_date(self,date_key):
+        date = self._config[date_key]
+        if type(date)==str:
+            try:
+                # Attempt to parse the date string with timestamp format
+                check_timestamp=datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S')
+                if check_timestamp:
+                    return to_datetime(date)
+            except ValueError:
+                raise ValueError(f"{date_key}  must include timestamp not just date {date,type(date)}")
+        elif type(date)==datetime.date:
+            raise ValueError(f"{date_key}  must include timestamp not just date {date,type(date)}")
+        else:
+            return date
+
+    def _validate_date_range(self):
+        assert self.end >= self.start, "End date must be greater than or equal to start date."
 
     @property
     def values(self): 
@@ -76,9 +110,6 @@ class StartStopExpand(Expand):
             yield x
             x += self.step
 
-    def format(self, x):
-        return x
-
     @cached_property
     def groups(self):
         groups = []
@@ -86,21 +117,6 @@ class StartStopExpand(Expand):
             g = [self.format(x) for x in g]
             groups.append(g)
         return groups
-
-
-class DateStartStopExpand(StartStopExpand):
-    def __init__(self, config):
-        super().__init__(config)
-
-        self.start = to_datetime(self.start)
-        self.end = to_datetime(self.end)
-
-        self._validate_date_range()
-
-        _frequency_str = self._config.get("frequency", "24h")
-        _freq = self._extract_frequency(_frequency_str)
-        self._validate_frequency(_freq,_frequency_str)
-        self.step = datetime.timedelta(hours=_freq)
 
     def _extract_frequency(self,frequency_str):
         freq_ending=frequency_str.lower()[-1]
@@ -118,11 +134,15 @@ class DateStartStopExpand(StartStopExpand):
             raise ValueError(
                 f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}"
             )
-
-    def _validate_date_range(self):
-        assert isinstance(self.start, datetime.date), (type(self.start), self.start)
-        assert isinstance(self.end, datetime.date), (type(self.end), self.end)
-        assert self.end >= self.start, "End date must be greater than or equal to start date."
+        
+    @staticmethod
+    def conditions(config):
+        return [
+            config.get("group_by") in ["monthly","daily","weekly",],
+            isinstance(config.get("start"), datetime.datetime),
+            isinstance(config.get("end"), datetime.datetime),
+            "frequency" in config,
+            config.get("kind") == "dates" and "start" in config]
 
     @property
     def grouper_key(self):
@@ -143,32 +163,6 @@ class DateStartStopExpand(StartStopExpand):
         return x
 
 
-class IntegerStartStopExpand(StartStopExpand):
-    def __init__(self, config):
-        super().__init__(config)
-        self.step = self._config.get("step", 1)
-        assert isinstance(self.step, int), config
-        assert isinstance(self.start, int), config
-        assert isinstance(self.end, int), config
-
-    def grouper_key(self, x):
-        group_by = self._config["group_by"]
-        return {
-            1: lambda x: 0,  # only one group
-            None: lambda x: x,  # one group per value
-        }[group_by](x)
-
-
-def build_conditions(config):
-    return [
-    (isinstance(config.get("values"), list) and len(config) == 1, ValuesExpand),
-    (config.get("group_by") in ["monthly","daily","weekly",],DateStartStopExpand),
-    (isinstance(config.get("start"), datetime.datetime),DateStartStopExpand),
-    (isinstance(config.get("end"), datetime.datetime),DateStartStopExpand),
-    ("frequency" in config,DateStartStopExpand),
-    (config.get("kind") == "dates" and "start" in config,DateStartStopExpand),
-    (isinstance(config.get("start"), int) or isinstance(config.get("end"), int),IntegerStartStopExpand)]
-
 
 def expand_class(config):
     base_dict_builder = {
@@ -180,9 +174,11 @@ def expand_class(config):
         if "start" not in config and "values" not in config:
             raise ValueError(f"Cannot expand loop from {config}")
         else:
-            conditions_and_rules=build_conditions(base_dict)
-            for condition, expanded_dict_class in conditions_and_rules:
-                if condition:
-                    return expanded_dict_class
+
+            candidates_classes={ValuesExpand:ValuesExpand.conditions(base_dict),
+                                DateStartStopExpand: DateStartStopExpand.conditions(base_dict)}
+            for expanded_class, list_of_conditions in candidates_classes.items():
+                if any(list_of_conditions):
+                    return expanded_class
     except:
         raise ValueError(f"Cannot expand loop from {config}")
