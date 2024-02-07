@@ -8,8 +8,6 @@
 import json
 import os
 
-import pytest
-
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
 
