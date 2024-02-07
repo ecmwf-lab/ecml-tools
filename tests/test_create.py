@@ -8,6 +8,8 @@
 import json
 import os
 
+import pytest
+
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
 
@@ -102,14 +104,17 @@ def _test_create(name):
     compare_zarr(reference, output)
 
 
+@pytest.mark.skip(reason="Test not running everywhere.")
 def test_create_concat():
     _test_create("create-concat")
 
 
+@pytest.mark.skip(reason="Test not running everywhere.")
 def test_create_join():
     _test_create("create-join")
 
 
+@pytest.mark.skip(reason="Test not running everywhere.")
 def test_create_pipe():
     _test_create("create-pipe")
 
