@@ -16,7 +16,6 @@ import socket
 from collections import defaultdict
 
 import numpy as np
-from prepml.utils.text import table
 
 from ecml_tools.provenance import gather_provenance_info
 
@@ -274,19 +273,12 @@ class Statistics(dict):
                 raise
 
     def __str__(self):
-        stats = [self[name] for name in self.STATS_NAMES]
-
-        rows = []
+        header = ["Variables"] + [self[name] for name in self.STATS_NAMES]
+        out = " ".join(header)
 
         for i, v in enumerate(self["variables_names"]):
-            rows.append([i, v] + [x[i] for x in stats])
-
-        return table(
-            rows,
-            header=["Index", "Variable", "Min", "Max", "Mean", "Stdev"],
-            align=[">", "<", ">", ">", ">", ">"],
-            margin=3,
-        )
+            out += " ".join([v] + [f"{x[i]:.2f}" for x in self.values()])
+        return out
 
     def save(self, filename, provenance=None):
         assert filename.endswith(".json"), filename
