@@ -42,103 +42,86 @@ def normalise_number(number):
 
 
 def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
-    n_ensembles = len(normalise_number(ensembles["number"]))
+    number_list = normalise_number(ensembles["number"])
+    n_numbers = len(number_list)
+
+    keys = ["param", "level", "valid_datetime", "date", "time", "step", "number"]
 
     print(f"Retrieving ensemble data with {ensembles}")
-    ensembles = load_source(**ensembles)
+    ensembles = load_source(**ensembles).order_by(*keys)
     print(f"Retrieving center data with {center}")
-    center = load_source(**center)
+    center = load_source(**center).order_by(*keys)
     print(f"Retrieving mean data with {mean}")
-    mean = load_source(**mean)
+    mean = load_source(**mean).order_by(*keys)
 
-    assert len(mean) * n_ensembles == len(ensembles), (
+    assert len(mean) * n_numbers == len(ensembles), (
         len(mean),
-        n_ensembles,
+        n_numbers,
         len(ensembles),
     )
-    assert len(center) * n_ensembles == len(ensembles), (
+    assert len(center) * n_numbers == len(ensembles), (
         len(center),
-        n_ensembles,
+        n_numbers,
         len(ensembles),
     )
 
+    # prepare output tmp file so we can read it back
     tmp = temp_file()
     path = tmp.path
     out = new_grib_output(path)
 
-    keys = ["param", "level", "valid_datetime", "number", "date", "time", "step"]
-
-    ensembles_coords = ensembles.unique_values(*keys)
-    center_coords = center.unique_values(*keys)
-    mean_coords = mean.unique_values(*keys)
-
-    for k in keys:
-        if k == "number":
-            assert len(mean_coords[k]) == 1
-            assert len(center_coords[k]) == 1
-            assert len(ensembles_coords[k]) == n_ensembles
-            continue
-        assert set(center_coords[k]) == set(ensembles_coords[k]), (
-            k,
-            center_coords[k],
-            ensembles_coords[k],
-        )
-        assert set(center_coords[k]) == set(mean_coords[k]), (
-            k,
-            center_coords[k],
-            mean_coords[k],
-        )
-
-    for field in tqdm.tqdm(center):
+    for i, field in tqdm.tqdm(enumerate(ensembles)):
         param = field.metadata("param")
-        grid = field.metadata("grid")
+        number = field.metadata("number")
+        ii = i // n_numbers
 
-        selection = dict(
-            valid_datetime=field.metadata("valid_datetime"),
-            param=field.metadata("param"),
-            level=field.metadata("level"),
-            date=field.metadata("date"),
-            time=field.metadata("time"),
-            step=field.metadata("step"),
-        )
-        mean_field = get_unique_field(mean, selection)
-        assert mean_field.metadata("grid") == grid, (mean_field.metadata("grid"), grid)
+        i_number = number_list.index(number)
+        assert i == ii * n_numbers + i_number, (i, ii, n_numbers, i_number, number_list)
 
-        m = mean_field.to_numpy()
-        c = field.to_numpy()
-        assert m.shape == c.shape, (m.shape, c.shape)
+        center_field = center[ii]
+        mean_field = mean[ii]
 
-        for number in ensembles_coords["number"]:
-            ensembles_field = get_unique_field(ensembles.sel(number=number), selection)
-            assert ensembles_field.metadata("grid") == grid, (
-                ensembles_field.metadata("grid"),
-                grid,
+        for k in keys + ["grid", "shape"]:
+            if k == "number":
+                continue
+            assert center_field.metadata(k) == field.metadata(k), (
+                k,
+                center_field.metadata(k),
+                field.metadata(k),
+            )
+            assert mean_field.metadata(k) == field.metadata(k), (
+                k,
+                mean_field.metadata(k),
+                field.metadata(k),
             )
 
-            e = ensembles_field.to_numpy()
-            assert c.shape == e.shape, (c.shape, e.shape)
+        e = field.to_numpy()
+        m = mean_field.to_numpy()
+        c = center_field.to_numpy()
+        assert m.shape == c.shape, (m.shape, c.shape)
 
-            x = c + m - e
-            if param == "q":
-                warnings.warn("Clipping q")
-                x = np.maximum(x, 0)
+        #################################
+        # Actual computation happens here
+        x = c + m - e
+        if param == "q":
+            warnings.warn("Clipping q")
+            x = np.maximum(x, 0)
+        #################################
 
-            assert x.shape == c.shape, (x.shape, c.shape)
+        assert x.shape == e.shape, (x.shape, e.shape)
 
-            check_data_values(x, name=param)
-            out.write(x, template=ensembles_field)
+        check_data_values(x, name=param)
+        out.write(x, template=field)
 
     out.close()
 
     ds = load_source("file", path)
-    assert len(ds) == len(ensembles), (len(ds), len(ensembles))
+    # save a reference to the tmp file so it is deleted
+    # only when the dataset is not used anymore
     ds._tmp = tmp
 
-    assert len(mean) * n_ensembles == len(ensembles)
-    assert len(center) * n_ensembles == len(ensembles)
+    assert len(ds) == len(ensembles), (len(ds), len(ensembles))
 
-    final_coords = ds.unique_values(*keys)
-    assert len(final_coords["number"]) == n_ensembles, final_coords
     return ds
 
 
