@@ -109,7 +109,7 @@ class DateStartStopGroups(Groups):
 
     def _get_date(self, date_key):
         date = self._config[date_key]
-        if type(date) == str:
+        if isinstance(date, str):
             try:
                 # Attempt to parse the date string with timestamp format
                 check_timestamp = datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S")
@@ -119,7 +119,7 @@ class DateStartStopGroups(Groups):
                 raise ValueError(
                     f"{date_key}  must include timestamp not just date {date,type(date)}"
                 )
-        elif type(date) == datetime.date:
+        elif type(date) == datetime.date:  # noqa: E721
             raise ValueError(
                 f"{date_key}  must include timestamp not just date {date,type(date)}"
             )
