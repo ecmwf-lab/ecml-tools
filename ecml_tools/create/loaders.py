@@ -13,24 +13,26 @@ from functools import cached_property
 import numpy as np
 import zarr
 
+from ecml_tools.data import open_dataset
+
 from .check import DatasetName
-from .config import build_output
-from .config import loader_config
+from .config import build_output, loader_config
 from .group import build_groups
 from .input import build_input
-from .statistics import compute_aggregated_statistics
-from .statistics import compute_statistics
-from .statistics import StatisticsRegistry
-from .utils import bytes
-from .utils import compute_directory_sizes
-from .utils import normalize_and_check_dates
-from .utils import progress_bar
-from .utils import to_datetime
-from .writer import CubesFilter
-from .writer import DataWriter
-from .zarr import add_zarr_dataset
-from .zarr import ZarrBuiltRegistry
-from ecml_tools.data import open_dataset
+from .statistics import (
+    StatisticsRegistry,
+    compute_aggregated_statistics,
+    compute_statistics,
+)
+from .utils import (
+    bytes,
+    compute_directory_sizes,
+    normalize_and_check_dates,
+    progress_bar,
+    to_datetime,
+)
+from .writer import CubesFilter, DataWriter
+from .zarr import ZarrBuiltRegistry, add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
