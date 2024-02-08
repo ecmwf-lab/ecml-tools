@@ -13,7 +13,7 @@ common:
     expver: '0001'
     grid: 20.0/20.0
     levtype: sfc
-    param: [2t]
+    param: [2t, tp]
   dates: &dates_anchor
     start: 2020-12-30 00:00:00
     end: 2021-01-03 12:00:00

@@ -7,6 +7,8 @@
 # nor does it submit to any jurisdiction.
 #
 import warnings
+from collections import defaultdict
+from copy import deepcopy
 
 import numpy as np
 import tqdm
@@ -23,35 +25,84 @@ def get_unique_field(ds, selection):
     return ds[0]
 
 
+def to_list(x):
+    if isinstance(x, (list, tuple)):
+        return x
+    if isinstance(x, str):
+        return x.split("/")
+    return [x]
+
+
 def normalise_number(number):
-    if isinstance(number, (tuple, list, int)):
-        return number
+    number = to_list(number)
 
-    assert isinstance(number, str), (type(number), number)
-
-    number = number.split("/")
     if len(number) > 4 and (number[1] == "to" and number[3] == "by"):
         return list(range(int(number[0]), int(number[2]) + 1, int(number[4])))
 
     if len(number) > 2 and number[1] == "to":
         return list(range(int(number[0]), int(number[2]) + 1))
 
-    assert isinstance(number, list), (type(number), number)
     return number
 
 
+def normalise_request(request):
+    request = deepcopy(request)
+    if "number" in request:
+        request["number"] = normalise_number(request["number"])
+    request["param"] = to_list(request["param"])
+    return request
+
+
+def wrapped_load_source(name, param, **kwargs):
+    ACCUMULATED_PARAMS = ["tp", "cp"]
+
+    accumulation_source_name = dict(
+        ea="era5-accumulations",
+        oper="oper-accumulations",
+        ei="oper-accumulations",
+    )[kwargs["class"]]
+    assert name == "mars", name  # untested with other sources
+
+    # split kwargs dict because some param need a different source
+    source_names = defaultdict(list)
+    for p in param:
+        if p in ACCUMULATED_PARAMS:
+            source_names[accumulation_source_name].append(p)
+        else:
+            source_names[name].append(p)
+
+    sources = []
+    for n, p in source_names.items():
+        sources.append(load_source(n, param=p, **patch_time_to_hours(kwargs)))
+    return load_source("multi", sources)
+
+
+def patch_time_to_hours(dic):
+    # era5-accumulations requires time in hours
+    if "time" not in dic:
+        return dic
+    time = dic["time"]
+    assert isinstance(time, (tuple, list)), time
+    time = [f"{int(t[:2]):02d}" for t in time]
+    return {**dic, "time": time}
+
+
 def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
-    number_list = normalise_number(ensembles["number"])
+    ensembles = normalise_request(ensembles)
+    center = normalise_request(center)
+    mean = normalise_request(mean)
+
+    number_list = ensembles["number"]
     n_numbers = len(number_list)
 
     keys = ["param", "level", "valid_datetime", "date", "time", "step", "number"]
 
     print(f"Retrieving ensemble data with {ensembles}")
-    ensembles = load_source(**ensembles).order_by(*keys)
+    ensembles = wrapped_load_source(**ensembles).order_by(*keys)
     print(f"Retrieving center data with {center}")
-    center = load_source(**center).order_by(*keys)
+    center = wrapped_load_source(**center).order_by(*keys)
     print(f"Retrieving mean data with {mean}")
-    mean = load_source(**mean).order_by(*keys)
+    mean = wrapped_load_source(**mean).order_by(*keys)
 
     assert len(mean) * n_numbers == len(ensembles), (
         len(mean),
