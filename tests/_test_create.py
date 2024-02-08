@@ -48,7 +48,12 @@ def compare_zarr(dir1, dir2):
     for i_date, date in zip(range(a.shape[0]), a.dates):
         for i_param in range(a.shape[1]):
             param = a.variables[i_param]
-            assert param == b.variables[i_param], (date, param, a.variables[i_param], b.variables[i_param])
+            assert param == b.variables[i_param], (
+                date,
+                param,
+                a.variables[i_param],
+                b.variables[i_param],
+            )
             a_ = a[i_date, i_param]
             b_ = b[i_date, i_param]
             assert a.shape == b.shape, (date, param, a.shape, b.shape)
