@@ -116,14 +116,20 @@ class DateStartStopGroups(Groups):
                 if check_timestamp:
                     return to_datetime(date)
             except ValueError:
-                raise ValueError(f"{date_key}  must include timestamp not just date {date,type(date)}")
+                raise ValueError(
+                    f"{date_key}  must include timestamp not just date {date,type(date)}"
+                )
         elif type(date) == datetime.date:
-            raise ValueError(f"{date_key}  must include timestamp not just date {date,type(date)}")
+            raise ValueError(
+                f"{date_key}  must include timestamp not just date {date,type(date)}"
+            )
         else:
             return date
 
     def _validate_date_range(self):
-        assert self.end >= self.start, "End date must be greater than or equal to start date."
+        assert (
+            self.end >= self.start
+        ), "End date must be greater than or equal to start date."
 
     def _extract_frequency(self, frequency_str):
         freq_ending = frequency_str.lower()[-1]
@@ -131,11 +137,15 @@ class DateStartStopGroups(Groups):
         try:
             return freq_mapping[freq_ending]
         except:  # noqa: E722
-            raise ValueError(f"Frequency must be in hours or days (12h or 2d). {frequency_str}")
+            raise ValueError(
+                f"Frequency must be in hours or days (12h or 2d). {frequency_str}"
+            )
 
     def _validate_frequency(self, freq, frequency_str):
         if freq > 24 and freq % 24 != 0:
-            raise ValueError(f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}")
+            raise ValueError(
+                f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}"
+            )
 
     @cached_property
     def step(self):
@@ -173,7 +183,9 @@ class DateStartStopGroups(Groups):
     def groups(self):
         # Return a list where each sublist contain the subgroups
         # of values according to the grouper_key
-        return [Group(g) for _, g in itertools.groupby(self.values, key=self.grouper_key)]
+        return [
+            Group(g) for _, g in itertools.groupby(self.values, key=self.grouper_key)
+        ]
 
     @cached_property
     def n_groups(self):

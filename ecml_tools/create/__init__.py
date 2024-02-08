@@ -21,13 +21,12 @@ class Creator:
         overwrite=False,
         **kwargs,
     ):
-        self.path = path # Output path
+        self.path = path  # Output path
         self.config = config
         self.cache = cache
         self.print = print
         self.statistics_tmp = statistics_tmp
         self.overwrite = overwrite
-
 
     def init(self, check_name=False):
         # check path

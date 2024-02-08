@@ -169,9 +169,13 @@ class InitialiseLoader(Loader):
 
         dates = self.groups.values
         if self.groups.frequency != self.groups.frequency:
-            raise ValueError(f"Frequency mismatch: {self.groups.frequency} != {self.groups.frequency}")
+            raise ValueError(
+                f"Frequency mismatch: {self.groups.frequency} != {self.groups.frequency}"
+            )
         if self.groups.values[0] != self.groups.values[0]:
-            raise ValueError(f"First date mismatch: {self.groups.values[0]} != {self.groups.values[0]}")
+            raise ValueError(
+                f"First date mismatch: {self.groups.values[0]} != {self.groups.values[0]}"
+            )
         print("-------------------------")
 
         frequency = self.groups.frequency
@@ -183,14 +187,18 @@ class InitialiseLoader(Loader):
             end="",
         )
         lengths = [len(g) for g in self.groups.groups]
-        self.print(f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}.")
+        self.print(
+            f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}."
+        )
         print("-------------------------")
 
         variables = self.minimal_input.variables
         self.print(f"Found {len(variables)} variables : {','.join(variables)}.")
 
         ensembles = self.minimal_input.ensembles
-        self.print(f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}.")
+        self.print(
+            f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}."
+        )
 
         grid_points = self.minimal_input.grid_points
         print(f"gridpoints size: {[len(i) for i in grid_points]}")
@@ -211,7 +219,9 @@ class InitialiseLoader(Loader):
         print(f"{chunks=}")
         dtype = self.output.dtype
 
-        self.print(f"Creating Dataset '{self.path}', with {total_shape=}, {chunks=} and {dtype=}")
+        self.print(
+            f"Creating Dataset '{self.path}', with {total_shape=}, {chunks=} and {dtype=}"
+        )
 
         metadata = {}
         metadata["uuid"] = str(uuid.uuid4())
@@ -281,7 +291,9 @@ class InitialiseLoader(Loader):
 
         self.registry.create(lengths=lengths)
         self.statistics_registry.create(exist_ok=False)
-        self.registry.add_to_history("statistics_registry_initialised", version=self.statistics_registry.version)
+        self.registry.add_to_history(
+            "statistics_registry_initialised", version=self.statistics_registry.version
+        )
 
         self.registry.add_to_history("init finished")
 
@@ -302,7 +314,9 @@ class ContentLoader(Loader):
         self.registry.add_to_history("loading_data_start", parts=parts)
 
         z = zarr.open(self.path, mode="r+")
-        data_writer = DataWriter(parts, parent=self, full_array=z["data"], print=self.print)
+        data_writer = DataWriter(
+            parts, parent=self, full_array=z["data"], print=self.print
+        )
 
         total = len(self.registry.get_flags())
         n_groups = len(self.groups.groups)
@@ -321,7 +335,9 @@ class ContentLoader(Loader):
 
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
-        self.statistics_registry.add_provenance(name="provenance_load", config=self.main_config)
+        self.statistics_registry.add_provenance(
+            name="provenance_load", config=self.main_config
+        )
 
         self.print_info()
 
@@ -384,9 +400,13 @@ class StatisticsLoader(Loader):
         if self._complete:
             return
         if not force:
-            raise Exception(f"❗Zarr {self.path} is not fully built. Use 'force' option.")
+            raise Exception(
+                f"❗Zarr {self.path} is not fully built. Use 'force' option."
+            )
         if self._write_to_dataset:
-            print(f"❗Zarr {self.path} is not fully built, not writting statistics into dataset.")
+            print(
+                f"❗Zarr {self.path} is not fully built, not writting statistics into dataset."
+            )
             self._write_to_dataset = False
 
     @property
@@ -409,7 +429,9 @@ class StatisticsLoader(Loader):
 
     def read_dataset_dates_metadata(self):
         ds = open_dataset(self.path)
-        subset = ds.dates_interval_to_indices(self.statistics_start, self.statistics_end)
+        subset = ds.dates_interval_to_indices(
+            self.statistics_start, self.statistics_end
+        )
         self.i_start = subset[0]
         self.i_end = subset[-1]
         self.date_start = ds.dates[subset[0]]
@@ -443,7 +465,8 @@ class StatisticsLoader(Loader):
         self.statistics_registry.create(exist_ok=True)
 
         self.print(
-            f"Building temporary statistics from data {self.path}. " f"From {self.date_start} to {self.date_end}"
+            f"Building temporary statistics from data {self.path}. "
+            f"From {self.date_start} to {self.date_end}"
         )
 
         shape = (self.i_end + 1 - self.i_start, len(self.variables_names))
@@ -469,7 +492,9 @@ class StatisticsLoader(Loader):
 
         print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
         self.statistics_registry[key] = detailed_stats
-        self.statistics_registry.add_provenance(name="provenance_recompute_statistics", config=self.main_config)
+        self.statistics_registry.add_provenance(
+            name="provenance_recompute_statistics", config=self.main_config
+        )
 
     def get_detailed_stats(self):
         expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
