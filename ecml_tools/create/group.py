@@ -7,11 +7,6 @@
 # nor does it submit to any jurisdiction.
 #
 import datetime
-from functools import cached_property
-from .config import DictObj
-
-
-import datetime
 import itertools
 from functools import cached_property
 
@@ -28,10 +23,10 @@ class GroupByDays:
         x = (year, days // self.days)
         return x
 
+
 class Group(list):
-    """
-    Interface wrapper for List objects
-    """
+    """Interface wrapper for List objects."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert len(self) >= 1, self
@@ -48,7 +43,7 @@ class BaseGroups:
             print(content)
             for g in self.groups:
                 assert isinstance(g[0], datetime.datetime), g[0]
-            print('val',self.values,self.n_groups)
+            print("val", self.values, self.n_groups)
             return f"{self.__class__.__name__}({content}={len(self.values)})({self.n_groups} groups)"
         except:  # noqa
             return f"{self.__class__.__name__}({len(self.values)} dates)"
@@ -56,7 +51,7 @@ class BaseGroups:
     @cached_property
     def values(self):
         raise NotImplementedError()
-    
+
     def intersect(self, dates):
         if dates is None:
             return self
@@ -83,15 +78,15 @@ class Groups(BaseGroups):
     def __init__(self, config):
         # Assert config input is ad dict but not a nested dict
         if not isinstance(config, dict):
-            raise ValueError(f"Config must be a dict. {config}")        
+            raise ValueError(f"Config must be a dict. {config}")
         for k, v in config.items():
             if isinstance(v, dict):
                 raise ValueError(f"Values can't be a dictionary. {k,v}")
 
-        self._config=config
-    
-class ExpandGroups(Groups):
+        self._config = config
 
+
+class ExpandGroups(Groups):
     def __init__(self, config):
         super().__init__(config)
 
@@ -99,74 +94,55 @@ class ExpandGroups(Groups):
     def values(self):
         return self._config.get("values")
 
-class DateStartStopGroups(Groups):
 
+class DateStartStopGroups(Groups):
     def __init__(self, config):
         super().__init__(config)
 
     @cached_property
     def start(self):
-        return self._get_date('start')
-    
+        return self._get_date("start")
+
     @cached_property
     def end(self):
-        return self._get_date('end')
+        return self._get_date("end")
 
-    def _get_date(self,date_key):
+    def _get_date(self, date_key):
         date = self._config[date_key]
-        if type(date)==str:
+        if type(date) == str:
             try:
                 # Attempt to parse the date string with timestamp format
-                check_timestamp=datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S')
+                check_timestamp = datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S")
                 if check_timestamp:
                     return to_datetime(date)
             except ValueError:
                 raise ValueError(f"{date_key}  must include timestamp not just date {date,type(date)}")
-        elif type(date)==datetime.date:
+        elif type(date) == datetime.date:
             raise ValueError(f"{date_key}  must include timestamp not just date {date,type(date)}")
         else:
             return date
 
     def _validate_date_range(self):
         assert self.end >= self.start, "End date must be greater than or equal to start date."
-        
-    def _extract_frequency(self,frequency_str):
-        freq_ending=frequency_str.lower()[-1]
-        freq_mapping ={"h":int(frequency_str[:-1]),
-                       "d":int(frequency_str[:-1])*24}
+
+    def _extract_frequency(self, frequency_str):
+        freq_ending = frequency_str.lower()[-1]
+        freq_mapping = {"h": int(frequency_str[:-1]), "d": int(frequency_str[:-1]) * 24}
         try:
             return freq_mapping[freq_ending]
-        except:
-            raise ValueError(
-                f"Frequency must be in hours or days (12h or 2d). {frequency_str}"
-            )
+        except:  # noqa: E722
+            raise ValueError(f"Frequency must be in hours or days (12h or 2d). {frequency_str}")
 
-    def _validate_frequency(self,freq,frequency_str):
+    def _validate_frequency(self, freq, frequency_str):
         if freq > 24 and freq % 24 != 0:
-            raise ValueError(
-                f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}"
-            )
-        
+            raise ValueError(f"Frequency must be less than 24h or a multiple of 24h. {frequency_str}")
+
     @cached_property
     def step(self):
         _frequency_str = self._config.get("frequency", "24h")
         _freq = self._extract_frequency(_frequency_str)
-        self._validate_frequency(_freq,_frequency_str)
+        self._validate_frequency(_freq, _frequency_str)
         return datetime.timedelta(hours=_freq)
-
-    @property
-    def grouper_key(self):
-        group_by = self._config.get("group_by")
-        if isinstance(group_by, int) and group_by > 0:
-            return GroupByDays(group_by)
-        return {
-            None: lambda dt: 0,  # only one group
-            0: lambda dt: 0,  # only one group
-            "monthly": lambda dt: (dt.year, dt.month),
-            "daily": lambda dt: (dt.year, dt.month, dt.day),
-            "weekly": lambda dt: (dt.weekday(),),
-            "MMDD": lambda dt: (dt.month, dt.day),
-        }[group_by]
 
     @cached_property
     def values(self):
@@ -174,7 +150,7 @@ class DateStartStopGroups(Groups):
         dates = []
         while x <= self.end:
             dates.append(x)
-           
+
             x += self.step
         assert isinstance(dates[0], datetime.datetime), dates[0]
         return dates
@@ -193,17 +169,15 @@ class DateStartStopGroups(Groups):
             "MMDD": lambda dt: (dt.month, dt.day),
         }[group_by]
 
-
     @property
     def groups(self):
         # Return a list where each sublist contain the subgroups
         # of values according to the grouper_key
-        return [Group(g) for _,g in itertools.groupby(self.values, key=self.grouper_key)]
+        return [Group(g) for _, g in itertools.groupby(self.values, key=self.grouper_key)]
 
     @cached_property
     def n_groups(self):
         return len(self.groups)
-
 
 
 class EmptyGroups(BaseGroups):
@@ -218,8 +192,8 @@ class EmptyGroups(BaseGroups):
 
 class GroupsIntersection(BaseGroups):
     def __init__(self, a, b):
-        assert isinstance(a,Groups), a 
-        assert isinstance(b,Groups), b
+        assert isinstance(a, Groups), a
+        assert isinstance(b, Groups), b
         self.a = a
         self.b = b
 
@@ -233,12 +207,12 @@ def build_groups(*objs):
         raise NotImplementedError()
     obj = objs[0]
 
-    if isinstance(obj, (GroupsIntersection,Groups)):
+    if isinstance(obj, (GroupsIntersection, Groups)):
         return obj
 
-    if isinstance(obj, list): 
+    if isinstance(obj, list):
         return ExpandGroups(dict(values=obj))
-    
+
     if isinstance(obj, dict):
         if "dates" in obj and len(obj) == 1:
             return DateStartStopGroups(dict(obj["dates"]))
