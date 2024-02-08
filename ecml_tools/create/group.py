@@ -233,13 +233,14 @@ def build_groups(*objs):
         raise NotImplementedError()
     obj = objs[0]
 
-    type_actions = {
-        GroupsIntersection: lambda x: x,
-        Groups: lambda x: x,
-        list: lambda x: ExpandGroups(dict(values=x)), #Expand
-        Group: lambda x: ExpandGroups(dict(values=x)), #Expand
-        DictObj: lambda x: DateStartStopGroups(dict(x["dates"])) if "dates" in x and len(x) == 1 else DateStartStopGroups(x), #StarStoptEnd
-        dict: lambda x: DateStartStopGroups(dict(x["dates"])) if "dates" in x and len(x) == 1 else DateStartStopGroups(x), #StarStoptEnd
-    }
+    if isinstance(obj, (GroupsIntersection,Groups)):
+        return obj
 
-    return type_actions[type(obj)](obj)
+    if isinstance(obj, list): 
+        return ExpandGroups(dict(values=obj))
+    
+    if isinstance(obj, dict):
+        if "dates" in obj and len(obj) == 1:
+            return DateStartStopGroups(dict(obj["dates"]))
+        else:
+            return DateStartStopGroups(obj)
