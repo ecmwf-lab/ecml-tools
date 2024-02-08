@@ -10,10 +10,11 @@ repos:
     -   id: debug-statements # Check for debugger imports and py37+ breakpoint()
     -   id: end-of-file-fixer # Ensure files end in a newline
     -   id: trailing-whitespace # Trailing whitespace checker
--   repo: https://github.com/asottile/reorder-python-imports # Reorder imports
-    rev: v3.10.0
-    hooks:
-    -   id: reorder-python-imports
+# conflicting with "isort"
+# -   repo: https://github.com/asottile/reorder-python-imports # Reorder imports
+#     rev: v3.10.0
+#     hooks:
+#     -   id: reorder-python-imports
 -   repo: https://github.com/asottile/pyupgrade # Upgrade Python syntax
     rev: v3.7.0
     hooks:
