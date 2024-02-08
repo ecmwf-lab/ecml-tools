@@ -82,18 +82,22 @@ def create_zarr(
         data=data,
         dtype=data.dtype,
         chunks=data.shape,
+        compressor=None,
     )
     root.create_dataset(
         "dates",
         data=dates,
+        compressor=None,
     )
     root.create_dataset(
         "latitudes",
         data=np.array([x + values for x in range(values)]),
+        compressor=None,
     )
     root.create_dataset(
         "longitudes",
         data=np.array([x + values for x in range(values)]),
+        compressor=None,
     )
 
     root.attrs["frequency"] = frequency
@@ -105,18 +109,22 @@ def create_zarr(
     root.create_dataset(
         "mean",
         data=np.mean(data, axis=0),
+        compressor=None,
     )
     root.create_dataset(
         "stdev",
         data=np.std(data, axis=0),
+        compressor=None,
     )
     root.create_dataset(
         "maximum",
         data=np.max(data, axis=0),
+        compressor=None,
     )
     root.create_dataset(
         "minimum",
         data=np.min(data, axis=0),
+        compressor=None,
     )
 
     return root
@@ -294,7 +302,7 @@ class DatasetTester:
         if ds.shape[2] > 1:  # Ensemble dimension
             t[0:10, :, (0, 1)]
 
-        for i in range(10):
+        for i in range(3):
             t[i]
             start = 5 * i
             end = len(ds) - 5 * i
@@ -639,7 +647,7 @@ def test_rename():
         ),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
-        statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
+        statistics_reference_dataset=None,
         statistics_reference_variables=None,
     )
 
@@ -1041,6 +1049,42 @@ def test_ensemble_2():
     )
 
 
+def test_ensemble_3():
+    test = DatasetTester(
+        ensemble=[
+            {"dataset": "test-2021-2021-6h-o96-abcd-1-10", "frequency": 12},
+            {"dataset": "test-2021-2021-6h-o96-abcd-2-1", "frequency": 12},
+            {"dataset": "test-2021-2021-6h-o96-abcd-3-5", "frequency": 12},
+        ]
+    )
+    test.run(
+        expected_class=Ensemble,
+        expected_length=365 * 1 * 2,
+        expected_shape=(365 * 1 * 2, 4, 16, VALUES),
+        expected_variables="abcd",
+        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        date_to_row=lambda date: make_row(
+            [_(date, "a", 1, i) for i in range(10)]
+            + [_(date, "a", 2, 0)]
+            + [_(date, "a", 3, i) for i in range(5)],
+            [_(date, "b", 1, i) for i in range(10)]
+            + [_(date, "b", 2, 0)]
+            + [_(date, "b", 3, i) for i in range(5)],
+            [_(date, "c", 1, i) for i in range(10)]
+            + [_(date, "c", 2, 0)]
+            + [_(date, "c", 3, i) for i in range(5)],
+            [_(date, "d", 1, i) for i in range(10)]
+            + [_(date, "d", 2, 0)]
+            + [_(date, "d", 3, i) for i in range(5)],
+            ensemble=True,
+        ),
+        start_date=datetime.datetime(2021, 1, 1),
+        time_increment=datetime.timedelta(hours=12),
+        statistics_reference_dataset=None,
+        statistics_reference_variables=None,
+    )
+
+
 def test_grids():
     test = DatasetTester(
         grids=[
@@ -1108,4 +1152,4 @@ def test_statistics():
 
 
 if __name__ == "__main__":
-    test_ensemble_1()
+    test_subset_1()

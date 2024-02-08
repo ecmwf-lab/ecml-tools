@@ -5,9 +5,8 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-import os
-import tempfile
 import json
+import os
 
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
@@ -19,7 +18,12 @@ def compare_dot_zattrs(a, b):
         b_keys = list(b.keys())
         for k in set(a_keys) & set(b_keys):
             if k in ["timestamp", "uuid", "latest_write_timestamp", "yaml_config"]:
-                assert type(a[k]) == type(b[k]), (type(a[k]), type(b[k]), a[k], b[k])
+                assert type(a[k]) == type(b[k]), (  # noqa: E721
+                    type(a[k]),
+                    type(b[k]),
+                    a[k],
+                    b[k],
+                )
             assert k in a_keys, (k, a_keys)
             assert k in b_keys, (k, b_keys)
             return compare_dot_zattrs(a[k], b[k])
@@ -29,7 +33,7 @@ def compare_dot_zattrs(a, b):
         for v, w in zip(a, b):
             return compare_dot_zattrs(v, w)
 
-    assert type(a) == type(b), (type(a), type(b), a, b)
+    assert type(a) == type(b), (type(a), type(b), a, b)  # noqa: E721
     return a == b, (a, b)
 
 
@@ -42,8 +46,9 @@ def compare_zarr(dir1, dir2):
         assert a_ == b_, (a, b)
     for k, date in zip(range(a.shape[0]), a.dates):
         for j in range(a.shape[1]):
-            assert (a[k, j] == b[k, j]).all(), (k, date,j, a[k, j], b[k, j])
+            assert (a[k, j] == b[k, j]).all(), (k, date, j, a[k, j], b[k, j])
     compare(dir1, dir2)
+
 
 def compare(dir1, dir2):
     """Compare two directories recursively."""
@@ -103,6 +108,10 @@ def test_create_join():
 
 def test_create_pipe():
     _test_create("create-pipe")
+
+
+def test_create_perturbations():
+    _test_create("create-perturbations")
 
 
 if __name__ == "__main__":

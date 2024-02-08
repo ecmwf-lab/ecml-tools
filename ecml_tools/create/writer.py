@@ -141,9 +141,11 @@ class OffsetView(ArrayLike):
 
             # Create a new key for indexing the large array.
             new_key = tuple(
-                slice(self.offset, self.offset + values_shape[i])
-                if i == self.axis
-                else slice(None)
+                (
+                    slice(self.offset, self.offset + values_shape[i])
+                    if i == self.axis
+                    else slice(None)
+                )
                 for i in range(len(self.shape))
             )
         else:

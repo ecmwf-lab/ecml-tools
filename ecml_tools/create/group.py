@@ -50,7 +50,7 @@ class BaseGroups:
                 assert isinstance(g[0], datetime.datetime), g[0]
             print('val',self.values,self.n_groups)
             return f"{self.__class__.__name__}({content}={len(self.values)})({self.n_groups} groups)"
-        except:
+        except:  # noqa
             return f"{self.__class__.__name__}({len(self.values)} dates)"
 
     @cached_property

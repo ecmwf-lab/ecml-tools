@@ -7,7 +7,9 @@
 # nor does it submit to any jurisdiction.
 #
 import datetime
+import importlib
 import logging
+import os
 import time
 from collections import defaultdict
 from copy import deepcopy
@@ -334,9 +336,10 @@ class ReferencesSolver(dict):
         raise KeyError(key)
 
 
-class SourceResult(Result):
+class FunctionResult(Result):
     def __init__(self, context, dates, action, previous_sibling=None):
         super().__init__(context, dates)
+        assert isinstance(action, Action), type(action)
         self.action = action
 
         _args = self.action.args
@@ -349,16 +352,18 @@ class SourceResult(Result):
 
     @cached_property
     def datasource(self):
-        from climetlab import load_source
-
         print(f"loading source with {self.args} {self.kwargs}")
-        return load_source(*self.args, **self.kwargs)
+        return self.action.function(*self.args, **self.kwargs)
 
     def __repr__(self):
         content = " ".join([f"{v}" for v in self.args])
         content += " ".join([f"{k}={v}" for k, v in self.kwargs.items()])
 
         return super().__repr__(content)
+
+    @property
+    def function(self):
+        raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
 
 
 class JoinResult(Result):
@@ -396,7 +401,7 @@ class LabelAction(Action):
         return super().__repr__(_inline_=self.name, _indent_=" ")
 
 
-class SourceAction(Action):
+class BaseFunctionAction(Action):
     def __repr__(self):
         content = ""
         content += ",".join([self._short_str(a) for a in self.args])
@@ -407,7 +412,32 @@ class SourceAction(Action):
         return super().__repr__(_inline_=content, _indent_=" ")
 
     def select(self, dates):
-        return SourceResult(self.context, dates, action=self)
+        return FunctionResult(self.context, dates, action=self)
+
+
+class SourceAction(BaseFunctionAction):
+    @property
+    def function(self):
+        from climetlab import load_source
+
+        return load_source
+
+
+class FunctionAction(BaseFunctionAction):
+    def __init__(self, context, name, **kwargs):
+        super().__init__(context, **kwargs)
+        self.name = name
+
+    @property
+    def function(self):
+        here = os.path.dirname(__file__)
+        path = os.path.join(here, "functions", f"{self.name}.py")
+        spec = importlib.util.spec_from_file_location(self.name, path)
+        module = spec.loader.load_module()
+        # TODO: this fails here, fix this.
+        #   getattr(module, self.name)
+        #   self.action.kwargs
+        return module.execute
 
 
 class ConcatResult(Result):
@@ -585,7 +615,9 @@ def action_factory(config, context):
         raise ValueError(f"Invalid input config {config}")
 
     if len(config) != 1:
-        raise ValueError(f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}")
+        raise ValueError(
+            f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}"
+        )
 
     config = deepcopy(config)
     key = list(config.keys())[0]
@@ -595,6 +627,7 @@ def action_factory(config, context):
         label=LabelAction,
         pipe=PipeAction,
         source=SourceAction,
+        function=FunctionAction,
         dates=DateAction,
     )[key]
 
@@ -670,7 +703,11 @@ class InputBuilder:
         return action_factory(self.config, context)
 
     def select(self, dates):
-        """ This changes the context. """
+        """This changes the context."""
         return self._action.select(dates)
+
+    def __repr__(self):
+        return repr(self._action)
+
 
 build_input = InputBuilder

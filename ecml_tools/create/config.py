@@ -91,7 +91,9 @@ class OutputSpecs:
             else:
                 chunks.append(len(v))
         if user:
-            raise ValueError(f"Unused chunking keys from config: {list(user.keys())}, not in known keys : {list(coords.keys())}")
+            raise ValueError(
+                f"Unused chunking keys from config: {list(user.keys())}, not in known keys : {list(coords.keys())}"
+            )
         return tuple(chunks)
 
     @property
@@ -126,11 +128,15 @@ class LoadersConfig(Config):
 
         if "config_format_version" not in self:
             # Should be changed to 2
-            self.config_format_version = 1 
-            print(f"Setting config_format_version={self.config_format_version} because it was not provided.")
+            self.config_format_version = 1
+            print(
+                f"Setting config_format_version={self.config_format_version} because it was not provided."
+            )
 
         if self.config_format_version != 2:
-            raise ValueError(f"Config format has changed. Must provide config with format version >= 2.")
+            raise ValueError(
+                "Config format has changed. Must provide config with format version >= 2."
+            )
 
         if "dates" in self.output:
             raise ValueError("Obsolete: Dates should not be provided in output config.")
