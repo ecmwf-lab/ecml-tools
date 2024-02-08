@@ -22,23 +22,23 @@ common:
 
 loop:
 - dates:
-    "<<": *dates_anchor
+    <<: *dates_anchor
     group_by: monthly
 
 input:
   dates:
-    "<<": *dates_anchor
+    <<: *dates_anchor
     join:
     - label:
         name: previous_data
         source:
-          '<<': *mars_request
+          <<: *mars_request
           param: [2t]
           levtype: sfc
 
     - pipe:
       - source:
-          '<<': *mars_request
+          <<: *mars_request
           param: [q, t]
           levtype: pl
           level: [50, 100]
@@ -48,7 +48,7 @@ input:
           level: [50]
 
     - source:
-        '<<': *mars_request
+        <<: *mars_request
         name: era5-accumulations
         param: [cp, tp]
         # era5-accumulations requires time in hours
@@ -62,7 +62,7 @@ input:
         date: $dates
 
 output:
-  chunking: {dates: 1}
+  chunking: {dates: 1, ensembles: 1}
   dtype: float32
   flatten_grid: True
   order_by:

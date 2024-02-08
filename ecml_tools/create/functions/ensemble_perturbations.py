@@ -99,11 +99,17 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
         c = center_field.to_numpy()
         assert m.shape == c.shape, (m.shape, c.shape)
 
+        FORCED_POSITIVE = [
+            "q",
+            "cp",
+            "lsp",
+            "tp",
+        ]  # add "swl4", "swl3", "swl2", "swl1", "swl0", and more ?
         #################################
         # Actual computation happens here
         x = c - m + e
-        if param == "q":
-            warnings.warn("Clipping q")
+        if param in FORCED_POSITIVE:
+            warnings.warn(f"Clipping {param} to be positive")
             x = np.maximum(x, 0)
         #################################
 

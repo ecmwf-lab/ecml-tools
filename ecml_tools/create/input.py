@@ -81,9 +81,7 @@ def _datasource_request(data):
     params_steps = sort(params_steps)
     params_levels = sort(params_levels)
 
-    return dict(
-        param_level=params_levels, param_step=params_steps, area=area, grid=grid
-    )
+    return dict(param_level=params_levels, param_step=params_steps, area=area, grid=grid)
 
 
 class Cache:
@@ -116,14 +114,10 @@ class Coords:
         ensembles_key = list(from_config.keys())[2]
 
         if isinstance(from_config[variables_key], (list, tuple)):
-            assert all(
-                [
-                    v == w
-                    for v, w in zip(
-                        from_data[variables_key], from_config[variables_key]
-                    )
-                ]
-            ), (from_data[variables_key], from_config[variables_key])
+            assert all([v == w for v, w in zip(from_data[variables_key], from_config[variables_key])]), (
+                from_data[variables_key],
+                from_config[variables_key],
+            )
 
         self.cache.variables = from_data[variables_key]  # "param_level"
         self.cache.ensembles = from_data[ensembles_key]  # "number"
@@ -257,7 +251,7 @@ class Result(HasCoordsMixin):
 
     @property
     def data_request(self):
-        """Returns a dictionary with the parameters needed to retrieve the data"""
+        """Returns a dictionary with the parameters needed to retrieve the data."""
         return _datasource_request(self.datasource)
 
     def get_cube(self):
@@ -405,9 +399,7 @@ class BaseFunctionAction(Action):
     def __repr__(self):
         content = ""
         content += ",".join([self._short_str(a) for a in self.args])
-        content += " ".join(
-            [self._short_str(f"{k}={v}") for k, v in self.kwargs.items()]
-        )
+        content += " ".join([self._short_str(f"{k}={v}") for k, v in self.kwargs.items()])
         content = self._short_str(content)
         return super().__repr__(_inline_=content, _indent_=" ")
 
@@ -455,7 +447,7 @@ class ConcatResult(Result):
 
     @property
     def variables(self):
-        """Check that all the results objects have the same variables"""
+        """Check that all the results objects have the same variables."""
         variables = None
         for f in self.results:
             if f.empty:
@@ -468,7 +460,7 @@ class ConcatResult(Result):
 
     @property
     def dates(self):
-        """Merge the dates of all the results objects"""
+        """Merge the dates of all the results objects."""
         dates = []
         for i in self.results:
             d = i.dates
@@ -628,9 +620,7 @@ def action_factory(config, context):
         raise ValueError(f"Invalid input config {config}")
 
     if len(config) != 1:
-        raise ValueError(
-            f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}"
-        )
+        raise ValueError(f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}")
 
     config = deepcopy(config)
     key = list(config.keys())[0]
@@ -717,6 +707,7 @@ class InputBuilder:
 
     def select(self, dates):
         """This changes the context."""
+        dates = build_groups(dates)
         return self._action.select(dates)
 
     def __repr__(self):

@@ -4,7 +4,6 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-
 import datetime
 import logging
 import os
@@ -14,26 +13,24 @@ from functools import cached_property
 import numpy as np
 import zarr
 
-from ecml_tools.data import open_dataset
-
 from .check import DatasetName
-from .config import build_output, loader_config
+from .config import build_output
+from .config import loader_config
 from .group import build_groups
 from .input import build_input
-from .statistics import (
-    StatisticsRegistry,
-    compute_aggregated_statistics,
-    compute_statistics,
-)
-from .utils import (
-    bytes,
-    compute_directory_sizes,
-    normalize_and_check_dates,
-    progress_bar,
-    to_datetime,
-)
-from .writer import CubesFilter, DataWriter
-from .zarr import ZarrBuiltRegistry, add_zarr_dataset
+from .statistics import compute_aggregated_statistics
+from .statistics import compute_statistics
+from .statistics import StatisticsRegistry
+from .utils import bytes
+from .utils import compute_directory_sizes
+from .utils import normalize_and_check_dates
+from .utils import progress_bar
+from .utils import to_datetime
+from .writer import CubesFilter
+from .writer import DataWriter
+from .zarr import add_zarr_dataset
+from .zarr import ZarrBuiltRegistry
+from ecml_tools.data import open_dataset
 
 LOG = logging.getLogger(__name__)
 
@@ -43,7 +40,7 @@ VERSION = "0.20"
 class Loader:
     def __init__(self, *, path, print=print, **kwargs):
         # Catch all floating point errors, including overflow, sqrt(<0), etc
-        np.seterr(all="raise")
+        np.seterr(all="raise", under="warn")
 
         assert isinstance(path, str), path
 
@@ -150,36 +147,29 @@ class InitialiseLoader(Loader):
         self.input = self.build_input()
 
         print(self.input)
-        self.inputs = self.input.select(dates=None)
-        all_dates = self.inputs.dates
+        all_dates = self.groups.values
         self.minimal_input = self.input.select(dates=[all_dates[0]])
 
         print("✅ GROUPS")
         print(self.groups)
-        print("✅ ALL INPUTS")
-        print(self.inputs)
         print("✅ MINIMAL INPUT")
         print(self.minimal_input)
 
     def initialise(self, check_name=True):
-        """Create empty dataset"""
+        """Create empty dataset."""
 
         self.print("Config loaded ok:")
         print(self.main_config)
         print("-------------------------")
 
-        dates = self.inputs.dates
-        if self.groups.frequency != self.inputs.frequency:
-            raise ValueError(
-                f"Frequency mismatch: {self.groups.frequency} != {self.inputs.frequency}"
-            )
-        if self.groups.values[0] != self.inputs.dates[0]:
-            raise ValueError(
-                f"First date mismatch: {self.groups.values[0]} != {self.inputs.dates[0]}"
-            )
+        dates = self.groups.values
+        if self.groups.frequency != self.groups.frequency:
+            raise ValueError(f"Frequency mismatch: {self.groups.frequency} != {self.groups.frequency}")
+        if self.groups.values[0] != self.groups.values[0]:
+            raise ValueError(f"First date mismatch: {self.groups.values[0]} != {self.groups.values[0]}")
         print("-------------------------")
 
-        frequency = self.inputs.frequency
+        frequency = self.groups.frequency
         assert isinstance(frequency, int), frequency
 
         self.print(f"Found {len(dates)} datetimes.")
@@ -188,18 +178,14 @@ class InitialiseLoader(Loader):
             end="",
         )
         lengths = [len(g) for g in self.groups.groups]
-        self.print(
-            f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}."
-        )
+        self.print(f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}.")
         print("-------------------------")
 
         variables = self.minimal_input.variables
         self.print(f"Found {len(variables)} variables : {','.join(variables)}.")
 
         ensembles = self.minimal_input.ensembles
-        self.print(
-            f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}."
-        )
+        self.print(f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}.")
 
         grid_points = self.minimal_input.grid_points
         print(f"gridpoints size: {[len(i) for i in grid_points]}")
@@ -220,9 +206,7 @@ class InitialiseLoader(Loader):
         print(f"{chunks=}")
         dtype = self.output.dtype
 
-        self.print(
-            f"Creating Dataset '{self.path}', with {total_shape=}, {chunks=} and {dtype=}"
-        )
+        self.print(f"Creating Dataset '{self.path}', with {total_shape=}, {chunks=} and {dtype=}")
 
         metadata = {}
         metadata["uuid"] = str(uuid.uuid4())
@@ -295,9 +279,7 @@ class InitialiseLoader(Loader):
 
         self.registry.create(lengths=lengths)
         self.statistics_registry.create(exist_ok=False)
-        self.registry.add_to_history(
-            "statistics_registry_initialised", version=self.statistics_registry.version
-        )
+        self.registry.add_to_history("statistics_registry_initialised", version=self.statistics_registry.version)
 
         self.registry.add_to_history("init finished")
 
@@ -318,9 +300,7 @@ class ContentLoader(Loader):
         self.registry.add_to_history("loading_data_start", parts=parts)
 
         z = zarr.open(self.path, mode="r+")
-        data_writer = DataWriter(
-            parts, parent=self, full_array=z["data"], print=self.print
-        )
+        data_writer = DataWriter(parts, parent=self, full_array=z["data"], print=self.print)
 
         total = len(self.registry.get_flags())
         n_groups = len(self.groups.groups)
@@ -339,9 +319,7 @@ class ContentLoader(Loader):
 
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
-        self.statistics_registry.add_provenance(
-            name="provenance_load", config=self.main_config
-        )
+        self.statistics_registry.add_provenance(name="provenance_load", config=self.main_config)
 
         self.print_info()
 
@@ -404,13 +382,9 @@ class StatisticsLoader(Loader):
         if self._complete:
             return
         if not force:
-            raise Exception(
-                f"❗Zarr {self.path} is not fully built. Use 'force' option."
-            )
+            raise Exception(f"❗Zarr {self.path} is not fully built. Use 'force' option.")
         if self._write_to_dataset:
-            print(
-                f"❗Zarr {self.path} is not fully built, not writting statistics into dataset."
-            )
+            print(f"❗Zarr {self.path} is not fully built, not writting statistics into dataset.")
             self._write_to_dataset = False
 
     @property
@@ -433,9 +407,7 @@ class StatisticsLoader(Loader):
 
     def read_dataset_dates_metadata(self):
         ds = open_dataset(self.path)
-        subset = ds.dates_interval_to_indices(
-            self.statistics_start, self.statistics_end
-        )
+        subset = ds.dates_interval_to_indices(self.statistics_start, self.statistics_end)
         self.i_start = subset[0]
         self.i_end = subset[-1]
         self.date_start = ds.dates[subset[0]]
@@ -469,10 +441,7 @@ class StatisticsLoader(Loader):
         self.statistics_registry.create(exist_ok=True)
 
         self.print(
-            (
-                f"Building temporary statistics from data {self.path}. "
-                f"From {self.date_start} to {self.date_end}"
-            )
+            f"Building temporary statistics from data {self.path}. " f"From {self.date_start} to {self.date_end}"
         )
 
         shape = (self.i_end + 1 - self.i_start, len(self.variables_names))
@@ -498,9 +467,7 @@ class StatisticsLoader(Loader):
 
         print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
         self.statistics_registry[key] = detailed_stats
-        self.statistics_registry.add_provenance(
-            name="provenance_recompute_statistics", config=self.main_config
-        )
+        self.statistics_registry.add_provenance(name="provenance_recompute_statistics", config=self.main_config)
 
     def get_detailed_stats(self):
         expected_shape = (self.dataset_shape[0], self.dataset_shape[1])
@@ -511,11 +478,9 @@ class StatisticsLoader(Loader):
             dates = open_dataset(self.path).dates
             missing_dates = dates[missing_index[0]]
             print(
-                (
-                    f"Missing dates: "
-                    f"{missing_dates[0]} ... {missing_dates[len(missing_dates)-1]} "
-                    f"({missing_dates.shape[0]} missing)"
-                )
+                f"Missing dates: "
+                f"{missing_dates[0]} ... {missing_dates[len(missing_dates)-1]} "
+                f"({missing_dates.shape[0]} missing)"
             )
             raise
 
