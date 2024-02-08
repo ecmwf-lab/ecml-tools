@@ -4,9 +4,10 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-
 import json
 import os
+
+import numpy as np
 
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
@@ -44,9 +45,16 @@ def compare_zarr(dir1, dir2):
     assert (a.dates == b.dates).all(), (a.dates, b.dates)
     for a_, b_ in zip(a.variables, b.variables):
         assert a_ == b_, (a, b)
-    for k, date in zip(range(a.shape[0]), a.dates):
-        for j in range(a.shape[1]):
-            assert (a[k, j] == b[k, j]).all(), (k, date, j, a[k, j], b[k, j])
+    for i_date, date in zip(range(a.shape[0]), a.dates):
+        for i_param in range(a.shape[1]):
+            param = a.variables[i_param]
+            assert param == b.variables[i_param], (date, param, a.variables[i_param], b.variables[i_param])
+            a_ = a[i_date, i_param]
+            b_ = b[i_date, i_param]
+            assert a.shape == b.shape, (date, param, a.shape, b.shape)
+            delta = a_ - b_
+            max_delta = np.max(np.abs(delta))
+            assert max_delta == 0.0, (date, param, a_, b_, a_ - b_, max_delta)
     compare(dir1, dir2)
 
 
