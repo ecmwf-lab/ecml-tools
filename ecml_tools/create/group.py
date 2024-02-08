@@ -99,7 +99,7 @@ class ExpandGroups(Groups):
     def values(self):
         return self._config.get("values")
 
-class DateStartStopExpandGroups(Groups):
+class DateStartStopGroups(Groups):
 
     def __init__(self, config):
         super().__init__(config)
@@ -238,8 +238,8 @@ def build_groups(*objs):
         Groups: lambda x: x,
         list: lambda x: ExpandGroups(dict(values=x)), #Expand
         Group: lambda x: ExpandGroups(dict(values=x)), #Expand
-        DictObj: lambda x: DateStartStopExpandGroups(dict(x["dates"])) if "dates" in x and len(x) == 1 else DateStartStopExpandGroups(x), #StarStoptEnd
-        dict: lambda x: DateStartStopExpandGroups(dict(x["dates"])) if "dates" in x and len(x) == 1 else DateStartStopExpandGroups(x), #StarStoptEnd
+        DictObj: lambda x: DateStartStopGroups(dict(x["dates"])) if "dates" in x and len(x) == 1 else DateStartStopGroups(x), #StarStoptEnd
+        dict: lambda x: DateStartStopGroups(dict(x["dates"])) if "dates" in x and len(x) == 1 else DateStartStopGroups(x), #StarStoptEnd
     }
 
     return type_actions[type(obj)](obj)
