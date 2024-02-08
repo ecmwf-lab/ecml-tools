@@ -330,7 +330,7 @@ def test_simple():
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 2 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
         statistics_reference_variables="abcd",
     )
@@ -341,7 +341,6 @@ def test_concat():
         "test-2021-2022-6h-o96-abcd",
         "test-2023-2023-6h-o96-abcd",
     )
-
     test.run(
         expected_class=Concat,
         expected_length=365 * 3 * 4,
@@ -349,7 +348,7 @@ def test_concat():
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 3 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2022-6h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -357,28 +356,15 @@ def test_concat():
 
 
 def test_join_1():
-    test = DatasetTester(
-        "test-2021-2021-6h-o96-abcd",
-        "test-2021-2021-6h-o96-efgh",
-    )
-
+    test = DatasetTester("test-2021-2021-6h-o96-abcd", "test-2021-2021-6h-o96-efgh")
     test.run(
         expected_class=Join,
         expected_length=365 * 4,
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 4, 8, 1, VALUES),
-        expected_variables=["a", "b", "c", "d", "e", "f", "g", "h"],
-        expected_name_to_index={
-            "a": 0,
-            "b": 1,
-            "c": 2,
-            "d": 3,
-            "e": 4,
-            "f": 5,
-            "g": 6,
-            "h": 7,
-        },
+        expected_variables="abcdefgh",
+        expected_name_to_index="abcdefgh",
         date_to_row=lambda date: simple_row(date, "abcdefgh"),
         # TODO: test second stats
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
@@ -387,19 +373,15 @@ def test_join_1():
 
 
 def test_join_2():
-    test = DatasetTester(
-        "test-2021-2021-6h-o96-abcd-1",
-        "test-2021-2021-6h-o96-bdef-2",
-    )
-
+    test = DatasetTester("test-2021-2021-6h-o96-abcd-1", "test-2021-2021-6h-o96-bdef-2")
     test.run(
         expected_class=Select,
         expected_length=365 * 4,
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 4, 6, 1, VALUES),
-        expected_variables=["a", "b", "c", "d", "e", "f"],
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5},
+        expected_variables="abcdef",
+        expected_name_to_index="abcdef",
         date_to_row=lambda date: make_row(
             _(date, "a", 1),
             _(date, "b", 2),
@@ -417,10 +399,7 @@ def test_join_2():
 
 
 def test_join_3():
-    test = DatasetTester(
-        "test-2021-2021-6h-o96-abcd-1",
-        "test-2021-2021-6h-o96-abcd-2",
-    )
+    test = DatasetTester("test-2021-2021-6h-o96-abcd-1", "test-2021-2021-6h-o96-abcd-2")
 
     # TODO: This should trigger a warning about occulted dataset
 
@@ -431,7 +410,7 @@ def test_join_3():
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: make_row(
             _(date, "a", 2),
             _(date, "b", 2),
@@ -445,7 +424,6 @@ def test_join_3():
 
 def test_subset_1():
     test = DatasetTester("test-2021-2023-1h-o96-abcd", frequency=12)
-
     test.run(
         expected_class=Subset,
         expected_length=365 * 3 * 2,
@@ -453,7 +431,7 @@ def test_subset_1():
         time_increment=datetime.timedelta(hours=12),
         expected_shape=(365 * 3 * 2, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -467,7 +445,7 @@ def test_subset_2():
         expected_length=365 * 24,
         expected_shape=(365 * 24, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2022, 1, 1),
         time_increment=datetime.timedelta(hours=1),
@@ -478,17 +456,14 @@ def test_subset_2():
 
 def test_subset_3():
     test = DatasetTester(
-        "test-2021-2023-1h-o96-abcd",
-        start=2022,
-        end=2022,
-        frequency=12,
+        "test-2021-2023-1h-o96-abcd", start=2022, end=2022, frequency=12
     )
     test.run(
         expected_class=Subset,
         expected_length=365 * 2,
         expected_shape=(365 * 2, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2022, 1, 1),
         time_increment=datetime.timedelta(hours=12),
@@ -506,7 +481,7 @@ def test_subset_4():
         time_increment=datetime.timedelta(hours=1),
         expected_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -522,7 +497,7 @@ def test_subset_5():
         time_increment=datetime.timedelta(hours=1),
         expected_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -531,11 +506,8 @@ def test_subset_5():
 
 def test_subset_6():
     test = DatasetTester(
-        "test-2021-2023-1h-o96-abcd",
-        start="2022-06-01",
-        end="2022-08-31",
+        "test-2021-2023-1h-o96-abcd", start="2022-06-01", end="2022-08-31"
     )
-
     test.run(
         expected_class=Subset,
         expected_length=(30 + 31 + 31) * 24,
@@ -543,7 +515,7 @@ def test_subset_6():
         time_increment=datetime.timedelta(hours=1),
         expected_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -559,7 +531,7 @@ def test_subset_7():
         time_increment=datetime.timedelta(hours=1),
         expected_shape=((30 + 31 + 31) * 24, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2023-1h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -577,7 +549,7 @@ def test_subset_8():
         expected_length=365 * 4,
         expected_shape=(365 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2021, 1, 1, 3, 0, 0),
         time_increment=datetime.timedelta(hours=6),
@@ -592,8 +564,8 @@ def test_select_1():
         expected_class=Select,
         expected_length=365 * 4,
         expected_shape=(365 * 4, 2, 1, VALUES),
-        expected_variables=["b", "d"],
-        expected_name_to_index={"b": 0, "d": 1},
+        expected_variables="bd",
+        expected_name_to_index="bd",
         date_to_row=lambda date: simple_row(date, "bd"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
@@ -608,8 +580,8 @@ def test_select_2():
         expected_class=Select,
         expected_length=365 * 4,
         expected_shape=(365 * 4, 2, 1, VALUES),
-        expected_variables=["c", "a"],
-        expected_name_to_index={"c": 0, "a": 1},
+        expected_variables="ca",
+        expected_name_to_index="ca",
         date_to_row=lambda date: simple_row(date, "ca"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
@@ -624,8 +596,8 @@ def test_select_3():
         expected_class=Select,
         expected_length=365 * 4,
         expected_shape=(365 * 4, 2, 1, VALUES),
-        expected_variables=["a", "c"],
-        expected_name_to_index={"a": 0, "c": 1},
+        expected_variables="ac",
+        expected_name_to_index="ac",
         date_to_row=lambda date: simple_row(date, "ac"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
@@ -640,11 +612,9 @@ def test_rename():
         expected_class=Rename,
         expected_length=365 * 4,
         expected_shape=(365 * 4, 4, 1, VALUES),
-        expected_variables=["x", "b", "y", "d"],
-        expected_name_to_index={"x": 0, "b": 1, "y": 2, "d": 3},
-        date_to_row=lambda date: make_row(
-            _(date, "a"), _(date, "b"), _(date, "c"), _(date, "d")
-        ),
+        expected_variables="xbyd",
+        expected_name_to_index="xbyd",
+        date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         statistics_reference_dataset=None,
@@ -660,9 +630,9 @@ def test_drop():
         expected_class=Select,
         expected_length=365 * 4,
         expected_shape=(365 * 4, 3, 1, VALUES),
-        expected_variables=["b", "c", "d"],
-        expected_name_to_index={"b": 0, "c": 1, "d": 2},
-        date_to_row=lambda date: make_row(_(date, "b"), _(date, "c"), _(date, "d")),
+        expected_variables="bcd",
+        expected_name_to_index="bcd",
+        date_to_row=lambda date: simple_row(date, "bcd"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
@@ -676,11 +646,9 @@ def test_reorder_1():
         expected_class=Select,
         expected_length=365 * 4,
         expected_shape=(365 * 4, 4, 1, VALUES),
-        expected_variables=["d", "c", "b", "a"],
-        expected_name_to_index={"d": 0, "c": 1, "b": 2, "a": 3},
-        date_to_row=lambda date: make_row(
-            _(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")
-        ),
+        expected_variables="dcba",
+        expected_name_to_index="dcba",
+        date_to_row=lambda date: simple_row(date, "dcba"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
@@ -694,11 +662,9 @@ def test_reorder_2():
         expected_class=Select,
         expected_length=365 * 4,
         expected_shape=(365 * 4, 4, 1, VALUES),
-        expected_variables=["d", "c", "b", "a"],
-        expected_name_to_index={"d": 0, "c": 1, "b": 2, "a": 3},
-        date_to_row=lambda date: make_row(
-            _(date, "d"), _(date, "c"), _(date, "b"), _(date, "a")
-        ),
+        expected_variables="dcba",
+        expected_name_to_index="dcba",
+        date_to_row=lambda date: simple_row(date, "dcba"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
@@ -719,7 +685,7 @@ def test_constructor_1():
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 2 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -728,7 +694,10 @@ def test_constructor_1():
 
 def test_constructor_2():
     test = DatasetTester(
-        datasets=["test-2021-2021-6h-o96-abcd", "test-2022-2022-6h-o96-abcd"]
+        datasets=[
+            "test-2021-2021-6h-o96-abcd",
+            "test-2022-2022-6h-o96-abcd",
+        ]
     )
     test.run(
         expected_class=Concat,
@@ -737,7 +706,7 @@ def test_constructor_2():
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 2 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -760,7 +729,7 @@ def test_constructor_3():
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 2 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -770,7 +739,10 @@ def test_constructor_3():
 def test_constructor_4():
     test = DatasetTester(
         "test-2021-2021-6h-o96-abcd",
-        {"dataset": "test-2022-2022-1h-o96-abcd", "frequency": 6},
+        {
+            "dataset": "test-2022-2022-1h-o96-abcd",
+            "frequency": 6,
+        },
     )
     test.run(
         expected_class=Concat,
@@ -779,7 +751,7 @@ def test_constructor_4():
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 2 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         statistics_reference_dataset="test-2021-2021-6h-o96-abcd",
         statistics_reference_variables="abcd",
@@ -797,8 +769,8 @@ def test_constructor_5():
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 4, 7, 1, VALUES),
-        expected_variables=["x", "b", "y", "d", "a", "z", "t"],
-        expected_name_to_index={"x": 0, "b": 1, "y": 2, "d": 3, "a": 4, "z": 5, "t": 6},
+        expected_variables="xbydazt",
+        expected_name_to_index="xbydazt",
         date_to_row=lambda date: make_row(
             _(date, "a", 1),
             _(date, "b", 2),
@@ -847,7 +819,7 @@ def test_slice_1():
         expected_length=365 * 1 * 4,
         expected_shape=(365 * 1 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(2021, 1, 1),
         time_increment=datetime.timedelta(hours=6),
@@ -865,7 +837,7 @@ def test_slice_2():
         expected_length=60632,
         expected_shape=(60632, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: simple_row(date, "abcd"),
         start_date=datetime.datetime(1940, 1, 1),
         time_increment=datetime.timedelta(hours=12),
@@ -888,62 +860,8 @@ def test_slice_3():
         start_date=datetime.datetime(2020, 1, 1),
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(366 * 4, 26, 1, VALUES),
-        expected_variables=[
-            "a",
-            "b",
-            "c",
-            "d",
-            "e",
-            "f",
-            "g",
-            "h",
-            "i",
-            "j",
-            "k",
-            "l",
-            "m",
-            "n",
-            "o",
-            "p",
-            "q",
-            "r",
-            "s",
-            "t",
-            "u",
-            "v",
-            "w",
-            "x",
-            "y",
-            "z",
-        ],
-        expected_name_to_index={
-            "a": 0,
-            "b": 1,
-            "c": 2,
-            "d": 3,
-            "e": 4,
-            "f": 5,
-            "g": 6,
-            "h": 7,
-            "i": 8,
-            "j": 9,
-            "k": 10,
-            "l": 11,
-            "m": 12,
-            "n": 13,
-            "o": 14,
-            "p": 15,
-            "q": 16,
-            "r": 17,
-            "s": 18,
-            "t": 19,
-            "u": 20,
-            "v": 21,
-            "w": 22,
-            "x": 23,
-            "y": 24,
-            "z": 25,
-        },
+        expected_variables="abcdefghijklmnopqrstuvwxyz",
+        expected_name_to_index="abcdefghijklmnopqrstuvwxyz",
         statistics_reference_dataset=None,
         statistics_reference_variables=None,
     )
@@ -961,7 +879,7 @@ def test_slice_4():
         time_increment=datetime.timedelta(hours=1),
         expected_shape=(8784, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         statistics_reference_dataset=None,
         statistics_reference_variables=None,
     )
@@ -980,7 +898,7 @@ def test_slice_5():
         time_increment=datetime.timedelta(hours=18),
         expected_shape=(4870, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         statistics_reference_dataset=None,
         statistics_reference_variables=None,
     )
@@ -998,7 +916,7 @@ def test_ensemble_1():
         expected_length=365 * 1 * 4,
         expected_shape=(365 * 1 * 4, 4, 11, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: make_row(
             [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)],
             [_(date, "b", 1, i) for i in range(10)] + [_(date, "b", 2, 0)],
@@ -1026,7 +944,7 @@ def test_ensemble_2():
         expected_length=365 * 1 * 4,
         expected_shape=(365 * 1 * 4, 4, 16, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: make_row(
             [_(date, "a", 1, i) for i in range(10)]
             + [_(date, "a", 2, 0)]
@@ -1062,7 +980,7 @@ def test_ensemble_3():
         expected_length=365 * 1 * 2,
         expected_shape=(365 * 1 * 2, 4, 16, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: make_row(
             [_(date, "a", 1, i) for i in range(10)]
             + [_(date, "a", 2, 0)]
@@ -1097,7 +1015,7 @@ def test_grids():
         expected_length=365 * 1 * 4,
         expected_shape=(365 * 1 * 4, 4, 1, VALUES + 25),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         date_to_row=lambda date: make_row(
             [
                 _(date, "a", 1),
@@ -1145,7 +1063,7 @@ def test_statistics():
         time_increment=datetime.timedelta(hours=6),
         expected_shape=(365 * 4, 4, 1, VALUES),
         expected_variables="abcd",
-        expected_name_to_index={"a": 0, "b": 1, "c": 2, "d": 3},
+        expected_name_to_index="abcd",
         statistics_reference_dataset="test-2000-2010-6h-o96-abcd",
         statistics_reference_variables="abcd",
     )

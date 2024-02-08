@@ -7,7 +7,7 @@ config_format_version: 2
 common:
   mars_request: &mars_request
     name: mars
-    expver: '0001'
+    expver: "0001"
     class: ea
     grid: 20./20.
     stream: oper
@@ -20,29 +20,27 @@ common:
     frequency: 12h
 
 loop:
-- dates:
-    "<<": *dates_anchor
-    group_by: monthly
+  - dates:
+      <<: *dates_anchor
+      group_by: monthly
 
 input:
-  dates:
-    "<<": *dates_anchor
-    join:
+  join:
     - label:
         name: previous_data
         source:
-          '<<': *mars_request
+          <<: *mars_request
           param: [2t]
           levtype: sfc
 
     - source:
-        '<<': *mars_request
+        <<: *mars_request
         param: [q, t]
         levtype: pl
         level: [50, 100]
 
     - source:
-        '<<': *mars_request
+        <<: *mars_request
         name: era5-accumulations
         param: [cp, tp]
         # era5-accumulations requires time in hours
@@ -51,19 +49,19 @@ input:
     - source:
         name: constants
         param:
-        - cos_latitude
+          - cos_latitude
         source_or_dataset: $previous_data
         date: $dates
 
 output:
-  chunking: {dates: 1}
+  chunking: {dates: 1, ensembles: 1}
   dtype: float32
   flatten_grid: True
   order_by:
-  - valid_datetime
-  - param_level
-  - number
+    - valid_datetime
+    - param_level
+    - number
   statistics: param_level
   statistics_end: 2021
   remapping: &remapping
-    param_level: '{param}_{levelist}'
+    param_level: "{param}_{levelist}"

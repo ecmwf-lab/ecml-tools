@@ -13,7 +13,7 @@ common:
     expver: '0001'
     grid: 20.0/20.0
     levtype: sfc
-    param: [2t]
+    param: [2t, tp]
   dates: &dates_anchor
     start: 2020-12-30 00:00:00
     end: 2021-01-03 12:00:00
@@ -21,28 +21,28 @@ common:
 
 loop:
 - dates:
-    "<<": *dates_anchor
+    <<: *dates_anchor
     group_by: monthly
 
 input:
   dates:
-    "<<": *dates_anchor
+    <<: *dates_anchor
     function:
       name: ensemble_perturbations
       ensembles: # the ensemble data has one additional dimension
-        '<<': *common
+        <<: *common
         stream: enda
         type: an
         number: 0/to/4/by/2
         # number: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
       center: # the new center of the data
-        '<<': *common
+        <<: *common
         stream: oper
         type: an
 
       mean: # the previous center of the data
-        '<<': *common
+        <<: *common
         stream: enda
         type: em
 

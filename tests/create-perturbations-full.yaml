@@ -34,46 +34,46 @@ common:
 
 loop:
 - dates:
-    "<<": *dates_anchor
+    <<: *dates_anchor
     group_by: monthly
 
 input:
   dates:
-    "<<": *dates_anchor
+    <<: *dates_anchor
     join:
     - function:
         name: ensemble_perturbations
         ensembles:
-          '<<': *common_sfc
+          <<: *common_sfc
           stream: enda
           type: an
           number: 0/to/9
 
         center:
-          '<<': *common_sfc
+          <<: *common_sfc
           stream: oper
           type: an
 
         mean:
-          '<<': *common_sfc
+          <<: *common_sfc
           stream: enda
           type: em
 
     - function:
         name: ensemble_perturbations
         ensembles:
-          '<<': *common_pl
+          <<: *common_pl
           stream: enda
           type: an
           number: 0/to/9
 
         center:
-          '<<': *common_pl
+          <<: *common_pl
           stream: oper
           type: an
 
         mean:
-          '<<': *common_pl
+          <<: *common_pl
           stream: enda
           type: em
 
