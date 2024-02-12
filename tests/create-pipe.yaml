@@ -29,12 +29,11 @@ input:
   dates:
     <<: *dates_anchor
     join:
-    - label:
-        name: previous_data
-        source:
-          <<: *mars_request
-          param: [2t]
-          levtype: sfc
+    - label: previous_data
+      source:
+        <<: *mars_request
+        param: [2t]
+        levtype: sfc
 
     - pipe:
       - source:

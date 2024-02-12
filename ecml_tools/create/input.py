@@ -390,8 +390,6 @@ class JoinResult(Result):
 class DependencyAction(Action):
     def __init__(self, context, **kwargs):
         super().__init__(context)
-        if len(kwargs) != 1:
-            raise ValueError(f"Invalid kwargs for label : {kwargs}")
         self.content = action_factory(kwargs, context)
 
     def select(self, dates):
@@ -633,6 +631,19 @@ def action_factory(config, context):
     assert isinstance(context, Context), (type, context)
     if not isinstance(config, dict):
         raise ValueError(f"Invalid input config {config}")
+
+    if len(config) == 2 and "label" in config:
+        config = deepcopy(config)
+        label = config.pop("label")
+        return action_factory(
+            dict(
+                label=dict(
+                    name=label,
+                    **config,
+                )
+            ),
+            context,
+        )
 
     if len(config) != 1:
         raise ValueError(
