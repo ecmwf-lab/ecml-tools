@@ -387,6 +387,24 @@ class JoinResult(Result):
         return super().__repr__(content)
 
 
+class DependencyAction(Action):
+    def __init__(self, context, **kwargs):
+        super().__init__(context)
+        if len(kwargs) != 1:
+            raise ValueError(f"Invalid kwargs for label : {kwargs}")
+        self.content = action_factory(kwargs, context)
+
+    def select(self, dates):
+        self.content.select(dates)
+        # this should trigger a registration of the result in the context
+        # if there is a label
+        # self.context.register_reference(self.name, result)
+        return EmptyResult(self.context, dates)
+
+    def __repr__(self):
+        return super().__repr__(self.content)
+
+
 class LabelAction(Action):
     def __init__(self, context, name, **kwargs):
         super().__init__(context)
@@ -631,6 +649,7 @@ def action_factory(config, context):
         source=SourceAction,
         function=FunctionAction,
         dates=DateAction,
+        dependency=DependencyAction,
     )[key]
 
     if isinstance(config[key], list):

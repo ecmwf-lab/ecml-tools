@@ -7,22 +7,15 @@
 # nor does it submit to any jurisdiction.
 #
 import warnings
-from collections import defaultdict
 from copy import deepcopy
 
 import numpy as np
 import tqdm
-from climetlab import load_source
 from climetlab.core.temporary import temp_file
 from climetlab.readers.grib.output import new_grib_output
 
 from ecml_tools.create.check import check_data_values
-
-
-def get_unique_field(ds, selection):
-    ds = ds.sel(**selection)
-    assert len(ds) == 1, (ds, selection)
-    return ds[0]
+from ecml_tools.create.functions import assert_is_fieldset, wrapped_mars_source
 
 
 def to_list(x):
@@ -49,45 +42,15 @@ def normalise_request(request):
     request = deepcopy(request)
     if "number" in request:
         request["number"] = normalise_number(request["number"])
+    if "time" in request:
+        request["time"] = to_list(request["time"])
     request["param"] = to_list(request["param"])
     return request
 
 
-def wrapped_load_source(name, param, **kwargs):
-    ACCUMULATED_PARAMS = ["tp", "cp"]
-
-    accumulation_source_name = dict(
-        ea="era5-accumulations",
-        oper="oper-accumulations",
-        ei="oper-accumulations",
-    )[kwargs["class"]]
-    assert name == "mars", name  # untested with other sources
-
-    # split kwargs dict because some param need a different source
-    source_names = defaultdict(list)
-    for p in param:
-        if p in ACCUMULATED_PARAMS:
-            source_names[accumulation_source_name].append(p)
-        else:
-            source_names[name].append(p)
-
-    sources = []
-    for n, p in source_names.items():
-        sources.append(load_source(n, param=p, **patch_time_to_hours(kwargs)))
-    return load_source("multi", sources)
-
-
-def patch_time_to_hours(dic):
-    # era5-accumulations requires time in hours
-    if "time" not in dic:
-        return dic
-    time = dic["time"]
-    assert isinstance(time, (tuple, list)), time
-    time = [f"{int(t[:2]):02d}" for t in time]
-    return {**dic, "time": time}
-
-
 def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
+    from climetlab import load_source
+
     ensembles = normalise_request(ensembles)
     center = normalise_request(center)
     mean = normalise_request(mean)
@@ -98,11 +61,11 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
     keys = ["param", "level", "valid_datetime", "date", "time", "step", "number"]
 
     print(f"Retrieving ensemble data with {ensembles}")
-    ensembles = wrapped_load_source(**ensembles).order_by(*keys)
+    ensembles = wrapped_mars_source(**ensembles).order_by(*keys)
     print(f"Retrieving center data with {center}")
-    center = wrapped_load_source(**center).order_by(*keys)
+    center = wrapped_mars_source(**center).order_by(*keys)
     print(f"Retrieving mean data with {mean}")
-    mean = wrapped_load_source(**mean).order_by(*keys)
+    mean = wrapped_mars_source(**mean).order_by(*keys)
 
     assert len(mean) * n_numbers == len(ensembles), (
         len(mean),
@@ -172,6 +135,7 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
     out.close()
 
     ds = load_source("file", path)
+    assert_is_fieldset(ds)
     # save a reference to the tmp file so it is deleted
     # only when the dataset is not used anymore
     ds._tmp = tmp
