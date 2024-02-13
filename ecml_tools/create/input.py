@@ -442,6 +442,23 @@ class SourceAction(BaseFunctionAction):
         return load_source
 
 
+def import_function(name):
+    here = os.path.dirname(__file__)
+    path = os.path.join(here, "functions", f"{name}.py")
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = spec.loader.load_module()
+    # TODO: this fails here, fix this.
+    #   getattr(module, self.name)
+    #   self.action.kwargs
+    return module.execute
+
+
+def is_function(name):
+    here = os.path.dirname(__file__)
+    path = os.path.join(here, "functions", f"{name}.py")
+    return os.path.exists(path)
+
+
 class FunctionAction(BaseFunctionAction):
     def __init__(self, context, name, **kwargs):
         super().__init__(context, **kwargs)
@@ -449,14 +466,7 @@ class FunctionAction(BaseFunctionAction):
 
     @property
     def function(self):
-        here = os.path.dirname(__file__)
-        path = os.path.join(here, "functions", f"{self.name}.py")
-        spec = importlib.util.spec_from_file_location(self.name, path)
-        module = spec.loader.load_module()
-        # TODO: this fails here, fix this.
-        #   getattr(module, self.name)
-        #   self.action.kwargs
-        return module.execute
+        return import_function(self.name)
 
 
 class ConcatResult(Result):
@@ -661,13 +671,17 @@ def action_factory(config, context):
         function=FunctionAction,
         dates=DateAction,
         dependency=DependencyAction,
-    )[key]
+    ).get(key)
 
     if isinstance(config[key], list):
         args, kwargs = config[key], {}
 
     if isinstance(config[key], dict):
         args, kwargs = [], config[key]
+
+    if cls is None:
+        cls = FunctionAction if is_function(key) else SourceAction
+        args = [key] + args
 
     return cls(context, *args, **kwargs)
 

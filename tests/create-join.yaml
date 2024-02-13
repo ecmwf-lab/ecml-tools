@@ -6,47 +6,43 @@ config_format_version: 2
 
 common:
   mars_request: &mars_request
-    name: mars
     expver: "0001"
     class: ea
     grid: 20./20.
     stream: oper
     type: an
-    date: $datetime_format($dates,%Y%m%d)
-    time: $datetime_format($dates,%H%M)
-  dates: &dates_anchor
-    start: 2020-12-30 00:00:00
-    end: 2021-01-03 12:00:00
-    frequency: 12h
 
 loop:
   - dates:
-      <<: *dates_anchor
+      start: 2020-12-30 00:00:00
+      end: 2021-01-03 12:00:00
+      frequency: 12h
       group_by: monthly
 
 input:
   join:
     - label: previous_data
-      source:
+      mars:
         <<: *mars_request
         param: [2t]
         levtype: sfc
+        dates: $dates
 
-    - source:
+    - mars:
         <<: *mars_request
         param: [q, t]
         levtype: pl
         level: [50, 100]
+        dates: $dates
 
-    - source:
+    - era5-accumulations:
         <<: *mars_request
-        name: era5-accumulations
+        date: $datetime_format($dates,%Y%m%d)
+        time: $datetime_format($dates,%H)
         param: [cp, tp]
         # era5-accumulations requires time in hours
-        time: $datetime_format($dates,%H)
 
-    - source:
-        name: constants
+    - constants:
         param:
           - cos_latitude
         source_or_dataset: $previous_data
