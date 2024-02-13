@@ -10,14 +10,11 @@ import datetime
 from copy import deepcopy
 
 from climetlab import load_source
-from climetlab.core.temporary import temp_file
-from climetlab.readers.grib.output import new_grib_output
 from climetlab.utils.availability import Availability
 
-from ecml_tools.create.functions import assert_is_fieldset
 from ecml_tools.create.utils import to_datetime_list
 
-DEBUG = False
+DEBUG = True
 
 
 def to_list(x):
@@ -119,5 +116,3 @@ if __name__ == "__main__":
     DEBUG = True
     for f in mars(None, dates, *config):
         print(f, f.to_numpy().mean())
-
-        # "[2022-12-30 12:00, 2022-12-31 00:00, 2022-12-31 12:00, 2023-01-01 00:00, 2023-01-01 12:00]"
