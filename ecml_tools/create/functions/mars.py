@@ -47,10 +47,11 @@ def _expand_mars_request(request, date):
     step = to_list(request.get("step", [0]))
     for s in step:
         r = deepcopy(request)
+        base = date - datetime.timedelta(hours=int(s))
         r.update(
             {
-                "date": date.strftime("%Y%m%d"),
-                "time": date.strftime("%H%M"),
+                "date": base.strftime("%Y%m%d"),
+                "time": base.strftime("%H%M"),
                 "step": s,
             }
         )
