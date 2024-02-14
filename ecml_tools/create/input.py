@@ -356,7 +356,7 @@ class FunctionResult(Result):
     @cached_property
     def datasource(self):
         print(f"loading source with {self.args} {self.kwargs}")
-        return self.action.function(*self.args, **self.kwargs)
+        return self.action.function(self.dates, *self.args, **self.kwargs)
 
     def __repr__(self):
         content = " ".join([f"{v}" for v in self.args])

@@ -7,6 +7,7 @@
 # nor does it submit to any jurisdiction.
 #
 
+import datetime
 import logging
 import time
 import warnings
@@ -177,8 +178,13 @@ class DataWriter:
 
     def write(self, result, igroup, dates):
         cube = result.get_cube()
-        assert cube.shape[0] == len(dates), (cube.shape[0], len(dates))
-        assert cube.coords["dates"] == dates, (cube.coords["dates"], dates)
+        assert cube.extended_user_shape[0] == len(dates), (
+            cube.extended_user_shape[0],
+            dates,
+        )
+        dates_in_data = cube.user_coords["valid_datetime"]
+        dates_in_data = [datetime.datetime.fromisoformat(_) for _ in dates_in_data]
+        assert dates_in_data == list(dates), (dates_in_data, list(dates))
         self.write_cube(cube, igroup)
 
     @property

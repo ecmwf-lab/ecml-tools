@@ -20,35 +20,26 @@ dates:
 
 input:
   join:
-    - pipe:
-      - join:
-        - mars:
-            <<: *mars_request
-            param: [2t]
-            levtype: sfc
-
-        - mars:
-            <<: *mars_request
-            param: [q, t]
-            levtype: pl
-            level: [50, 100]
-
-        - accumulations:
-            <<: *mars_request
-            param: [cp, tp]
-            accumulation_period: 6h
-
-        - constants:
-            <<: *mars_request
-            param:
-              - cos_latitude
-      - filter:
-          param: [2t, q, t, cp, tp, cos_latitude]
-          level: [sfc, 50, 100]
     - mars:
         <<: *mars_request
         param: [2t]
         levtype: sfc
+
+    - mars:
+        <<: *mars_request
+        param: [q, t]
+        levtype: pl
+        level: [50, 100]
+
+    - accumulations:
+        <<: *mars_request
+        param: [cp, tp]
+        accumulation_period: 6h
+
+    - constants:
+        <<: *mars_request
+        param:
+          - cos_latitude
 
 output:
   chunking: {dates: 1, ensembles: 1}
