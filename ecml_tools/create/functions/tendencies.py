@@ -8,7 +8,6 @@
 #
 import datetime
 from collections import defaultdict
-from copy import deepcopy
 
 from climetlab.core.temporary import temp_file
 from climetlab.readers.grib.output import new_grib_output

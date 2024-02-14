@@ -9,7 +9,6 @@
 import datetime
 import logging
 import os
-import warnings
 from copy import deepcopy
 
 import yaml
@@ -143,11 +142,21 @@ class LoadersConfig(Config):
 
         # deprecated/obsolete
         if "order" in self.output:
-            raise ValueError(f"Do not use 'order'. Use order_by in {self}")
+            raise ValueError(
+                f"Do not use 'order'. Use order_by instead. {list(self.keys())}"
+            )
         if "loops" in self:
-            assert "loop" not in self
-            warnings.warn("Should use loop instead of loops in config")
-            self.loop = self.pop("loops")
+            raise ValueError(
+                f"Do not use 'loops'. Use dates instead. {list(self.keys())}"
+            )
+        if "loop" in self:
+            print(f"Do not use 'loop'. Use 'dates' instead. {list(self.keys())}")
+            self.dates = self.pop("loop")
+
+        if isinstance(self.dates, dict):
+            self.dates = [self.dates]
+
+        self.loop = self.pop("dates")
 
         self.normalise()
 
