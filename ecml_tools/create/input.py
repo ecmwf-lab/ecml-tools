@@ -427,7 +427,7 @@ class LabelAction(Action):
 def import_function(name):
     name = name.replace("-", "_")
     here = os.path.dirname(__file__)
-    path = os.path.join(here, "functions", f"{name}.py")
+    path = os.path.join(here, "functions", "actions",f"{name}.py")
     spec = importlib.util.spec_from_file_location(name, path)
     module = spec.loader.load_module()
     # TODO: this fails here, fix this.
@@ -439,7 +439,7 @@ def import_function(name):
 def is_function(name):
     name = name.replace("-", "_")
     here = os.path.dirname(__file__)
-    path = os.path.join(here, "functions", f"{name}.py")
+    path = os.path.join(here, "functions", "actions" ,f"{name}.py")
     return os.path.exists(path)
 
 
