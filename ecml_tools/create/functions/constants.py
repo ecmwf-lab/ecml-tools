@@ -22,13 +22,18 @@ def to_list(x):
 
 
 def get_template_field(request):
+    """Create a template request from the initial request, setting the date, time,
+    levtype and param fields."""
     template_request = {
+        "class": "ea",
+        "expver": "0001",
+        "type": "an",
         "date": "20200101",
         "time": "0000",
         "levtype": "sfc",
         "param": "2t",
     }
-    for k in ["area", "grid", "class"]:  # is class needed?
+    for k in ["area", "grid"]:  # is class needed?
         if k in request:
             template_request[k] = request[k]
     template = load_source("mars", template_request)
@@ -50,9 +55,7 @@ def normalise_time_to_hours(r):
     return r
 
 
-def constants(context, dates, request, **kwargs):
-    to_list(request["param"])
-
+def constants(context, dates, **request):
     template = get_template_field(request)
 
     print(f"✅ load_source(constants, {template}, {request}")
@@ -66,7 +69,7 @@ if __name__ == "__main__":
 
     config = yaml.safe_load(
         """
-    - class: ea
+      class: ea
       expver: '0001'
       grid: 20.0/20.0
       levtype: sfc
@@ -81,5 +84,5 @@ if __name__ == "__main__":
     dates = to_datetime_list(dates)
 
     DEBUG = True
-    for f in constants(None, dates, *config):
+    for f in constants(None, dates, **config):
         print(f, f.to_numpy().mean())

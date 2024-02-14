@@ -36,7 +36,7 @@ def normalise_time_to_hours(r):
     return r
 
 
-def accumulations(context, dates, request, **kwargs):
+def accumulations(context, dates, **request):
     to_list(request["param"])
     class_ = request["class"]
 
@@ -66,9 +66,9 @@ if __name__ == "__main__":
 
     config = yaml.safe_load(
         """
-    - class: ea
+      class: ea
       expver: '0001'
-      grid: 20.0/20.0
+      grid: 20./20.
       levtype: sfc
 #      number: [0, 1]
 #      stream: enda
@@ -82,5 +82,5 @@ if __name__ == "__main__":
     dates = to_datetime_list(dates)
 
     DEBUG = True
-    for f in accumulations(None, dates, *config):
+    for f in accumulations(None, dates, **config):
         print(f, f.to_numpy().mean())

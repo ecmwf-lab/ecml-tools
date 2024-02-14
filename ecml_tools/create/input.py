@@ -99,9 +99,7 @@ class Coords:
         assert isinstance(self.owner.context, Context), type(self.owner.context)
         assert isinstance(self.owner, Result), type(self.owner)
         assert hasattr(self.owner, "context"), self.owner
-        assert hasattr(self.owner, "datasource"), self.owner
         assert hasattr(self.owner, "get_cube"), self.owner
-        self.owner.datasource
 
         from_data = self.owner.get_cube().user_coords
         from_config = self.owner.context.order_by
@@ -355,8 +353,12 @@ class FunctionResult(Result):
 
     @cached_property
     def datasource(self):
-        print(f"loading source with {self.args} {self.kwargs}")
-        return self.action.function(self.dates, *self.args, **self.kwargs)
+        print(
+            f"applying function {self.action.function} to {self.dates}, {self.args} {self.kwargs}, {self}"
+        )
+        return self.action.function(
+            FunctionContext(self), self.dates, *self.args, **self.kwargs
+        )
 
     def __repr__(self):
         content = " ".join([f"{v}" for v in self.args])
@@ -420,28 +422,6 @@ class LabelAction(Action):
         return super().__repr__(_inline_=self.name, _indent_=" ")
 
 
-class BaseFunctionAction(Action):
-    def __repr__(self):
-        content = ""
-        content += ",".join([self._short_str(a) for a in self.args])
-        content += " ".join(
-            [self._short_str(f"{k}={v}") for k, v in self.kwargs.items()]
-        )
-        content = self._short_str(content)
-        return super().__repr__(_inline_=content, _indent_=" ")
-
-    def select(self, dates):
-        return FunctionResult(self.context, dates, action=self)
-
-
-class SourceAction(BaseFunctionAction):
-    @property
-    def function(self):
-        from climetlab import load_source
-
-        return load_source
-
-
 def import_function(name):
     here = os.path.dirname(__file__)
     path = os.path.join(here, "functions", f"{name}.py")
@@ -459,14 +439,26 @@ def is_function(name):
     return os.path.exists(path)
 
 
-class FunctionAction(BaseFunctionAction):
+class FunctionAction(Action):
     def __init__(self, context, name, **kwargs):
         super().__init__(context, **kwargs)
         self.name = name
 
+    def select(self, dates):
+        return FunctionResult(self.context, dates, action=self)
+
     @property
     def function(self):
         return import_function(self.name)
+
+    def __repr__(self):
+        content = ""
+        content += ",".join([self._short_str(a) for a in self.args])
+        content += " ".join(
+            [self._short_str(f"{k}={v}") for k, v in self.kwargs.items()]
+        )
+        content = self._short_str(content)
+        return super().__repr__(_inline_=content, _indent_=" ")
 
 
 class ConcatResult(Result):
@@ -578,7 +570,7 @@ class StepFunctionResult(StepAction):
     @property
     def datasource(self):
         return self.function(
-            self.context, self.content.datasource, self.dates, **self.kwargs
+            FunctionContext(self), self.content.datasource, **self.kwargs
         )
 
 
@@ -675,7 +667,7 @@ def action_factory(config, context):
         join=JoinAction,
         label=LabelAction,
         pipe=PipeAction,
-        source=SourceAction,
+        # source=SourceAction,
         function=FunctionAction,
         dates=DateAction,
         dependency=DependencyAction,
@@ -688,7 +680,9 @@ def action_factory(config, context):
         args, kwargs = [], config[key]
 
     if cls is None:
-        cls = FunctionAction if is_function(key) else SourceAction
+        if not is_function(key):
+            raise ValueError(f"Unknown action {key}")
+        cls = FunctionAction
         args = [key] + args
 
     return cls(context, *args, **kwargs)
@@ -722,9 +716,13 @@ def step_factory(config, context, _upstream_action):
     return cls(context, *args, **kwargs)
 
 
+class FunctionContext:
+    def __init__(self, owner):
+        self.owner = owner
+
+
 class Context:
-    def __init__(self, /, dates, order_by, flatten_grid, remapping):
-        self.dates = dates
+    def __init__(self, /, order_by, flatten_grid, remapping):
         self.order_by = order_by
         self.flatten_grid = flatten_grid
         self.remapping = build_remapping(remapping)
@@ -755,12 +753,12 @@ class InputBuilder:
     def select(self, dates):
         """This changes the context."""
         dates = build_groups(dates)
-        context = Context(dates=dates, **self.kwargs)
+        context = Context(**self.kwargs)
         action = action_factory(self.config, context)
         return action.select(dates)
 
     def __repr__(self):
-        context = Context(dates=None, **self.kwargs)
+        context = Context(**self.kwargs)
         a = action_factory(self.config, context)
         return repr(a)
 
