@@ -81,7 +81,9 @@ def _datasource_request(data):
     params_steps = sort(params_steps)
     params_levels = sort(params_levels)
 
-    return dict(param_level=params_levels, param_step=params_steps, area=area, grid=grid)
+    return dict(
+        param_level=params_levels, param_step=params_steps, area=area, grid=grid
+    )
 
 
 class Cache:
@@ -114,7 +116,14 @@ class Coords:
         ensembles_key = list(from_config.keys())[2]
 
         if isinstance(from_config[variables_key], (list, tuple)):
-            assert all([v == w for v, w in zip(from_data[variables_key], from_config[variables_key])]), (
+            assert all(
+                [
+                    v == w
+                    for v, w in zip(
+                        from_data[variables_key], from_config[variables_key]
+                    )
+                ]
+            ), (
                 from_data[variables_key],
                 from_config[variables_key],
             )
@@ -415,7 +424,9 @@ class BaseFunctionAction(Action):
     def __repr__(self):
         content = ""
         content += ",".join([self._short_str(a) for a in self.args])
-        content += " ".join([self._short_str(f"{k}={v}") for k, v in self.kwargs.items()])
+        content += " ".join(
+            [self._short_str(f"{k}={v}") for k, v in self.kwargs.items()]
+        )
         content = self._short_str(content)
         return super().__repr__(_inline_=content, _indent_=" ")
 
@@ -562,10 +573,14 @@ class StepAction(Action):
     def __repr__(self):
         return super().__repr__(self.content, _inline_=str(self.kwargs))
 
+
 class StepFunctionResult(StepAction):
     @property
     def datasource(self):
-        return self.function(self.context, self.content.datasource, self.dates, **self.kwargs)
+        return self.function(
+            self.context, self.content.datasource, self.dates, **self.kwargs
+        )
+
 
 class FilterStepResult(StepResult):
     @property
@@ -649,7 +664,9 @@ def action_factory(config, context):
         )
 
     if len(config) != 1:
-        raise ValueError(f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}")
+        raise ValueError(
+            f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}"
+        )
 
     config = deepcopy(config)
     key = list(config.keys())[0]
@@ -735,16 +752,15 @@ class InputBuilder:
         self.kwargs = kwargs
         self.config = config
 
-
     def select(self, dates):
         """This changes the context."""
         dates = build_groups(dates)
-        context = Context(dates = dates, **self.kwargs)
+        context = Context(dates=dates, **self.kwargs)
         action = action_factory(self.config, context)
         return action.select(dates)
 
     def __repr__(self):
-        context = Context(dates = None, **self.kwargs)
+        context = Context(dates=None, **self.kwargs)
         a = action_factory(self.config, context)
         return repr(a)
 

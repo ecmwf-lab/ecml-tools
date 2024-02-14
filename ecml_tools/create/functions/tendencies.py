@@ -98,7 +98,9 @@ def tendencies(dates, time_increment, **kwargs):
             ################
 
             assert x.shape == c.shape, c.shape
-            print(f"Computing data for {field.metadata('valid_datetime')}={field}-{b_field}")
+            print(
+                f"Computing data for {field.metadata('valid_datetime')}={field}-{b_field}"
+            )
             out.write(x, template=field)
 
     out.close()
@@ -162,7 +164,9 @@ if __name__ == "__main__":
     """
     )["config"]
 
-    dates = yaml.safe_load("[2022-12-30 18:00, 2022-12-31 00:00, 2022-12-31 06:00, 2022-12-31 12:00]")
+    dates = yaml.safe_load(
+        "[2022-12-30 18:00, 2022-12-31 00:00, 2022-12-31 06:00, 2022-12-31 12:00]"
+    )
     dates = to_datetime_list(dates)
 
     DEBUG = True

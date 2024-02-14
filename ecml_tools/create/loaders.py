@@ -331,7 +331,7 @@ class ContentLoader(Loader):
             assert isinstance(group[0], datetime.datetime), group
 
             result = self.input.select(dates=group)
-            data_writer.write(result, igroup,group)
+            data_writer.write(result, igroup, group)
 
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
