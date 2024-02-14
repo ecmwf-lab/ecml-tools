@@ -4,24 +4,21 @@ purpose: aifs
 name: test-small
 config_format_version: 2
 
-loop:
-- dates:
-    start: 2020-12-30 00:00:00
-    end: 2021-01-03 12:00:00
-    frequency: 12h
-    group_by: monthly
+dates:
+  start: 2020-12-30 00:00:00
+  end: 2021-01-03 12:00:00
+  frequency: 12h
+  group_by: monthly
 
 common:
   mars_request: &mars_request
-    name: mars
     expver: '0001'
     class: ea
-    date: $datetime_format($dates,%Y%m%d)
-    time: $datetime_format($dates,%H%M)
     grid: 20./20.
     levtype: sfc
     stream: oper
     type: an
+    param: [2t]
 
 
 input:
@@ -30,16 +27,14 @@ input:
       start: 2020-12-30 00:00:00
       end: 2021-01-01 12:00:00
       frequency: 12h
-      source:
+      mars:
         <<: *mars_request
-        param: [2t]
   - dates:
       start: 2021-01-02 00:00:00
       end: 2021-01-03 12:00:00
       frequency: 12h
-      source:
+      mars:
         <<: *mars_request
-        param: [2t]
 
 output:
   chunking: {dates: 1, ensembles: 1}
