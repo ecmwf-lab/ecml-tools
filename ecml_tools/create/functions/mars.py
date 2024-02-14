@@ -71,7 +71,7 @@ def factorise_requests(dates, *requests):
     return compressed.iterate()
 
 
-def mars(dates, *requests, **kwargs):
+def mars(dates, *requests, _source_name="mars", **kwargs):
     if not requests:
         requests = [kwargs]
 
@@ -80,8 +80,8 @@ def mars(dates, *requests, **kwargs):
     for r in requests:
         r = {k: v for k, v in r.items() if v != ("-",)}
         if DEBUG:
-            print(f"✅ load_source(mars, {r}")
-        ds = ds + load_source("mars", **r)
+            print(f"✅ load_source({_source_name}, {r}")
+        ds = ds + load_source(_source_name, **r)
     return ds
 
 
