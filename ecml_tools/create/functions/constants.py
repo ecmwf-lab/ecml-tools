@@ -50,13 +50,13 @@ def normalise_time_to_hours(r):
     return r
 
 
-def constants(context, dates, request, **kwargs):
-    to_list(request["param"])
+def constants(dates, param, **kwargs):
 
-    template = get_template_field(request)
 
-    print(f"✅ load_source(constants, {template}, {request}")
-    return load_source("constants", source_or_dataset=template, **request)
+    template = get_template_field(kwargs)
+
+    print(f"✅ load_source(constants, {template}, {kwargs}")
+    return load_source("constants", source_or_dataset=template, date=dates, param=param)
 
 
 execute = constants
