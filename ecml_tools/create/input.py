@@ -562,8 +562,12 @@ class StepAction(Action):
     def __repr__(self):
         return super().__repr__(self.content, _inline_=str(self.kwargs))
 
+class StepFunctionResult(StepAction):
+    @property
+    def datasource(self):
+        return self.function(self.context, self.content.datasource, self.dates, **self.kwargs)
 
-class FilterResult(StepResult):
+class FilterStepResult(StepResult):
     @property
     def datasource(self):
         ds = self.content.datasource
@@ -573,8 +577,8 @@ class FilterResult(StepResult):
         return ds
 
 
-class FilterAction(StepAction):
-    result_class = FilterResult
+class FilterStepAction(StepAction):
+    result_class = FilterStepResult
 
 
 class ConcatAction(ActionWithList):
@@ -683,7 +687,7 @@ def step_factory(config, context, _upstream_action):
 
     key = list(config.keys())[0]
     cls = dict(
-        filter=FilterAction,
+        filter=FilterStepAction,
         # rename=RenameAction,
         # remapping=RemappingAction,
     )[key]
@@ -702,7 +706,8 @@ def step_factory(config, context, _upstream_action):
 
 
 class Context:
-    def __init__(self, /, order_by, flatten_grid, remapping):
+    def __init__(self, /, dates, order_by, flatten_grid, remapping):
+        self.dates = dates
         self.order_by = order_by
         self.flatten_grid = flatten_grid
         self.remapping = build_remapping(remapping)
@@ -730,18 +735,18 @@ class InputBuilder:
         self.kwargs = kwargs
         self.config = config
 
-    @property
-    def _action(self):
-        context = Context(**self.kwargs)
-        return action_factory(self.config, context)
 
     def select(self, dates):
         """This changes the context."""
         dates = build_groups(dates)
-        return self._action.select(dates)
+        context = Context(dates = dates, **self.kwargs)
+        action = action_factory(self.config, context)
+        return action.select(dates)
 
     def __repr__(self):
-        return repr(self._action)
+        context = Context(dates = None, **self.kwargs)
+        a = action_factory(self.config, context)
+        return repr(a)
 
 
 build_input = InputBuilder

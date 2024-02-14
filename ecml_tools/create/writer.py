@@ -177,8 +177,10 @@ class DataWriter:
         self.append_axis = parent.output.append_axis
         self.n_cubes = parent.groups.n_groups
 
-    def write(self, inputs, igroup):
-        cube = inputs.get_cube()
+    def write(self, result, igroup,dates):
+        cube = result.get_cube()
+        assert cube.shape[0] == len(dates), (cube.shape[0], len(dates))
+        assert cube.coords['dates'] == dates, (cube.coords['dates'], dates)
         self.write_cube(cube, igroup)
 
     @property
