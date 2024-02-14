@@ -444,9 +444,9 @@ def is_function(name):
 
 
 class FunctionAction(Action):
-    def __init__(self, context, name, **kwargs):
+    def __init__(self, context, _name, **kwargs):
         super().__init__(context, **kwargs)
-        self.name = name
+        self.name = _name
 
     def select(self, dates):
         return FunctionResult(self.context, dates, action=self)

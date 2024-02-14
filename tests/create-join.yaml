@@ -25,6 +25,9 @@ input:
         stream: oper
         type: an
 
+    # - source:
+    #     <<: *mars_request
+    #     name: mars
     - mars:
         <<: *mars_request
         param: [q, t]
