@@ -4,10 +4,9 @@ purpose: aifs
 name: test-small
 config_format_version: 2
 
-
 common:
   mars_request: &mars_request
-    expver: '0001'
+    expver: "0001"
     class: ea
     grid: 20./20.
 
@@ -19,42 +18,42 @@ dates: &dates_anchor
 
 input:
   join:
-  - mars:
-      <<: *mars_request
-      param: [2t]
-      levtype: sfc
-
-  - pipe:
     - mars:
         <<: *mars_request
-        param: [q, t]
-        levtype: pl
-        level: [50, 100]
-        stream: oper
-        type: an
-    - filter:
-        param: [q]
-    - filter:
-        level: [50]
+        param: [2t]
+        levtype: sfc
 
-  - accumulations:
-      <<: *mars_request
-      param: [cp, tp]
+    - pipe:
+        - mars:
+            <<: *mars_request
+            param: [q, t]
+            levtype: pl
+            level: [50, 100]
+            stream: oper
+            type: an
+        - filter:
+            param: [q]
+        - filter:
+            level: [50]
 
-  - constants:
-      <<: *mars_request
-      param:
-      - cos_latitude
+    - accumulations:
+        <<: *mars_request
+        param: [cp, tp]
+
+    - constants:
+        <<: *mars_request
+        param:
+          - cos_latitude
 
 output:
-  chunking: {dates: 1, ensembles: 1}
+  chunking: { dates: 1, ensembles: 1 }
   dtype: float32
   flatten_grid: True
   order_by:
-  - valid_datetime
-  - param_level
-  - number
+    - valid_datetime
+    - param_level
+    - number
   statistics: param_level
   statistics_end: 2021
   remapping: &remapping
-    param_level: '{param}_{levelist}'
+    param_level: "{param}_{levelist}"

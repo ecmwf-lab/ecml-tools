@@ -12,7 +12,7 @@ dates:
 
 common:
   mars_request: &mars_request
-    expver: '0001'
+    expver: "0001"
     class: ea
     grid: 20./20.
     levtype: sfc
@@ -20,31 +20,30 @@ common:
     type: an
     param: [2t]
 
-
 input:
   concat:
-  - dates:
-      start: 2020-12-30 00:00:00
-      end: 2021-01-01 12:00:00
-      frequency: 12h
-      mars:
-        <<: *mars_request
-  - dates:
-      start: 2021-01-02 00:00:00
-      end: 2021-01-03 12:00:00
-      frequency: 12h
-      mars:
-        <<: *mars_request
+    - dates:
+        start: 2020-12-30 00:00:00
+        end: 2021-01-01 12:00:00
+        frequency: 12h
+        mars:
+          <<: *mars_request
+    - dates:
+        start: 2021-01-02 00:00:00
+        end: 2021-01-03 12:00:00
+        frequency: 12h
+        mars:
+          <<: *mars_request
 
 output:
-  chunking: {dates: 1, ensembles: 1}
+  chunking: { dates: 1, ensembles: 1 }
   dtype: float32
   flatten_grid: True
   order_by:
-  - valid_datetime
-  - param_level
-  - number
+    - valid_datetime
+    - param_level
+    - number
   statistics: param_level
   statistics_end: 2021
   remapping: &remapping
-    param_level: '{param}_{levelist}'
+    param_level: "{param}_{levelist}"

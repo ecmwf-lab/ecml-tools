@@ -37,7 +37,7 @@ input:
         <<: *mars_request
         levtype: sfc
         param: [cp, tp]
-#        accumulation_period: 6h
+        # accumulation_period: 6h
 
     - constants:
         <<: *mars_request
@@ -45,7 +45,7 @@ input:
           - cos_latitude
 
 output:
-  chunking: {dates: 1, ensembles: 1}
+  chunking: { dates: 1, ensembles: 1 }
   dtype: float32
   flatten_grid: True
   order_by:
