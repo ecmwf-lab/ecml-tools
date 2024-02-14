@@ -99,7 +99,9 @@ class Coords:
         assert isinstance(self.owner.context, Context), type(self.owner.context)
         assert isinstance(self.owner, Result), type(self.owner)
         assert hasattr(self.owner, "context"), self.owner
+        assert hasattr(self.owner, "datasource"), self.owner
         assert hasattr(self.owner, "get_cube"), self.owner
+        self.owner.datasource
 
         from_data = self.owner.get_cube().user_coords
         from_config = self.owner.context.order_by
@@ -423,6 +425,7 @@ class LabelAction(Action):
 
 
 def import_function(name):
+    name = name.replace("-", "_")
     here = os.path.dirname(__file__)
     path = os.path.join(here, "functions", f"{name}.py")
     spec = importlib.util.spec_from_file_location(name, path)
@@ -434,6 +437,7 @@ def import_function(name):
 
 
 def is_function(name):
+    name = name.replace("-", "_")
     here = os.path.dirname(__file__)
     path = os.path.join(here, "functions", f"{name}.py")
     return os.path.exists(path)

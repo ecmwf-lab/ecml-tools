@@ -146,7 +146,7 @@ class InitialiseLoader(Loader):
 
         self.groups = build_groups(*self.main_config.loop)
         print("✅ GROUPS")
-        print(self.groups, self.main_config.loop)
+        # print(self.groups, self.main_config.loop)
 
         self.output = build_output(self.main_config.output, parent=self)
         self.input = self.build_input()

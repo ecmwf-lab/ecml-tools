@@ -54,7 +54,7 @@ def accumulations(context, dates, **request):
         r = normalise_time_to_hours(r)
 
         if DEBUG:
-            print(f"✅ load_source({source_name},  {r}")
+            print(f"load_source({source_name},  {r}")
         ds = ds + load_source(source_name, **r)
     return ds
 
