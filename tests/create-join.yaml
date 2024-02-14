@@ -43,8 +43,6 @@ input:
         <<: *mars_request
         param:
           - cos_latitude
-        stream: oper
-        type: an
 
 output:
   chunking: {dates: 1, ensembles: 1}
