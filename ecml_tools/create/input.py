@@ -24,17 +24,22 @@ from .utils import seconds
 LOG = logging.getLogger(__name__)
 
 
-def merge_remappings(*remappings):
-    remapping = remappings[0]
-    for other in remappings[1:]:
-        if not other:
-            continue
-        assert other == remapping, (
-            "Multiple inconsistent remappings not implemented",
-            other,
-            remapping,
-        )
-    return remapping
+def find_function_path(name, kind):
+    name = name.replace("-", "_")
+    here = os.path.dirname(__file__)
+    return os.path.join(here, "functions", kind, f"{name}.py")
+
+
+def import_function(name, kind):
+    path = find_function_path(name, kind)
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = spec.loader.load_module()
+    return module.execute
+
+
+def is_function(name, kind):
+    path = find_function_path(name, kind)
+    return os.path.exists(path)
 
 
 def assert_is_fieldset(obj):
@@ -424,25 +429,6 @@ class LabelAction(Action):
         return super().__repr__(_inline_=self.name, _indent_=" ")
 
 
-def import_function(name):
-    name = name.replace("-", "_")
-    here = os.path.dirname(__file__)
-    path = os.path.join(here, "functions", "actions",f"{name}.py")
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = spec.loader.load_module()
-    # TODO: this fails here, fix this.
-    #   getattr(module, self.name)
-    #   self.action.kwargs
-    return module.execute
-
-
-def is_function(name):
-    name = name.replace("-", "_")
-    here = os.path.dirname(__file__)
-    path = os.path.join(here, "functions", "actions" ,f"{name}.py")
-    return os.path.exists(path)
-
-
 class FunctionAction(Action):
     def __init__(self, context, _name, **kwargs):
         super().__init__(context, **kwargs)
@@ -453,7 +439,7 @@ class FunctionAction(Action):
 
     @property
     def function(self):
-        return import_function(self.name)
+        return import_function(self.name, "actions")
 
     def __repr__(self):
         content = ""
@@ -684,7 +670,7 @@ def action_factory(config, context):
         args, kwargs = [], config[key]
 
     if cls is None:
-        if not is_function(key):
+        if not is_function(key, "actions"):
             raise ValueError(f"Unknown action {key}")
         cls = FunctionAction
         args = [key] + args

@@ -6,11 +6,8 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-from copy import deepcopy
-
 from climetlab import load_source
 
-from ecml_tools.create.input import Context
 from ecml_tools.create.utils import to_datetime_list
 
 DEBUG = True
@@ -19,10 +16,10 @@ DEBUG = True
 def source(context, dates, **kwargs):
     name = kwargs.pop("name")
     print(f"✅ load_source({name}, {dates}, {kwargs}")
-    date = list({d.strftime("%Y%m%d") for d in dates})
-    time = list({d.strftime("%H%M") for d in dates})
-    kwargs["date"] = kwargs.get("date", date)
-    kwargs["time"] = kwargs.get("time", time)
+    if kwargs["date"] == "$from_dates":
+        kwargs["date"] = list({d.strftime("%Y%m%d") for d in dates})
+    if kwargs["time"] == "$from_dates":
+        kwargs["time"] = list({d.strftime("%H%M") for d in dates})
     return load_source(name, **kwargs)
 
 
@@ -33,13 +30,15 @@ if __name__ == "__main__":
 
     config = yaml.safe_load(
         """
-    - class: ea
+      name: mars
+      class: ea
       expver: '0001'
       grid: 20.0/20.0
       levtype: sfc
-      # param: [10u, 10v, 2d, 2t, lsm, msl, sdor, skt, slor, sp, tcw, z]
+      param: [2t]
       number: [0, 1]
-      param: [cos_latitude]
+      date: $from_dates
+      time: $from_dates
     """
     )
     dates = yaml.safe_load(
@@ -48,5 +47,5 @@ if __name__ == "__main__":
     dates = to_datetime_list(dates)
 
     DEBUG = True
-    for f in constants(None, dates, *config):
+    for f in source(None, dates, **config):
         print(f, f.to_numpy().mean())
