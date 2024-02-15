@@ -96,12 +96,12 @@ class Coords:
         self.cache = Cache()
 
     def _build_coords(self):
-        assert isinstance(self.owner.context, Context), type(self.owner.context)
-        assert isinstance(self.owner, Result), type(self.owner)
-        assert hasattr(self.owner, "context"), self.owner
-        assert hasattr(self.owner, "datasource"), self.owner
-        assert hasattr(self.owner, "get_cube"), self.owner
-        self.owner.datasource
+        # assert isinstance(self.owner.context, Context), type(self.owner.context)
+        # assert isinstance(self.owner, Result), type(self.owner)
+        # assert hasattr(self.owner, "context"), self.owner
+        # assert hasattr(self.owner, "datasource"), self.owner
+        # assert hasattr(self.owner, "get_cube"), self.owner
+        # self.owner.datasource
 
         from_data = self.owner.get_cube().user_coords
         from_config = self.owner.context.order_by
@@ -353,7 +353,8 @@ class FunctionResult(Result):
         self.args = substitute(_args, vars)
         self.kwargs = substitute(_kwargs, vars)
 
-    @cached_property
+    # @cached_property
+    @property
     def datasource(self):
         print(
             f"applying function {self.action.function} to {self.dates}, {self.args} {self.kwargs}, {self}"
