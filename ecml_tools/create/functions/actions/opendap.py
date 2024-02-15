@@ -19,7 +19,7 @@ def opendap(context, dates, url_pattern, *args, **kwargs):
     )
 
     ds = load_source("empty")
-    levels = kwargs.get("level", None)
+    levels = kwargs.get("level", kwargs.get("levelist"))
 
     for url in all_urls:
 
@@ -28,7 +28,7 @@ def opendap(context, dates, url_pattern, *args, **kwargs):
         s = s.sel(
             valid_datetime=[d.isoformat() for d in dates],
             param=kwargs["param"],
-            step=kwargs["step"],
+            step=kwargs.get("step", 0),
         )
         if levels:
             s = s.sel(levelist=levels)

@@ -237,9 +237,7 @@ class DataWriter:
             data = cubelet.to_numpy()
             cubelet_coords = cubelet.coords
 
-            bar.set_description(
-                f"Loading {i}/{total} {str(cubelet)} ({data.shape}) {cube=}"
-            )
+            bar.set_description(f"Loading {i}/{total} {str(cubelet)} ({data.shape})")
             load += time.time() - now
 
             j = cubelet_coords[1]
