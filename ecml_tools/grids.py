@@ -86,7 +86,12 @@ def cropping_mask(lats, lons, north, west, south, east):
 
 
 def cutout_mask(
-    global_lats, global_lons, lats, lons, cropping_distance=2.0, min_distance=0.0
+    global_lats,
+    global_lons,
+    lats,
+    lons,
+    cropping_distance=2.0,
+    min_distance=0.0,
 ):
     """
     Return a mask for the points in [global_lats, global_lons] that are inside of [lats, lons]
@@ -139,9 +144,12 @@ def cutout_mask(
     ):
         t = Triangle3D(points[index[0]], points[index[1]], points[index[2]])
         distance = np.min(distance)
+        # The point is inside the triangle if the intersection with the ray
+        # from the point to the center of the Earth is not None
+        # (the direction of the ray is not important)
         ok.append(
             (t.intersect(zero, era_point) or t.intersect(era_point, zero))
-            and (distance >= min_distance)
+            # and (distance >= min_distance)
         )
 
     j = 0
@@ -154,6 +162,8 @@ def cutout_mask(
         j += 1
 
     assert j == len(ok)
+
+    # Invert the mask, so we have only the points outside the cutout
     return ~mask
 
 
