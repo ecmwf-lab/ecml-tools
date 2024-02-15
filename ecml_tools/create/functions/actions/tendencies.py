@@ -1,4 +1,4 @@
-# (C) Copyright 2020 ECMWF.
+# (C) Copyright 2024 ECMWF.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -121,33 +121,6 @@ execute = tendencies
 if __name__ == "__main__":
     import yaml
 
-    #    config = yaml.safe_load(
-    #        """
-    #
-    #    config:
-    #        padded_source:
-    #          name: mars
-    #          # marser is the MARS containing ERA5 reanalysis dataset, avoid hitting the FDB server for nothing
-    #          database: marser
-    #          class: ea
-    #          # date: $datetime_format($dates,%Y%m%d)
-    #          # time: $datetime_format($dates,%H%M)
-    #          date: 20221230/to/20230103
-    #          time: '0000/1200'
-    #          expver: '0001'
-    #          grid: 20.0/20.0
-    #          levtype: sfc
-    #          param: [2t]
-    #          # levtype: pl
-    #          # param: [10u, 10v, 2d, 2t, lsm, msl, sdor, skt, slor, sp, tcw, z]
-    #
-    #          # number: [0, 1]
-    #
-    #        time_increment: 12h
-    #
-    #        dates: [2022-12-31 00:00, 2022-12-31 12:00, 2023-01-01 00:00, 2023-01-01 12:00, 2023-01-02 00:00, 2023-01-02 12:00]
-    #    """
-    #    )["config"]
     config = yaml.safe_load(
         """
 

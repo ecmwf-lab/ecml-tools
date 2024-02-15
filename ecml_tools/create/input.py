@@ -43,7 +43,7 @@ def is_function(name, kind):
 
 
 def assert_is_fieldset(obj):
-    from climetlab.readers.grib.index import FieldSet
+    from climetlab.indexing.fieldset import FieldSet
 
     assert isinstance(obj, FieldSet), type(obj)
 
@@ -56,8 +56,10 @@ def _datasource_request(data):
     for field in data:
         if not hasattr(field, "as_mars"):
             continue
+
         if date is None:
             date = field.valid_datetime()
+
         if field.valid_datetime() != date:
             continue
 

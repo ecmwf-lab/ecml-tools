@@ -113,6 +113,7 @@ class Loader:
         z.create_group("_build")
 
     def update_metadata(self, **kwargs):
+        print("Updating metadata", kwargs)
         z = zarr.open(self.path, mode="w+")
         for k, v in kwargs.items():
             if isinstance(v, np.datetime64):
