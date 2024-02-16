@@ -13,7 +13,6 @@ from climetlab.utils.patterns import Pattern
 
 
 def opendap(context, dates, url_pattern, *args, **kwargs):
-
     all_urls = Pattern(url_pattern, ignore_missing_keys=True).substitute(
         *args, date=dates, **kwargs
     )
@@ -22,7 +21,6 @@ def opendap(context, dates, url_pattern, *args, **kwargs):
     levels = kwargs.get("level", kwargs.get("levelist"))
 
     for url in all_urls:
-
         print("URL", url)
         s = load_source("opendap", url)
         s = s.sel(

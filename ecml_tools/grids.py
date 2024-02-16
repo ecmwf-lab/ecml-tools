@@ -32,9 +32,7 @@ def latlon_to_xyz(lat, lon, radius=1.0):
 
 
 class Triangle3D:
-
     def __init__(self, v0, v1, v2):
-
         self.v0 = v0
         self.v1 = v1
         self.v2 = v2
@@ -168,7 +166,6 @@ def cutout_mask(
 
 
 if __name__ == "__main__":
-
     global_lats, global_lons = np.meshgrid(
         np.linspace(90, -90, 90),
         np.linspace(-180, 180, 180),

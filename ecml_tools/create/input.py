@@ -18,7 +18,7 @@ from functools import cached_property
 from climetlab.core.order import build_remapping
 
 from .group import build_groups
-from .template import substitute
+from .template import resolve, substitute
 from .utils import seconds
 
 LOG = logging.getLogger(__name__)
@@ -100,16 +100,9 @@ class Cache:
 class Coords:
     def __init__(self, owner):
         self.owner = owner
-        self.cache = Cache()
 
+    @cached_property
     def _build_coords(self):
-        # assert isinstance(self.owner.context, Context), type(self.owner.context)
-        # assert isinstance(self.owner, Result), type(self.owner)
-        # assert hasattr(self.owner, "context"), self.owner
-        # assert hasattr(self.owner, "datasource"), self.owner
-        # assert hasattr(self.owner, "get_cube"), self.owner
-        # self.owner.datasource
-
         from_data = self.owner.get_cube().user_coords
         from_config = self.owner.context.order_by
 
@@ -135,63 +128,75 @@ class Coords:
                 from_config[variables_key],
             )
 
-        self.cache.variables = from_data[variables_key]  # "param_level"
-        self.cache.ensembles = from_data[ensembles_key]  # "number"
+        self._variables = from_data[variables_key]  # "param_level"
+        self._ensembles = from_data[ensembles_key]  # "number"
 
         first_field = self.owner.datasource[0]
         grid_points = first_field.grid_points()
         grid_values = list(range(len(grid_points[0])))
 
-        self.cache.grid_points = grid_points
-        self.cache.resolution = first_field.resolution
-        self.cache.grid_values = grid_values
+        self._grid_points = grid_points
+        self._resolution = first_field.resolution
+        self._grid_values = grid_values
 
-    def __getattr__(self, name):
-        if name in [
-            "variables",
-            "ensembles",
-            "resolution",
-            "grid_values",
-            "grid_points",
-        ]:
-            if not hasattr(self.cache, name):
-                self._build_coords()
-            return getattr(self.cache, name)
-        raise AttributeError(name)
+    @cached_property
+    def variables(self):
+        self._build_coords
+        return self._variables
+
+    @cached_property
+    def ensembles(self):
+        self._build_coords
+        return self._ensembles
+
+    @cached_property
+    def resolution(self):
+        self._build_coords
+        return self._resolution
+
+    @cached_property
+    def grid_values(self):
+        self._build_coords
+        return self._grid_values
+
+    @cached_property
+    def grid_points(self):
+        self._build_coords
+        return self._grid_points
 
 
 class HasCoordsMixin:
-    @property
+    @cached_property
     def variables(self):
         return self._coords.variables
 
-    @property
+    @cached_property
     def ensembles(self):
         return self._coords.ensembles
 
-    @property
+    @cached_property
     def resolution(self):
         return self._coords.resolution
 
-    @property
+    @cached_property
     def grid_values(self):
         return self._coords.grid_values
 
-    @property
+    @cached_property
     def grid_points(self):
         return self._coords.grid_points
 
-    @property
+    @cached_property
     def dates(self):
         if self._dates is None:
             raise ValueError(f"No dates for {self}")
         return self._dates.values
 
-    @property
+    @cached_property
     def frequency(self):
         return self._dates.frequency
 
-    @property
+    @cached_property
     def shape(self):
         return [
             len(self.dates),
@@ -200,7 +205,7 @@ class HasCoordsMixin:
             len(self.grid_values),
         ]
 
-    @property
+    @cached_property
     def coords(self):
         return {
             "dates": self.dates,
@@ -211,7 +216,7 @@ class HasCoordsMixin:
 
 
 class Action:
-    def __init__(self, context, /, *args, **kwargs):
+    def __init__(self, context, path, /, *args, **kwargs):
         if "args" in kwargs and "kwargs" in kwargs:
             """We have:
                args = []
@@ -227,6 +232,7 @@ class Action:
         self.context = context
         self.kwargs = kwargs
         self.args = args
+        self.path = path
 
     @classmethod
     def _short_str(cls, x):
@@ -252,14 +258,29 @@ class Action:
         raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
 
 
+def check_references(method):
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+        self.context.notify_result(self.path, result)
+        return result
+
+    return wrapper
+
+
 class Result(HasCoordsMixin):
     empty = False
 
-    def __init__(self, context, dates=None):
+    def __init__(self, context, path, dates):
         assert isinstance(context, Context), type(context)
+
+        assert path is None or isinstance(path, list), path
+
         self.context = context
         self._coords = Coords(self)
         self._dates = dates
+        self.path = path
+        if path is not None:
+            context.register_reference(path, self)
 
     @property
     def datasource(self):
@@ -318,9 +339,6 @@ class Result(HasCoordsMixin):
 class EmptyResult(Result):
     empty = True
 
-    def __init__(self, context, dates=None):
-        super().__init__(context)
-
     @cached_property
     def datasource(self):
         from climetlab import load_source
@@ -332,43 +350,40 @@ class EmptyResult(Result):
         return []
 
 
-class ReferencesSolver(dict):
-    def __init__(self, context, dates):
-        self.context = context
-        self.dates = dates
-
-    def __getitem__(self, key):
-        if key == "dates":
-            return self.dates.values
-        if key in self.context.references:
-            result = self.context.references[key]
-            return result.datasource
-        raise KeyError(key)
-
-
 class FunctionResult(Result):
-    def __init__(self, context, dates, action, previous_sibling=None):
-        super().__init__(context, dates)
+    def __init__(self, context, path, dates, action):
+        super().__init__(context, path, dates)
         assert isinstance(action, Action), type(action)
         self.action = action
 
-        _args = self.action.args
-        _kwargs = self.action.kwargs
+        self.args, self.kwargs = substitute(
+            context, (self.action.args, self.action.kwargs)
+        )
 
-        vars = ReferencesSolver(context, dates)
+        self._result = None
 
-        self.args = substitute(_args, vars)
-        self.kwargs = substitute(_kwargs, vars)
-
-    # @cached_property
     @property
+    @check_references
     def datasource(self):
         print(
-            f"applying function {self.action.function} to {self.dates}, {self.args} {self.kwargs}, {self}"
+            "🌎",
+            self.path,
+            f"{self.action.function.__name__}.datasource({self.dates}, {self.args} {self.kwargs})",
         )
-        return self.action.function(
-            FunctionContext(self), self.dates, *self.args, **self.kwargs
+
+        # We don't use the cached_property here because if hides
+        # errors in the function.
+
+        if self._result is not None:
+            return self._result
+
+        args, kwargs = resolve(self.context, (self.args, self.kwargs))
+
+        self._result = self.action.function(
+            FunctionContext(self), self.dates, *args, **kwargs
         )
+
+        return self._result
 
     def __repr__(self):
         content = " ".join([f"{v}" for v in self.args])
@@ -382,13 +397,14 @@ class FunctionResult(Result):
 
 
 class JoinResult(Result):
-    def __init__(self, context, dates, results, **kwargs):
-        super().__init__(context, dates)
+    def __init__(self, context, path, dates, results, **kwargs):
+        super().__init__(context, path, dates)
         self.results = [r for r in results if not r.empty]
 
-    @property
+    @cached_property
+    @check_references
     def datasource(self):
-        ds = EmptyResult(self.context, self._dates).datasource
+        ds = EmptyResult(self.context, None, self._dates).datasource
         for i in self.results:
             ds += i.datasource
             assert_is_fieldset(ds), i
@@ -399,46 +415,14 @@ class JoinResult(Result):
         return super().__repr__(content)
 
 
-class DependencyAction(Action):
-    def __init__(self, context, **kwargs):
-        super().__init__(context)
-        self.content = action_factory(kwargs, context)
-
-    def select(self, dates):
-        self.content.select(dates)
-        # this should trigger a registration of the result in the context
-        # if there is a label
-        # self.context.register_reference(self.name, result)
-        return EmptyResult(self.context, dates)
-
-    def __repr__(self):
-        return super().__repr__(self.content)
-
-
-class LabelAction(Action):
-    def __init__(self, context, name, **kwargs):
-        super().__init__(context)
-        if len(kwargs) != 1:
-            raise ValueError(f"Invalid kwargs for label : {kwargs}")
-        self.name = name
-        self.content = action_factory(kwargs, context)
-
-    def select(self, dates):
-        result = self.content.select(dates)
-        self.context.register_reference(self.name, result)
-        return result
-
-    def __repr__(self):
-        return super().__repr__(_inline_=self.name, _indent_=" ")
-
-
 class FunctionAction(Action):
-    def __init__(self, context, _name, **kwargs):
-        super().__init__(context, **kwargs)
+    def __init__(self, context, path, _name, **kwargs):
+        super().__init__(context, path, **kwargs)
         self.name = _name
 
     def select(self, dates):
-        return FunctionResult(self.context, dates, action=self)
+        print("🚀", self.path, f"{self.name}.select({dates})")
+        return FunctionResult(self.context, self.path, dates, action=self)
 
     @property
     def function(self):
@@ -455,11 +439,12 @@ class FunctionAction(Action):
 
 
 class ConcatResult(Result):
-    def __init__(self, context, results):
+    def __init__(self, context, path, results):
         super().__init__(context, dates=None)
         self.results = [r for r in results if not r.empty]
 
-    @property
+    @cached_property
+    @check_references
     def datasource(self):
         ds = EmptyResult(self.context, self.dates).datasource
         for i in self.results:
@@ -504,9 +489,11 @@ class ConcatResult(Result):
 class ActionWithList(Action):
     result_class = None
 
-    def __init__(self, context, *configs):
-        super().__init__(context, *configs)
-        self.actions = [action_factory(c, context) for c in configs]
+    def __init__(self, context, path, *configs):
+        super().__init__(context, path, *configs)
+        self.actions = [
+            action_factory(c, context, path + [str(i)]) for i, c in enumerate(configs)
+        ]
 
     def __repr__(self):
         content = "\n".join([str(i) for i in self.actions])
@@ -514,61 +501,87 @@ class ActionWithList(Action):
 
 
 class PipeAction(Action):
-    def __init__(self, context, *configs):
-        super().__init__(context, *configs)
-        current = action_factory(configs[0], context)
-        for c in configs[1:]:
-            current = step_factory(c, context, _upstream_action=current)
+    def __init__(self, context, path, *configs):
+        super().__init__(context, path, *configs)
+        assert len(configs) > 1, configs
+        current = action_factory(configs[0], context, path + ["0"])
+        for i, c in enumerate(configs[1:]):
+            current = step_factory(
+                c, context, path + [str(i + 1)], previous_step=current
+            )
         self.content = current
 
     def select(self, dates):
-        return self.content.select(dates)
+        print("🚀", self.path, f"PipeAction.select({dates}, {self.content})")
+        result = self.content.select(dates)
+        print("🍎", self.path, f"PipeAction.result", result)
+        return result
 
     def __repr__(self):
         return super().__repr__(self.content)
 
 
 class StepResult(Result):
-    def __init__(self, upstream, context, dates, action):
-        super().__init__(context, dates)
-        assert isinstance(upstream, Result), type(upstream)
-        self.content = upstream
+    def __init__(self, context, path, dates, action, upstream_result):
+        print("🐫", "step result", path, upstream_result, type(upstream_result))
+        super().__init__(context, path, dates)
+        assert isinstance(upstream_result, Result), type(upstream_result)
+        self.upstream_result = upstream_result
         self.action = action
 
     @property
+    @check_references
     def datasource(self):
-        return self.content.datasource
+        raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
+        # return self.upstream_result.datasource
 
 
 class StepAction(Action):
     result_class = None
 
-    def __init__(self, context, _upstream_action, **kwargs):
-        super().__init__(context, **kwargs)
-        self.content = _upstream_action
+    def __init__(self, context, path, previous_step, *args, **kwargs):
+        super().__init__(context, path, *args, **kwargs)
+        self.previous_step = previous_step
 
     def select(self, dates):
         return self.result_class(
-            self.content.select(dates),
             self.context,
+            self.path,
             dates,
             self,
+            self.previous_step.select(dates),
         )
 
     def __repr__(self):
-        return super().__repr__(self.content, _inline_=str(self.kwargs))
+        return super().__repr__(self.previous_step, _inline_=str(self.kwargs))
 
 
-class StepFunctionResult(StepAction):
+class StepFunctionResult(StepResult):
+    _result = None
+
     @property
+    @check_references
     def datasource(self):
-        return self.function(
-            FunctionContext(self), self.content.datasource, **self.kwargs
+        # We don't use the cached_property here because if hides
+        # errors in the function.
+
+        print("🥧", "StepFunctionResult.datasource", self.action.function)
+
+        if self._result is not None:
+            return self._result
+
+        self._result = self.action.function(
+            FunctionContext(self),
+            self.upstream_result.datasource,
+            **self.action.kwargs,
         )
+
+        return self._result
 
 
 class FilterStepResult(StepResult):
     @property
+    @check_references
     def datasource(self):
         ds = self.content.datasource
         assert_is_fieldset(ds)
@@ -581,6 +594,14 @@ class FilterStepAction(StepAction):
     result_class = FilterStepResult
 
 
+class FunctionStepAction(StepAction):
+    def __init__(self, context, path, previous_step, *args, **kwargs):
+        super().__init__(context, path, previous_step, *args, **kwargs)
+        self.function = import_function(args[0], "steps")
+
+    result_class = StepFunctionResult
+
+
 class ConcatAction(ActionWithList):
     def select(self, dates):
         return ConcatResult(self.context, [a.select(dates) for a in self.actions])
@@ -588,11 +609,13 @@ class ConcatAction(ActionWithList):
 
 class JoinAction(ActionWithList):
     def select(self, dates):
-        return JoinResult(self.context, dates, [a.select(dates) for a in self.actions])
+        return JoinResult(
+            self.context, self.path, dates, [a.select(dates) for a in self.actions]
+        )
 
 
 class DateAction(Action):
-    def __init__(self, context, **kwargs):
+    def __init__(self, context, path, **kwargs):
         super().__init__(context, **kwargs)
 
         datesconfig = {}
@@ -630,23 +653,23 @@ def merge_dicts(a, b):
     return deepcopy(b)
 
 
-def action_factory(config, context):
+def action_factory(config, context, path):
     assert isinstance(context, Context), (type, context)
     if not isinstance(config, dict):
         raise ValueError(f"Invalid input config {config}")
 
-    if len(config) == 2 and "label" in config:
-        config = deepcopy(config)
-        label = config.pop("label")
-        return action_factory(
-            dict(
-                label=dict(
-                    name=label,
-                    **config,
-                )
-            ),
-            context,
-        )
+    # if len(config) == 2 and "label" in config:
+    #     config = deepcopy(config)
+    #     label = config.pop("label")
+    #     return action_factory(
+    #         dict(
+    #             label=dict(
+    #                 name=label,
+    #                 **config,
+    #             )
+    #         ),
+    #         context,
+    #     )
 
     if len(config) != 1:
         raise ValueError(
@@ -658,12 +681,12 @@ def action_factory(config, context):
     cls = dict(
         concat=ConcatAction,
         join=JoinAction,
-        label=LabelAction,
+        # label=LabelAction,
         pipe=PipeAction,
         # source=SourceAction,
         function=FunctionAction,
         dates=DateAction,
-        dependency=DependencyAction,
+        # dependency=DependencyAction,
     ).get(key)
 
     if isinstance(config[key], list):
@@ -678,10 +701,10 @@ def action_factory(config, context):
         cls = FunctionAction
         args = [key] + args
 
-    return cls(context, *args, **kwargs)
+    return cls(context, path + [key], *args, **kwargs)
 
 
-def step_factory(config, context, _upstream_action):
+def step_factory(config, context, path, previous_step):
     assert isinstance(context, Context), (type, context)
     if not isinstance(config, dict):
         raise ValueError(f"Invalid input config {config}")
@@ -694,7 +717,7 @@ def step_factory(config, context, _upstream_action):
         filter=FilterStepAction,
         # rename=RenameAction,
         # remapping=RemappingAction,
-    )[key]
+    ).get(key)
 
     if isinstance(config[key], list):
         args, kwargs = config[key], {}
@@ -702,11 +725,13 @@ def step_factory(config, context, _upstream_action):
     if isinstance(config[key], dict):
         args, kwargs = [], config[key]
 
-    if "_upstream_action" in kwargs:
-        raise ValueError(f"Reserverd keyword '_upsream_action' in {config}")
-    kwargs["_upstream_action"] = _upstream_action
+    if cls is None:
+        if not is_function(key, "steps"):
+            raise ValueError(f"Unknown step {key}")
+        cls = FunctionStepAction
+        args = [key] + args
 
-    return cls(context, *args, **kwargs)
+    return cls(context, path, previous_step, *args, **kwargs)
 
 
 class FunctionContext:
@@ -721,21 +746,49 @@ class Context:
         self.remapping = build_remapping(remapping)
 
         self.references = {}
+        self.used_references = set()
+        self.results = {}
 
-    def register_reference(self, name, obj):
-        assert isinstance(obj, Result), type(obj)
-        if name in self.references:
-            raise ValueError(f"Duplicate reference {name}")
-        self.references[name] = obj
+    def register_reference(self, path, obj):
+        assert isinstance(path, (list, tuple)), path
+        path = tuple(path)
+        print("=======> register", path, type(obj))
+        if path in self.references:
+            raise ValueError(f"Duplicate reference {path}")
+        self.references[path] = obj
 
-    def find_reference(self, name):
-        if name in self.references:
-            return self.references[name]
-        # It can happend that the required name is not yet registered,
+    def find_reference(self, path):
+        assert isinstance(path, (list, tuple)), path
+        path = tuple(path)
+        if path in self.references:
+            return self.references[path]
+        # It can happend that the required path is not yet registered,
         # even if it is defined in the config.
         # Handling this case implies implementing a lazy inheritance resolution
         # and would complexify the code. This is not implemented.
-        raise ValueError(f"Cannot find reference {name}")
+
+        raise ValueError(f"Cannot find reference {path}")
+
+    def will_need_reference(self, path):
+        assert isinstance(path, (list, tuple)), path
+        path = tuple(path)
+        self.used_references.add(path)
+
+    def notify_result(self, path, result):
+        print("notify_result", path, result)
+        assert isinstance(path, (list, tuple)), path
+        path = tuple(path)
+        if path in self.used_references:
+            if path in self.results:
+                raise ValueError(f"Duplicate result {path}")
+            self.results[path] = result
+
+    def get_result(self, path):
+        assert isinstance(path, (list, tuple)), path
+        path = tuple(path)
+        if path in self.results:
+            return self.results[path]
+        raise ValueError(f"Cannot find result {path}")
 
 
 class InputBuilder:
@@ -747,12 +800,12 @@ class InputBuilder:
         """This changes the context."""
         dates = build_groups(dates)
         context = Context(**self.kwargs)
-        action = action_factory(self.config, context)
+        action = action_factory(self.config, context, ["input"])
         return action.select(dates)
 
     def __repr__(self):
         context = Context(**self.kwargs)
-        a = action_factory(self.config, context)
+        a = action_factory(self.config, context, ["input"])
         return repr(a)
 
 
