@@ -15,6 +15,7 @@ from collections import defaultdict
 from copy import deepcopy
 from functools import cached_property
 
+import numpy as np
 from climetlab.core.order import build_remapping
 
 from .group import build_groups
@@ -52,6 +53,8 @@ def _datasource_request(data):
     date = None
     params_levels = defaultdict(set)
     params_steps = defaultdict(set)
+
+    area = grid = None
 
     for field in data:
         if not hasattr(field, "as_mars"):
@@ -133,6 +136,20 @@ class Coords:
 
         first_field = self.owner.datasource[0]
         grid_points = first_field.grid_points()
+
+        lats, lons = grid_points
+        north = np.amax(lats)
+        south = np.amin(lats)
+        east = np.amax(lons)
+        west = np.amin(lons)
+
+        assert -90 <= south <= north <= 90, (south, north, first_field)
+        assert (-180 <= west <= east <= 180) or (0 <= west <= east <= 360), (
+            west,
+            east,
+            first_field,
+        )
+
         grid_values = list(range(len(grid_points[0])))
 
         self._grid_points = grid_points
@@ -514,7 +531,7 @@ class PipeAction(Action):
     def select(self, dates):
         print("🚀", self.path, f"PipeAction.select({dates}, {self.content})")
         result = self.content.select(dates)
-        print("🍎", self.path, f"PipeAction.result", result)
+        print("🍎", self.path, "PipeAction.result", result)
         return result
 
     def __repr__(self):

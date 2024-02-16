@@ -784,6 +784,12 @@ class Grids(GivenAxis):
         # Shape: (dates, variables, ensemble, 1d-values)
         assert len(datasets[0].shape) == 4, "Grids must be 1D for now"
 
+    def check_same_grid(self, d1, d2):
+        # We don't check the grid, because we want to be able to combine
+        pass
+
+
+class ConcatGrids(Grids):
     # TODO: select the statistics of the most global grid?
     @property
     def latitudes(self):
@@ -793,9 +799,74 @@ class Grids(GivenAxis):
     def longitudes(self):
         return np.concatenate([d.longitudes for d in self.datasets])
 
-    def check_same_grid(self, d1, d2):
-        # We don't check the grid, because we want to be able to combine
+
+class CutoutGrids(Grids):
+    def __init__(self, datasets, axis):
+        from .grids import cutout_mask
+
+        super().__init__(datasets, axis)
+        assert len(datasets) == 2, "CutoutGrids requires two datasets"
+        assert axis == 3, "CutoutGrids requires axis=3"
+
+        # We assume that the LAM is the first dataset, and the global is the second
+        # Note: the second fields does not really need to be global
+
+        self.lam, self.globe = datasets
+        self.mask = cutout_mask(
+            self.lam.latitudes,
+            self.lam.longitudes,
+            self.globe.latitudes,
+            self.globe.longitudes,
+            plot="cutout",
+        )
+        assert len(self.mask) == self.globe.shape[3], (
+            len(self.mask),
+            self.globe.shape[3],
+        )
+
+    @cached_property
+    def shape(self):
+        shape = self.lam.shape
+        # Number of non-zero masked values in the globe dataset
+        nb_globe = np.count_nonzero(self.mask)
+        return shape[:-1] + (shape[-1] + nb_globe,)
+
+    def check_same_resolution(self, d1, d2):
+        # Turned off because we are combining different resolutions
         pass
+
+    @property
+    def latitudes(self):
+        return np.concatenate([self.lam.latitudes, self.globe.latitudes[self.mask]])
+
+    @property
+    def longitudes(self):
+        return np.concatenate([self.lam.longitudes, self.globe.longitudes[self.mask]])
+
+    def __getitem__(self, index):
+        if isinstance(index, (int, slice)):
+            index = (index, slice(None), slice(None), slice(None))
+        return self._get_tuple(index)
+
+    @debug_indexing
+    @expand_list_indexing
+    def _get_tuple(self, index):
+        assert index[self.axis] == slice(
+            None
+        ), "No support for selecting a subset of the 1D values"
+        index, changes = index_to_slices(index, self.shape)
+
+        # In case index_to_slices has changed the last slice
+        index, _ = update_tuple(index, self.axis, slice(None))
+
+        lam_data = self.lam[index]
+        globe_data = self.globe[index]
+
+        globe_data = globe_data[:, :, :, self.mask]
+
+        result = np.concatenate([lam_data, globe_data], axis=self.axis)
+
+        return apply_index_to_slices_changes(result, changes)
 
 
 class Join(Combined):
@@ -1259,10 +1330,23 @@ def _open_dataset(*args, zarr_root, **kwargs):
         if "ensemble" in kwargs:
             raise NotImplementedError("Cannot use both 'ensemble' and 'grids'")
         grids = kwargs.pop("grids")
+        mode = kwargs.pop("mode", "concatenate")
         axis = kwargs.pop("axis", 3)
         assert len(args) == 0
         assert isinstance(grids, (list, tuple))
-        return Grids([_open(e, zarr_root) for e in grids], axis=axis)._subset(**kwargs)
+
+        KLASSES = {
+            "concatenate": ConcatGrids,
+            "cutout": CutoutGrids,
+        }
+        if mode not in KLASSES:
+            raise ValueError(
+                f"Unknown grids mode: {mode}, values are {list(KLASSES.keys())}"
+            )
+
+        return KLASSES[mode]([_open(e, zarr_root) for e in grids], axis=axis)._subset(
+            **kwargs
+        )
 
     for name in ("datasets", "dataset"):
         if name in kwargs:

@@ -11,6 +11,23 @@ import numpy as np
 from scipy.spatial import KDTree
 
 
+def plot_mask(path, mask, lats, lons, global_lats, global_lons):
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure(figsize=(10, 5))
+    plt.scatter(global_lons, global_lats, s=0.01, marker="o", c="r")
+    plt.savefig(path + "-global.png")
+
+    fig = plt.figure(figsize=(10, 5))
+    plt.scatter(global_lons[mask], global_lats[mask], s=0.1, c="k")
+    plt.savefig(path + "-cutout.png")
+
+    fig = plt.figure(figsize=(10, 5))
+    plt.scatter(lons, lats, s=0.01)
+    plt.savefig(path + "-lam.png")
+    # plt.scatter(lons, lats, s=0.01)
+
+
 def latlon_to_xyz(lat, lon, radius=1.0):
     # https://en.wikipedia.org/wiki/Geographic_coordinate_conversion#From_geodetic_to_ECEF_coordinates
     # We assume that the Earth is a sphere of radius 1 so N(phi) = 1
@@ -84,12 +101,13 @@ def cropping_mask(lats, lons, north, west, south, east):
 
 
 def cutout_mask(
-    global_lats,
-    global_lons,
     lats,
     lons,
+    global_lats,
+    global_lons,
     cropping_distance=2.0,
     min_distance=0.0,
+    plot=None,
 ):
     """
     Return a mask for the points in [global_lats, global_lons] that are inside of [lats, lons]
@@ -162,7 +180,12 @@ def cutout_mask(
     assert j == len(ok)
 
     # Invert the mask, so we have only the points outside the cutout
-    return ~mask
+    mask = ~mask
+
+    if plot:
+        plot_mask(plot, mask, lats, lons, global_lats, global_lons)
+
+    return mask
 
 
 if __name__ == "__main__":
@@ -180,12 +203,12 @@ if __name__ == "__main__":
     lats = lats.flatten()
     lons = lons.flatten()
 
-    mask = cutout_mask(global_lats, global_lons, lats, lons, cropping_distance=5.0)
+    mask = cutout_mask(lats, lons, global_lats, global_lons, cropping_distance=5.0)
 
     import matplotlib.pyplot as plt
 
     fig = plt.figure(figsize=(10, 5))
     plt.scatter(global_lons, global_lats, s=0.01, marker="o", c="r")
     plt.scatter(global_lons[mask], global_lats[mask], s=0.1, c="k")
-    plt.scatter(lons, lats, s=0.01)
+    # plt.scatter(lons, lats, s=0.01)
     plt.savefig("cutout.png")
