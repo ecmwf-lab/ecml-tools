@@ -14,15 +14,15 @@ from scipy.spatial import KDTree
 def plot_mask(path, mask, lats, lons, global_lats, global_lons):
     import matplotlib.pyplot as plt
 
-    fig = plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(10, 5))
     plt.scatter(global_lons, global_lats, s=0.01, marker="o", c="r")
     plt.savefig(path + "-global.png")
 
-    fig = plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(10, 5))
     plt.scatter(global_lons[mask], global_lats[mask], s=0.1, c="k")
     plt.savefig(path + "-cutout.png")
 
-    fig = plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(10, 5))
     plt.scatter(lons, lats, s=0.01)
     plt.savefig(path + "-lam.png")
     # plt.scatter(lons, lats, s=0.01)

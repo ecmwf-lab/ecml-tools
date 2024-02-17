@@ -53,6 +53,7 @@ create_requires = [
     "tqdm",
     "climetlab",  # "earthkit-data"
     "earthkit-meteo",
+    "pyproj",
 ]
 
 
