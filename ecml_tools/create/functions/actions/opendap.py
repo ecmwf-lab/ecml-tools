@@ -12,16 +12,16 @@ from climetlab import load_source
 from climetlab.utils.patterns import Pattern
 
 
-def opendap(context, dates, url_pattern, *args, **kwargs):
-    all_urls = Pattern(url_pattern, ignore_missing_keys=True).substitute(
+def execute(context, dates, url_pattern, *args, **kwargs):
+    urls = Pattern(url_pattern, ignore_missing_keys=True).substitute(
         *args, date=dates, **kwargs
     )
 
     ds = load_source("empty")
     levels = kwargs.get("level", kwargs.get("levelist"))
 
-    for url in all_urls:
-        print("URL", url)
+    for url in urls:
+        # print("URL", url)
         s = load_source("opendap", url)
         s = s.sel(
             valid_datetime=[d.isoformat() for d in dates],
@@ -32,6 +32,3 @@ def opendap(context, dates, url_pattern, *args, **kwargs):
             s = s.sel(levelist=levels)
         ds = ds + s
     return ds
-
-
-execute = opendap
