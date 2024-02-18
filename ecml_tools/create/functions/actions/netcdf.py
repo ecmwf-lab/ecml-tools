@@ -7,6 +7,44 @@
 # nor does it submit to any jurisdiction.
 #
 
-from .opendap import execute as opendap_execute
+from climetlab import load_source
+from climetlab.utils.patterns import Pattern
 
-execute = opendap_execute  # netcdf is an alias for opendap
+
+def check(what, ds, paths, **kwargs):
+    count = 1
+    for k, v in kwargs.items():
+        if isinstance(v, (tuple, list)):
+            count *= len(v)
+
+    if len(ds) != count:
+        raise ValueError(
+            f"Expected {count} fields, got {len(ds)} (kwargs={kwargs}, {what}s={paths})"
+        )
+
+
+def load_netcdfs(emoji, what, context, dates, path, *args, **kwargs):
+    paths = Pattern(path, ignore_missing_keys=True).substitute(
+        *args, date=dates, **kwargs
+    )
+
+    ds = load_source("empty")
+    levels = kwargs.get("level", kwargs.get("levelist"))
+
+    for path in paths:
+        context.trace(emoji, what.upper(), path)
+        s = load_source("opendap", path)
+        s = s.sel(
+            valid_datetime=[d.isoformat() for d in dates],
+            param=kwargs["param"],
+            step=kwargs.get("step", 0),
+        )
+        if levels:
+            s = s.sel(levelist=levels)
+        ds = ds + s
+    check(what, ds, paths, valid_datetime=dates, **kwargs)
+    return ds
+
+
+def execute(context, dates, path, *args, **kwargs):
+    return load_netcdfs("📁", "path", context, dates, path, *args, **kwargs)

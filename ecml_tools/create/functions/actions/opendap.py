@@ -7,28 +7,8 @@
 # nor does it submit to any jurisdiction.
 #
 
-
-from climetlab import load_source
-from climetlab.utils.patterns import Pattern
+from .netcdf import load_netcdfs
 
 
-def execute(context, dates, url_pattern, *args, **kwargs):
-    urls = Pattern(url_pattern, ignore_missing_keys=True).substitute(
-        *args, date=dates, **kwargs
-    )
-
-    ds = load_source("empty")
-    levels = kwargs.get("level", kwargs.get("levelist"))
-
-    for url in urls:
-        context.trace("🌐", url)
-        s = load_source("opendap", url)
-        s = s.sel(
-            valid_datetime=[d.isoformat() for d in dates],
-            param=kwargs["param"],
-            step=kwargs.get("step", 0),
-        )
-        if levels:
-            s = s.sel(levelist=levels)
-        ds = ds + s
-    return ds
+def execute(context, dates, url, *args, **kwargs):
+    return load_netcdfs("🌐", "url", context, dates, url, *args, **kwargs)
