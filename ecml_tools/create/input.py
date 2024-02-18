@@ -353,16 +353,14 @@ class Result(HasCoordsMixin):
 
     def __init__(self, context, action_path, dates):
         assert isinstance(context, Context), type(context)
-
-        assert action_path is None or isinstance(action_path, list), action_path
-        action_path = tuple(action_path or [])
+        assert isinstance(action_path, list), action_path
 
         self.context = context
         self._coords = Coords(self)
         self._dates = dates
         self.action_path = action_path
-        if action_path is not None:
-            context.register_reference(action_path, self)
+
+        context.register_reference(action_path, self)
 
     @property
     @trace_datasource
@@ -425,6 +423,9 @@ class Result(HasCoordsMixin):
 class EmptyResult(Result):
     empty = True
 
+    def __init__(self, context, action_path, dates):
+        super().__init__(context, action_path + ["empty"], dates)
+
     @cached_property
     @trace_datasource
     def datasource(self):
@@ -484,7 +485,7 @@ class JoinResult(Result):
     @check_references
     @trace_datasource
     def datasource(self):
-        ds = EmptyResult(self.context, None, self._dates).datasource
+        ds = EmptyResult(self.context, self.action_path, self._dates).datasource
         for i in self.results:
             ds += i.datasource
             assert_is_fieldset(ds), i
@@ -715,7 +716,7 @@ class DateAction(Action):
                 subconfig[k] = v
 
         self._dates = build_groups(datesconfig)
-        self.content = action_factory(subconfig, context)
+        self.content = action_factory(subconfig, context, self.action_path + ["dates"])
 
     @trace_select
     def select(self, dates):
@@ -846,7 +847,9 @@ class Context:
         action_path = tuple(action_path)
         trace("📚", step(action_path), "register", type(obj))
         if action_path in self.references:
-            raise ValueError(f"Duplicate reference {action_path}")
+            raise ValueError(
+                f"Duplicate reference [{action_path}] {obj} {self.references[action_path]}"
+            )
         self.references[action_path] = obj
 
     def find_reference(self, action_path):

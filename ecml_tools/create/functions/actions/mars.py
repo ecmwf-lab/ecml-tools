@@ -14,7 +14,7 @@ from climetlab.utils.availability import Availability
 
 from ecml_tools.create.utils import to_datetime_list
 
-DEBUG = True
+DEBUG = False
 
 
 def to_list(x):
@@ -80,7 +80,7 @@ def mars(context, dates, *requests, **kwargs):
     for r in requests:
         r = {k: v for k, v in r.items() if v != ("-",)}
         if DEBUG:
-            print(f"✅ load_source(mars, {r}")
+            context.trace("✅", f"load_source(mars, {r}")
         ds = ds + load_source("mars", **r)
     return ds
 

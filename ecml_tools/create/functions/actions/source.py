@@ -15,7 +15,7 @@ DEBUG = True
 
 def source(context, dates, **kwargs):
     name = kwargs.pop("name")
-    print(f"✅ load_source({name}, {dates}, {kwargs}")
+    context.trace("✅", f"load_source({name}, {dates}, {kwargs}")
     if kwargs["date"] == "$from_dates":
         kwargs["date"] = list({d.strftime("%Y%m%d") for d in dates})
     if kwargs["time"] == "$from_dates":
