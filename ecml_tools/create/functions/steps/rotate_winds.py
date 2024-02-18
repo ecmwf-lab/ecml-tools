@@ -40,7 +40,7 @@ def rotate_winds(lats, lons, x_wind, y_wind, source_projection, target_projectio
     orig_speed = np.sqrt(x_wind**2 + y_wind**2)
 
     x0, y0 = source_projection(lons, lats)
-    print(x0, y0)
+
     if source_projection.name != "longlat":
         x1 = x0 + x_wind
         y1 = y0 + y_wind

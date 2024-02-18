@@ -21,7 +21,7 @@ def execute(context, dates, url_pattern, *args, **kwargs):
     levels = kwargs.get("level", kwargs.get("levelist"))
 
     for url in urls:
-        # print("URL", url)
+        context.trace("🌐", url)
         s = load_source("opendap", url)
         s = s.sel(
             valid_datetime=[d.isoformat() for d in dates],

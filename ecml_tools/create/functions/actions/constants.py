@@ -56,7 +56,7 @@ def normalise_time_to_hours(r):
 
 
 def constants(context, dates, template, param):
-    print(f"✅ load_source(constants, {template}, {param}")
+    context.trace("✅", f"load_source(constants, {template}, {param}")
     return load_source("constants", source_or_dataset=template, date=dates, param=param)
 
 
