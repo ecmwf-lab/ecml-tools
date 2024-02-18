@@ -355,11 +355,12 @@ class Result(HasCoordsMixin):
         assert isinstance(context, Context), type(context)
 
         assert action_path is None or isinstance(action_path, list), action_path
+        action_path = tuple(action_path or [])
 
         self.context = context
         self._coords = Coords(self)
         self._dates = dates
-        self.action_path = action_path or []
+        self.action_path = action_path
         if action_path is not None:
             context.register_reference(action_path, self)
 
@@ -464,7 +465,10 @@ class FunctionResult(Result):
             raise
 
     def __repr__(self):
-        return f"{self.action.name}({shorten(self.dates)})"
+        try:
+            return f"{self.action.name}({shorten(self.dates)})"
+        except Exception:
+            return f"{self.__class__.__name__}(unitialised)"
 
     @property
     def function(self):
@@ -519,14 +523,14 @@ class FunctionAction(Action):
 
 class ConcatResult(Result):
     def __init__(self, context, action_path, results):
-        super().__init__(context, dates=None)
+        super().__init__(context, action_path, dates=None)
         self.results = [r for r in results if not r.empty]
 
     @cached_property
     @check_references
     @trace_datasource
     def datasource(self):
-        ds = EmptyResult(self.context, self.dates).datasource
+        ds = EmptyResult(self.context, None, self.dates).datasource
         for i in self.results:
             ds += i.datasource
             assert_is_fieldset(ds), i
@@ -700,7 +704,7 @@ class JoinAction(ActionWithList):
 
 class DateAction(Action):
     def __init__(self, context, action_path, **kwargs):
-        super().__init__(context, **kwargs)
+        super().__init__(context, action_path, **kwargs)
 
         datesconfig = {}
         subconfig = {}
@@ -717,7 +721,7 @@ class DateAction(Action):
     def select(self, dates):
         newdates = self._dates.intersect(dates)
         if newdates.empty():
-            return EmptyResult(self.context, dates=newdates)
+            return EmptyResult(self.context, None, newdates)
         return self.content.select(newdates)
 
     def __repr__(self):
