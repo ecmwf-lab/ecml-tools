@@ -1179,7 +1179,8 @@ def _frequency_to_hours(frequency):
 
 def _as_date(d, dates, last):
     if isinstance(d, datetime.datetime):
-        assert d.minutes == 0 and d.hours == 0 and d.seconds == 0, d
+        if not d.minute == 0 and d.hour == 0 and d.second == 0:
+            return np.datetime64(d)
         d = datetime.date(d.year, d.month, d.day)
 
     if isinstance(d, datetime.date):
@@ -1187,7 +1188,7 @@ def _as_date(d, dates, last):
 
     try:
         d = int(d)
-    except ValueError:
+    except (ValueError, TypeError):
         pass
 
     if isinstance(d, int):
@@ -1255,12 +1256,14 @@ def _as_last_date(d, dates):
     return _as_date(d, dates, last=True)
 
 
-def _concat_or_join(datasets):
+def _concat_or_join(datasets, kwargs):
+    datasets, kwargs = _auto_adjust(datasets, kwargs)
+
     # Study the dates
     ranges = [(d.dates[0].astype(object), d.dates[-1].astype(object)) for d in datasets]
 
     if len(set(ranges)) == 1:
-        return Join(datasets)._overlay()
+        return Join(datasets)._overlay(), kwargs
 
     # Make sure the dates are disjoint
     for i in range(len(ranges)):
@@ -1285,7 +1288,7 @@ def _concat_or_join(datasets):
                 f"{r} and {s} ({datasets[i]} {datasets[i+1]})"
             )
 
-    return Concat(datasets)
+    return Concat(datasets), kwargs
 
 
 def _open(a, zarr_root):
@@ -1310,6 +1313,48 @@ def _open(a, zarr_root):
     raise NotImplementedError()
 
 
+def _auto_adjust(datasets, kwargs):
+    """Adjust the datasets for concatenation or joining based
+    on parameters set to 'matching'"""
+
+    if kwargs.get("ajust") == "matching":
+        kwargs.pop("ajust")
+        for p in ("select", "frequency", "start", "end"):
+            kwargs[p] = "matching"
+
+    adjust = {}
+
+    if kwargs.get("select") == "matching":
+        kwargs.pop("select")
+        variables = None
+        for d in datasets:
+            if variables is None:
+                variables = set(d.variables)
+            else:
+                variables &= set(d.variables)
+        if len(variables) == 0:
+            raise ValueError("No common variables")
+
+        adjust["select"] = variables
+
+    if kwargs.get("frequency") == "matching":
+        kwargs.pop("frequency")
+        adjust["frequency"] = max(d.frequency for d in datasets)
+
+    if kwargs.get("start") == "matching":
+        kwargs.pop("start")
+        adjust["start"] = max(d.dates[0] for d in datasets).astype(object)
+
+    if kwargs.get("end") == "matching":
+        kwargs.pop("end")
+        adjust["end"] = max(d.dates[-1] for d in datasets).astype(object)
+
+    if adjust:
+        datasets = [d._subset(**adjust) for d in datasets]
+
+    return datasets, kwargs
+
+
 def _open_dataset(*args, zarr_root, **kwargs):
     sets = []
     for a in args:
@@ -1318,17 +1363,21 @@ def _open_dataset(*args, zarr_root, **kwargs):
     if "ensemble" in kwargs:
         if "grids" in kwargs:
             raise NotImplementedError("Cannot use both 'ensemble' and 'grids'")
+
         ensemble = kwargs.pop("ensemble")
         axis = kwargs.pop("axis", 2)
         assert len(args) == 0
         assert isinstance(ensemble, (list, tuple))
-        return Ensemble([_open(e, zarr_root) for e in ensemble], axis=axis)._subset(
-            **kwargs
-        )
+
+        datasets = [_open(e, zarr_root) for e in ensemble]
+        datasets, kwargs = _auto_adjust(datasets, kwargs)
+
+        return Ensemble(datasets, axis=axis)._subset(**kwargs)
 
     if "grids" in kwargs:
         if "ensemble" in kwargs:
             raise NotImplementedError("Cannot use both 'ensemble' and 'grids'")
+
         grids = kwargs.pop("grids")
         mode = kwargs.pop("mode", "concatenate")
         axis = kwargs.pop("axis", 3)
@@ -1344,9 +1393,10 @@ def _open_dataset(*args, zarr_root, **kwargs):
                 f"Unknown grids mode: {mode}, values are {list(KLASSES.keys())}"
             )
 
-        return KLASSES[mode]([_open(e, zarr_root) for e in grids], axis=axis)._subset(
-            **kwargs
-        )
+        datasets = [_open(e, zarr_root) for e in grids]
+        datasets, kwargs = _auto_adjust(datasets, kwargs)
+
+        return KLASSES[mode](datasets, axis=axis)._subset(**kwargs)
 
     for name in ("datasets", "dataset"):
         if name in kwargs:
@@ -1359,7 +1409,8 @@ def _open_dataset(*args, zarr_root, **kwargs):
     assert len(sets) > 0, (args, kwargs)
 
     if len(sets) > 1:
-        return _concat_or_join(sets)._subset(**kwargs)
+        dataset, kwargs = _concat_or_join(sets, kwargs)
+        return dataset._subset(**kwargs)
 
     return sets[0]._subset(**kwargs)
 

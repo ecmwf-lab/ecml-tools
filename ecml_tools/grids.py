@@ -155,7 +155,7 @@ def cutout_mask(
 
     zero = np.array([0.0, 0.0, 0.0])
     ok = []
-    for i, (era_point, distance, index) in enumerate(
+    for i, (global_point, distance, index) in enumerate(
         zip(global_points, distances, indices)
     ):
         t = Triangle3D(points[index[0]], points[index[1]], points[index[2]])
@@ -164,7 +164,7 @@ def cutout_mask(
         # from the point to the center of the Earth is not None
         # (the direction of the ray is not important)
         ok.append(
-            (t.intersect(zero, era_point) or t.intersect(era_point, zero))
+            (t.intersect(zero, global_point) or t.intersect(global_point, zero))
             # and (distance >= min_distance)
         )
 
@@ -186,6 +186,58 @@ def cutout_mask(
         plot_mask(plot, mask, lats, lons, global_lats, global_lons)
 
     return mask
+
+
+def thinning_mask(
+    lats,
+    lons,
+    global_lats,
+    global_lons,
+    cropping_distance=2.0,
+):
+    """
+    Return the list of points in [lats, lons] closest to [global_lats, global_lons]
+    """
+
+    assert global_lats.ndim == 1
+    assert global_lons.ndim == 1
+    assert lats.ndim == 1
+    assert lons.ndim == 1
+
+    assert global_lats.shape == global_lons.shape
+    assert lats.shape == lons.shape
+
+    north = np.amax(lats)
+    south = np.amin(lats)
+    east = np.amax(lons)
+    west = np.amin(lons)
+
+    # Reduce the global grid to the area of interest
+
+    mask = cropping_mask(
+        global_lats,
+        global_lons,
+        np.min([90.0, north + cropping_distance]),
+        west - cropping_distance,
+        np.max([-90.0, south - cropping_distance]),
+        east + cropping_distance,
+    )
+
+    # return mask
+    global_lats_masked = global_lats[mask]
+    global_lons_masked = global_lons[mask]
+
+    global_xyx = latlon_to_xyz(global_lats_masked, global_lons_masked)
+    global_points = np.array(global_xyx).transpose()
+
+    xyx = latlon_to_xyz(lats, lons)
+    points = np.array(xyx).transpose()
+
+    # Use a KDTree to find the nearest points
+    kdtree = KDTree(points)
+    _, indices = kdtree.query(global_points, k=1)
+
+    return np.array([i for i in indices])
 
 
 if __name__ == "__main__":
