@@ -37,12 +37,7 @@ def main():
         action="store_true",
         help="Debug mode",
     )
-    parser.add_argument(
-        "--force",
-        "-f",
-        action="store_true",
-        help="Don't ask for confirmation",
-    )
+
     subparsers = parser.add_subparsers(help="commands:", dest="command")
     for name, command in COMMANDS.items():
         command_parser = subparsers.add_parser(name, help=command.__doc__)
