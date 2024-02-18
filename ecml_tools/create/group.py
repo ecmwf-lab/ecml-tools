@@ -30,10 +30,14 @@ class Group(list):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert len(self) >= 1, self
+        assert all(isinstance(_, datetime.datetime) for _ in self), self
 
     def __repr__(self):
-        content = ",".join([str(_.strftime("%Y-%m-%d:%H")) for _ in self])
-        return f"Group({len(self)}, {content})"
+        try:
+            content = ",".join([str(_.strftime("%Y-%m-%d:%H")) for _ in self])
+            return f"Group({len(self)}, {content})"
+        except Exception:
+            return super().__repr__()
 
 
 class BaseGroups:
@@ -85,14 +89,52 @@ class Groups(BaseGroups):
 
         self._config = config
 
+    @property
+    def groups(self):
+        # Return a list where each sublist contain the subgroups
+        # of values according to the grouper_key
+        return [
+            Group(g) for _, g in itertools.groupby(self.values, key=self.grouper_key)
+        ]
+
+    @property
+    def grouper_key(self):
+        group_by = self._config.get("group_by")
+        if isinstance(group_by, int) and group_by > 0:
+            return GroupByDays(group_by)
+        return {
+            None: lambda dt: 0,  # only one group
+            0: lambda dt: 0,  # only one group
+            "monthly": lambda dt: (dt.year, dt.month),
+            "daily": lambda dt: (dt.year, dt.month, dt.day),
+            "weekly": lambda dt: (dt.weekday(),),
+            "MMDD": lambda dt: (dt.month, dt.day),
+        }[group_by]
+
+    @cached_property
+    def n_groups(self):
+        return len(self.groups)
+
 
 class ExpandGroups(Groups):
     def __init__(self, config):
         super().__init__(config)
 
-    @cached_property
-    def values(self):
-        return self._config.get("values")
+        def _(x):
+            if isinstance(x, str):
+                return to_datetime(x)
+            return x
+
+        self.values = [_(x) for x in self._config.get("values")]
+
+
+class SingleGroup(Groups):
+    def __init__(self, group):
+        self.values = group
+
+    @property
+    def groups(self):
+        return [Group(self.values)]
 
 
 class DateStartStopGroups(Groups):
@@ -165,32 +207,6 @@ class DateStartStopGroups(Groups):
         assert isinstance(dates[0], datetime.datetime), dates[0]
         return dates
 
-    @property
-    def grouper_key(self):
-        group_by = self._config.get("group_by")
-        if isinstance(group_by, int) and group_by > 0:
-            return GroupByDays(group_by)
-        return {
-            None: lambda dt: 0,  # only one group
-            0: lambda dt: 0,  # only one group
-            "monthly": lambda dt: (dt.year, dt.month),
-            "daily": lambda dt: (dt.year, dt.month, dt.day),
-            "weekly": lambda dt: (dt.weekday(),),
-            "MMDD": lambda dt: (dt.month, dt.day),
-        }[group_by]
-
-    @property
-    def groups(self):
-        # Return a list where each sublist contain the subgroups
-        # of values according to the grouper_key
-        return [
-            Group(g) for _, g in itertools.groupby(self.values, key=self.grouper_key)
-        ]
-
-    @cached_property
-    def n_groups(self):
-        return len(self.groups)
-
 
 class EmptyGroups(BaseGroups):
     def __init__(self):
@@ -214,19 +230,16 @@ class GroupsIntersection(BaseGroups):
         return list(set(self.a.values) & set(self.b.values))
 
 
-def build_groups(*objs):
-    if len(objs) > 1:
-        raise NotImplementedError()
-    obj = objs[0]
+def build_groups(config):
+    if isinstance(config, Group):
+        return SingleGroup(config)
 
-    if isinstance(obj, (GroupsIntersection, Groups)):
-        return obj
+    assert isinstance(config, dict), config
 
-    if isinstance(obj, list):
-        return ExpandGroups(dict(values=obj))
+    if "values" in config:
+        return ExpandGroups(config)
 
-    if isinstance(obj, dict):
-        if "dates" in obj and len(obj) == 1:
-            return DateStartStopGroups(dict(obj["dates"]))
-        else:
-            return DateStartStopGroups(obj)
+    if "start" in config and "end" in config:
+        return DateStartStopGroups(config)
+
+    raise NotImplementedError(config)

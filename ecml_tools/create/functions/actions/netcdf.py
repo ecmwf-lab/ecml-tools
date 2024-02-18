@@ -24,25 +24,32 @@ def check(what, ds, paths, **kwargs):
 
 
 def load_netcdfs(emoji, what, context, dates, path, *args, **kwargs):
-    paths = Pattern(path, ignore_missing_keys=True).substitute(
-        *args, date=dates, **kwargs
-    )
+    given_paths = path if isinstance(path, list) else [path]
 
+    dates = [d.isoformat() for d in dates]
     ds = load_source("empty")
-    levels = kwargs.get("level", kwargs.get("levelist"))
 
-    for path in paths:
-        context.trace(emoji, what.upper(), path)
-        s = load_source("opendap", path)
-        s = s.sel(
-            valid_datetime=[d.isoformat() for d in dates],
-            param=kwargs["param"],
-            step=kwargs.get("step", 0),
+    for path in given_paths:
+        paths = Pattern(path, ignore_missing_keys=True).substitute(
+            *args, date=dates, **kwargs
         )
-        if levels:
-            s = s.sel(levelist=levels)
-        ds = ds + s
-    check(what, ds, paths, valid_datetime=dates, **kwargs)
+
+        levels = kwargs.get("level", kwargs.get("levelist"))
+
+        for path in paths:
+            context.trace(emoji, what.upper(), path)
+            s = load_source("opendap", path)
+            s = s.sel(
+                valid_datetime=dates,
+                param=kwargs["param"],
+                step=kwargs.get("step", 0),
+            )
+            if levels:
+                s = s.sel(levelist=levels)
+            ds = ds + s
+
+    check(what, ds, given_paths, valid_datetime=dates, **kwargs)
+
     return ds
 
 

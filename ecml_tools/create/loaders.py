@@ -154,7 +154,7 @@ class InitialiseLoader(Loader):
 
         print(self.input)
         all_dates = self.groups.values
-        self.minimal_input = self.input.select(dates=[all_dates[0]])
+        self.minimal_input = self.input.select(dates=dict(values=[all_dates[0]]))
 
         print("✅ GROUPS")
         print(self.groups)
@@ -329,6 +329,7 @@ class ContentLoader(Loader):
             if not filter(igroup):
                 continue
             self.print(f" -> Processing {igroup} total={n_groups}")
+            print("========", group)
             assert isinstance(group[0], datetime.datetime), group
 
             result = self.input.select(dates=group)

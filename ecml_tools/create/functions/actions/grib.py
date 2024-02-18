@@ -25,22 +25,26 @@ def check(ds, paths, **kwargs):
 
 
 def execute(context, dates, path, *args, **kwargs):
-    paths = Pattern(path, ignore_missing_keys=True).substitute(
-        *args, date=dates, **kwargs
-    )
-
-    for name in ("grid", "area", "rotation", "frame", "resol", "bitmap"):
-        if name in kwargs:
-            raise ValueError(f"MARS interpolation parameter '{name}' not supported")
+    given_paths = path if isinstance(path, list) else [path]
 
     ds = load_source("empty")
     dates = [d.isoformat() for d in dates]
 
-    for path in paths:
-        context.trace("📁", "PATH", path)
-        s = load_source("file", path)
-        s = s.sel(valid_datetime=dates, **kwargs)
-        ds = ds + s
+    for path in given_paths:
+        paths = Pattern(path, ignore_missing_keys=True).substitute(
+            *args, date=dates, **kwargs
+        )
 
-    check(ds, paths, valid_datetime=dates, **kwargs)
+        for name in ("grid", "area", "rotation", "frame", "resol", "bitmap"):
+            if name in kwargs:
+                raise ValueError(f"MARS interpolation parameter '{name}' not supported")
+
+        for path in paths:
+            context.trace("📁", "PATH", path)
+            s = load_source("file", path)
+            s = s.sel(valid_datetime=dates, **kwargs)
+            ds = ds + s
+
+    check(ds, given_paths, valid_datetime=dates, **kwargs)
+
     return ds
