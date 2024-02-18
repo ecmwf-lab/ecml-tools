@@ -863,7 +863,7 @@ class Context:
         self.used_references.add(path)
 
     def notify_result(self, path, result):
-        print("🎯", " " * TRACE_INDENT, step(path), "notify result", result)
+        trace("🎯", step(path), "notify result", result)
         assert isinstance(path, (list, tuple)), path
         path = tuple(path)
         if path in self.used_references:
