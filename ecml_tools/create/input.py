@@ -200,6 +200,7 @@ class HasCoordsMixin:
     def dates(self):
         if self._dates is None:
             raise ValueError(f"No dates for {self}")
+        assert hasattr(self._dates, "values"), (type(self), self._dates)
         return self._dates.values
 
     @cached_property
@@ -523,15 +524,15 @@ class FunctionAction(Action):
 
 
 class ConcatResult(Result):
-    def __init__(self, context, action_path, results):
-        super().__init__(context, action_path, dates=None)
+    def __init__(self, context, action_path, dates, results, **kwargs):
+        super().__init__(context, action_path, dates)
         self.results = [r for r in results if not r.empty]
 
     @cached_property
     @check_references
     @trace_datasource
     def datasource(self):
-        ds = EmptyResult(self.context, None, self.dates).datasource
+        ds = EmptyResult(self.context, self.action_path, self._dates).datasource
         for i in self.results:
             ds += i.datasource
             assert_is_fieldset(ds), i
@@ -689,7 +690,12 @@ class FunctionStepAction(StepAction):
 class ConcatAction(ActionWithList):
     @trace_select
     def select(self, dates):
-        return ConcatResult(self.context, [a.select(dates) for a in self.actions])
+        return ConcatResult(
+            self.context,
+            self.action_path,
+            dates,
+            [a.select(dates) for a in self.actions],
+        )
 
 
 class JoinAction(ActionWithList):
@@ -715,18 +721,18 @@ class DateAction(Action):
             else:
                 subconfig[k] = v
 
-        self._dates = build_groups(datesconfig)
+        self.filtering_dates = build_groups(datesconfig)
         self.content = action_factory(subconfig, context, self.action_path + ["dates"])
 
     @trace_select
     def select(self, dates):
-        newdates = self._dates.intersect(dates)
+        newdates = self.filtering_dates.intersect(dates)
         if newdates.empty():
-            return EmptyResult(self.context, None, newdates)
+            return EmptyResult(self.context, self.action_path, newdates)
         return self.content.select(newdates)
 
     def __repr__(self):
-        return super().__repr__(f"{self._dates}\n{self.content}")
+        return super().__repr__(f"{self.filtering_dates}\n{self.content}")
 
 
 def merge_dicts(a, b):

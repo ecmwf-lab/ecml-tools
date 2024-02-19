@@ -576,6 +576,7 @@ class SizeLoader(Loader):
 
         self.update_metadata(total_size=size, total_number_of_files=n)
 
+
 class CleanupLoader(Loader):
     def run(self):
         self.statistics_registry.delete()
