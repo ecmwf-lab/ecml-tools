@@ -99,6 +99,17 @@ class Creator:
         loader = SizeLoader.from_dataset(path=self.path, print=self.print)
         loader.add_total_size()
 
+    def cleanup(self):
+        from .loaders import CleanupLoader
+
+        loader = CleanupLoader.from_dataset(
+            path=self.path,
+            print=self.print,
+            statistics_tmp=self.statistics_tmp,
+        )
+        loader.run()
+
+
     def patch(self, **kwargs):
         from .patch import apply_patch
 
@@ -112,6 +123,7 @@ class Creator:
         self.init()
         self.load()
         self.finalise()
+        self.cleanup()
 
     def _cache_context(self):
         from .utils import cache_context

@@ -575,3 +575,8 @@ class SizeLoader(Loader):
         print(f"Total number of files: {n}")
 
         self.update_metadata(total_size=size, total_number_of_files=n)
+
+class CleanupLoader(Loader):
+    def run(self):
+        self.statistics_registry.delete()
+        self.registry.clean()

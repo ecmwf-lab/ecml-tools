@@ -43,7 +43,7 @@ input:
         # accumulation_period: 6h
 
     - constants:
-        <<: *mars_request
+        template: ${input.join.0.mars}
         param:
           - cos_latitude
 
