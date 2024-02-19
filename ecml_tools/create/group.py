@@ -191,7 +191,7 @@ class DateStartStopGroups(Groups):
 
     @cached_property
     def step(self):
-        _frequency_str = self._config.get("frequency", "24h")
+        _frequency_str = self._config.get("frequency", "1h")
         _freq = self._extract_frequency(_frequency_str)
         self._validate_frequency(_freq, _frequency_str)
         return datetime.timedelta(hours=_freq)

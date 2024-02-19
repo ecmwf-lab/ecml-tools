@@ -18,12 +18,12 @@ class Substitution:
 
 
 class Reference(Substitution):
-    def __init__(self, context, path):
+    def __init__(self, context, action_path):
         self.context = context
-        self.path = path
+        self.action_path = action_path
 
     def resolve(self, context):
-        return context.get_result(self.path)
+        return context.get_result(self.action_path)
 
 
 def resolve(context, x):
