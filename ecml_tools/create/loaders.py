@@ -14,10 +14,10 @@ import numpy as np
 import zarr
 
 from ecml_tools.data import open_dataset
+from ecml_tools.utils.dates.groups import Groups
 
 from .check import DatasetName
 from .config import build_output, loader_config
-from .group import build_groups
 from .input import build_input
 from .statistics import (
     StatisticsRegistry,
@@ -145,16 +145,16 @@ class InitialiseLoader(Loader):
 
         self.statistics_registry.delete()
 
-        self.groups = build_groups(*self.main_config.loop)
+        print(self.main_config.dates)
+        self.groups = Groups(**self.main_config.dates)
         print("✅ GROUPS")
-        # print(self.groups, self.main_config.loop)
 
         self.output = build_output(self.main_config.output, parent=self)
         self.input = self.build_input()
 
         print(self.input)
-        all_dates = self.groups.values
-        self.minimal_input = self.input.select(dates=dict(values=[all_dates[0]]))
+        all_dates = self.groups.dates
+        self.minimal_input = self.input.select([all_dates[0]])
 
         print("✅ GROUPS")
         print(self.groups)
@@ -168,26 +168,18 @@ class InitialiseLoader(Loader):
         print(self.main_config)
         print("-------------------------")
 
-        dates = self.groups.values
-        if self.groups.frequency != self.groups.frequency:
-            raise ValueError(
-                f"Frequency mismatch: {self.groups.frequency} != {self.groups.frequency}"
-            )
-        if self.groups.values[0] != self.groups.values[0]:
-            raise ValueError(
-                f"First date mismatch: {self.groups.values[0]} != {self.groups.values[0]}"
-            )
+        dates = self.groups.dates
         print("-------------------------")
 
-        frequency = self.groups.frequency
+        frequency = dates.frequency
         assert isinstance(frequency, int), frequency
 
         self.print(f"Found {len(dates)} datetimes.")
         print(
-            f"Dates: Found {len(dates)} datetimes, in {self.groups.n_groups} groups: ",
+            f"Dates: Found {len(dates)} datetimes, in {len(self.groups)} groups: ",
             end="",
         )
-        lengths = [len(g) for g in self.groups.groups]
+        lengths = [len(g) for g in self.groups]
         self.print(
             f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}."
         )
@@ -306,7 +298,7 @@ class ContentLoader(Loader):
         super().__init__(**kwargs)
         self.main_config = loader_config(config)
 
-        self.groups = build_groups(*self.main_config.loop)
+        self.groups = Groups(**self.main_config.dates)
         self.output = build_output(self.main_config.output, parent=self)
         self.input = self.build_input()
         self.read_dataset_metadata()
@@ -320,15 +312,16 @@ class ContentLoader(Loader):
         )
 
         total = len(self.registry.get_flags())
-        n_groups = len(self.groups.groups)
         filter = CubesFilter(parts=parts, total=total)
-        for igroup, group in enumerate(self.groups.groups):
+        for igroup, group in enumerate(self.groups):
             if self.registry.get_flag(igroup):
-                LOG.info(f" -> Skipping {igroup} total={n_groups} (already done)")
+                LOG.info(
+                    f" -> Skipping {igroup} total={len(self.groups)} (already done)"
+                )
                 continue
             if not filter(igroup):
                 continue
-            self.print(f" -> Processing {igroup} total={n_groups}")
+            self.print(f" -> Processing {igroup} total={len(self.groups)}")
             print("========", group)
             assert isinstance(group[0], datetime.datetime), group
 

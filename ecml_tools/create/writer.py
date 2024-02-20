@@ -174,13 +174,13 @@ class DataWriter:
         self.print = parent.print
 
         self.append_axis = parent.output.append_axis
-        self.n_cubes = parent.groups.n_groups
+        self.n_cubes = len(parent.groups)
 
     def write(self, result, igroup, dates):
         cube = result.get_cube()
         assert cube.extended_user_shape[0] == len(dates), (
             cube.extended_user_shape[0],
-            dates,
+            len(dates),
         )
         dates_in_data = cube.user_coords["valid_datetime"]
         dates_in_data = [datetime.datetime.fromisoformat(_) for _ in dates_in_data]

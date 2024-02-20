@@ -8,12 +8,11 @@ remapping: &remapping
   #param_level: '{param}_{levtype}{levelist}'
   param_level: '{param}_{levelist}'
 
-loop:
-- dates:
-    start: 2020-12-30 00:00:00
-    end: 2021-01-03 12:00:00
-    frequency: 12h
-    group_by: monthly
+dates:
+  start: 2020-12-30 00:00:00
+  end: 2021-01-03 12:00:00
+  frequency: 12h
+  group_by: monthly
 
 input:
   join:

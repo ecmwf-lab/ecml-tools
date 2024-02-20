@@ -19,10 +19,9 @@ common:
     end: 2021-01-03 12:00:00
     frequency: 12h
 
-loop:
-- dates:
-    <<: *dates_anchor
-    group_by: monthly
+dates:
+  <<: *dates_anchor
+  group_by: monthly
 
 input:
   dates:

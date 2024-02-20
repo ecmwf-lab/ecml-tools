@@ -6,7 +6,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-import datetime
 import importlib
 import logging
 import time
@@ -18,7 +17,8 @@ import numpy as np
 from climetlab.core.order import build_remapping
 from climetlab.indexing.fieldset import FieldSet
 
-from .group import build_groups
+from ecml_tools.utils.dates import Dates
+
 from .template import (
     Context,
     notify_result,
@@ -213,17 +213,6 @@ class HasCoordsMixin:
         return self._coords.grid_points
 
     @cached_property
-    def dates(self):
-        if self._dates is None:
-            raise ValueError(f"No dates for {self}")
-        assert hasattr(self._dates, "values"), (type(self), self._dates)
-        return self._dates.values
-
-    @cached_property
-    def frequency(self):
-        return self._dates.frequency
-
-    @cached_property
     def shape(self):
         return [
             len(self.dates),
@@ -305,7 +294,7 @@ class Result(HasCoordsMixin):
 
         self.context = context
         self._coords = Coords(self)
-        self._dates = dates
+        self.dates = dates
         self.action_path = action_path
 
     @property
@@ -344,7 +333,7 @@ class Result(HasCoordsMixin):
         more += ",".join([f"{k}={v}"[:5000] for k, v in kwargs.items()])
 
         dates = " no-dates"
-        if self._dates is not None:
+        if self.dates is not None:
             dates = f" {len(self.dates)} dates"
             dates += " ("
             dates += "/".join(d.strftime("%Y-%m-%d:%H") for d in self.dates)
@@ -433,7 +422,7 @@ class JoinResult(Result):
     @notify_result
     @trace_datasource
     def datasource(self):
-        ds = EmptyResult(self.context, self.action_path, self._dates).datasource
+        ds = EmptyResult(self.context, self.action_path, self.dates).datasource
         for i in self.results:
             ds += i.datasource
         return ds
@@ -479,7 +468,7 @@ class ConcatResult(Result):
     @notify_result
     @trace_datasource
     def datasource(self):
-        ds = EmptyResult(self.context, self.action_path, self._dates).datasource
+        ds = EmptyResult(self.context, self.action_path, self.dates).datasource
         for i in self.results:
             ds += i.datasource
         return ds
@@ -496,22 +485,6 @@ class ConcatResult(Result):
             assert variables == f.variables, (variables, f.variables)
         assert variables is not None, self.results
         return variables
-
-    @property
-    def dates(self):
-        """Merge the dates of all the results objects."""
-        dates = []
-        for i in self.results:
-            d = i.dates
-            if d is None:
-                continue
-            dates += d
-        assert isinstance(dates[0], datetime.datetime), dates[0]
-        return sorted(dates)
-
-    @property
-    def frequency(self):
-        return build_groups(self.dates).frequency
 
     def __repr__(self):
         content = "\n".join([str(i) for i in self.results])
@@ -655,24 +628,17 @@ class JoinAction(ActionWithList):
 
 
 class DateAction(Action):
-    def __init__(self, context, action_path, **kwargs):
+    def __init__(self, context, action_path, start, end, frequency, **kwargs):
         super().__init__(context, action_path, **kwargs)
-
-        datesconfig = {}
-        subconfig = {}
-        for k, v in deepcopy(kwargs).items():
-            if k in ["start", "end", "frequency"]:
-                datesconfig[k] = v
-            else:
-                subconfig[k] = v
-
-        self.filtering_dates = build_groups(datesconfig)
-        self.content = action_factory(subconfig, context, self.action_path + ["dates"])
+        self.filtering_dates = Dates.from_config(
+            start=start, end=end, frequency=frequency
+        )
+        self.content = action_factory(kwargs, context, self.action_path + ["dates"])
 
     @trace_select
     def select(self, dates):
-        newdates = self.filtering_dates.intersect(dates)
-        if newdates.empty():
+        newdates = sorted(set(dates) & set(self.filtering_dates))
+        if not newdates:
             return EmptyResult(self.context, self.action_path, newdates)
         return self.content.select(newdates)
 
@@ -680,38 +646,10 @@ class DateAction(Action):
         return super().__repr__(f"{self.filtering_dates}\n{self.content}")
 
 
-def merge_dicts(a, b):
-    if isinstance(a, dict):
-        assert isinstance(b, dict), (a, b)
-        a = deepcopy(a)
-        for k, v in b.items():
-            if k not in a:
-                a[k] = v
-            else:
-                a[k] = merge_dicts(a[k], v)
-        return a
-
-    return deepcopy(b)
-
-
 def action_factory(config, context, action_path):
     assert isinstance(context, Context), (type, context)
     if not isinstance(config, dict):
         raise ValueError(f"Invalid input config {config}")
-
-    # if len(config) == 2 and "label" in config:
-    #     config = deepcopy(config)
-    #     label = config.pop("label")
-    #     return action_factory(
-    #         dict(
-    #             label=dict(
-    #                 name=label,
-    #                 **config,
-    #             )
-    #         ),
-    #         context,
-    #     )
-
     if len(config) != 1:
         raise ValueError(
             f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}"
@@ -776,6 +714,10 @@ def step_factory(config, context, action_path, previous_step):
 
 
 class FunctionContext:
+    """A FunctionContext is passed to all functions, it will be used to
+    pass information to the functions from the other actions and steps and results.
+    """
+
     def __init__(self, owner):
         self.owner = owner
 
@@ -800,7 +742,6 @@ class InputBuilder:
     @trace_select
     def select(self, dates):
         """This changes the context."""
-        dates = build_groups(dates)
         context = ActionContext(**self.kwargs)
         action = action_factory(self.config, context, self.action_path)
         return action.select(dates)

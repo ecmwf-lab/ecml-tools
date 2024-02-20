@@ -150,23 +150,18 @@ class LoadersConfig(Config):
                 f"Do not use 'loops'. Use dates instead. {list(self.keys())}"
             )
         if "loop" in self:
-            print(f"Do not use 'loop'. Use 'dates' instead. {list(self.keys())}")
-            self.dates = self.pop("loop")
+            raise ValueError(
+                f"Do not use 'loop'. Use dates instead. {list(self.keys())}"
+            )
 
-        if isinstance(self.dates, dict):
-            self.dates = [self.dates]
-
-        self.loop = self.pop("dates")
+        if not isinstance(self.dates, dict):
+            raise ValueError(f"Dates must be a dict. Got {self.dates}")
 
         self.normalise()
 
     def normalise(self):
         if isinstance(self.input, (tuple, list)):
             self.input = dict(concat=self.input)
-
-        if not isinstance(self.loop, list):
-            assert isinstance(self.loop, dict), self.loop
-            self.loop = [dict(loop_a=self.loop)]
 
         if "order_by" in self.output:
             self.output.order_by = normalize_order_by(self.output.order_by)
