@@ -9,8 +9,107 @@
 
 import logging
 import re
+import textwrap
+from functools import wraps
 
 LOG = logging.getLogger(__name__)
+
+TRACE_INDENT = 0
+
+
+def step(action_path):
+    return f"[{'.'.join(action_path)}]"
+
+
+def trace(emoji, *args):
+    print(emoji, " " * TRACE_INDENT, *args)
+
+
+def trace_datasource(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        global TRACE_INDENT
+        trace(
+            "🌍",
+            "=>",
+            step(self.action_path),
+            self._trace_datasource(*args, **kwargs),
+        )
+        TRACE_INDENT += 1
+        result = method(self, *args, **kwargs)
+        TRACE_INDENT -= 1
+        trace(
+            "🍎",
+            "<=",
+            step(self.action_path),
+            textwrap.shorten(repr(result), 256),
+        )
+        return result
+
+    return wrapper
+
+
+def trace_select(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        global TRACE_INDENT
+        trace(
+            "👓",
+            "=>",
+            ".".join(self.action_path),
+            self._trace_select(*args, **kwargs),
+        )
+        TRACE_INDENT += 1
+        result = method(self, *args, **kwargs)
+        TRACE_INDENT -= 1
+        trace(
+            "🍍",
+            "<=",
+            ".".join(self.action_path),
+            textwrap.shorten(repr(result), 256),
+        )
+        return result
+
+    return wrapper
+
+
+def notify_result(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+        self.context.notify_result(self.action_path, result)
+        return result
+
+    return wrapper
+
+
+class Context:
+    def __init__(self):
+        # used_references is a set of reference paths that will be needed
+        self.used_references = set()
+        # results is a dictionary of reference path -> obj
+        self.results = {}
+
+    def will_need_reference(self, key):
+        assert isinstance(key, (list, tuple)), key
+        key = tuple(key)
+        self.used_references.add(key)
+
+    def notify_result(self, key, result):
+        trace("🎯", step(key), "notify result", result)
+        assert isinstance(key, (list, tuple)), key
+        key = tuple(key)
+        if key in self.used_references:
+            if key in self.results:
+                raise ValueError(f"Duplicate result {key}")
+            self.results[key] = result
+
+    def get_result(self, key):
+        assert isinstance(key, (list, tuple)), key
+        key = tuple(key)
+        if key in self.results:
+            return self.results[key]
+        raise ValueError(f"Cannot find result {key}")
 
 
 class Substitution:

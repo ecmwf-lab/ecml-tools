@@ -9,7 +9,6 @@
 import datetime
 import importlib
 import logging
-import textwrap
 import time
 from collections import defaultdict
 from copy import deepcopy
@@ -17,9 +16,18 @@ from functools import cached_property, wraps
 
 import numpy as np
 from climetlab.core.order import build_remapping
+from climetlab.indexing.fieldset import FieldSet
 
 from .group import build_groups
-from .template import resolve, substitute
+from .template import (
+    Context,
+    notify_result,
+    resolve,
+    substitute,
+    trace,
+    trace_datasource,
+    trace_select,
+)
 from .utils import seconds
 
 LOG = logging.getLogger(__name__)
@@ -40,13 +48,21 @@ def is_function(name, kind):
         return False
 
 
-def assert_is_fieldset(obj):
-    from climetlab.indexing.fieldset import FieldSet
+def assert_fieldset(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+        assert isinstance(result, FieldSet), type(result)
+        return result
 
+    return wrapper
+
+
+def assert_is_fieldset(obj):
     assert isinstance(obj, FieldSet), type(obj)
 
 
-def _datasource_request(data):
+def _data_request(data):
     date = None
     params_levels = defaultdict(set)
     params_steps = defaultdict(set)
@@ -239,7 +255,7 @@ class Action:
             args = kwargs.pop("args")
             kwargs = kwargs.pop("kwargs")
 
-        assert isinstance(context, Context), type(context)
+        assert isinstance(context, ActionContext), type(context)
         self.context = context
         self.kwargs = kwargs
         self.args = args
@@ -280,88 +296,17 @@ def shorten(dates):
     return dates
 
 
-def check_references(method):
-    @wraps(method)
-    def wrapper(self, *args, **kwargs):
-        result = method(self, *args, **kwargs)
-        self.context.notify_result(self.action_path, result)
-        return result
-
-    return wrapper
-
-
-TRACE_INDENT = 0
-
-
-def step(action_path):
-    return f"[{'.'.join(action_path)}]"
-
-
-def trace(emoji, *args):
-    print(emoji, " " * TRACE_INDENT, *args)
-
-
-def trace_datasource(method):
-    @wraps(method)
-    def wrapper(self, *args, **kwargs):
-        global TRACE_INDENT
-        trace(
-            "🌍",
-            "=>",
-            step(self.action_path),
-            self._trace_datasource(*args, **kwargs),
-        )
-        TRACE_INDENT += 1
-        result = method(self, *args, **kwargs)
-        TRACE_INDENT -= 1
-        trace(
-            "🍎",
-            "<=",
-            step(self.action_path),
-            textwrap.shorten(repr(result), 256),
-        )
-        return result
-
-    return wrapper
-
-
-def trace_select(method):
-    @wraps(method)
-    def wrapper(self, *args, **kwargs):
-        global TRACE_INDENT
-        trace(
-            "👓",
-            "=>",
-            ".".join(self.action_path),
-            self._trace_select(*args, **kwargs),
-        )
-        TRACE_INDENT += 1
-        result = method(self, *args, **kwargs)
-        TRACE_INDENT -= 1
-        trace(
-            "🍍",
-            "<=",
-            ".".join(self.action_path),
-            textwrap.shorten(repr(result), 256),
-        )
-        return result
-
-    return wrapper
-
-
 class Result(HasCoordsMixin):
     empty = False
 
     def __init__(self, context, action_path, dates):
-        assert isinstance(context, Context), type(context)
+        assert isinstance(context, ActionContext), type(context)
         assert isinstance(action_path, list), action_path
 
         self.context = context
         self._coords = Coords(self)
         self._dates = dates
         self.action_path = action_path
-
-        context.register_reference(action_path, self)
 
     @property
     @trace_datasource
@@ -371,12 +316,11 @@ class Result(HasCoordsMixin):
     @property
     def data_request(self):
         """Returns a dictionary with the parameters needed to retrieve the data."""
-        return _datasource_request(self.datasource)
+        return _data_request(self.datasource)
 
     def get_cube(self):
         trace("🧊", f"getting cube from {self.__class__.__name__}")
         ds = self.datasource
-        assert_is_fieldset(ds)
 
         remapping = self.context.remapping
         order_by = self.context.order_by
@@ -428,6 +372,7 @@ class EmptyResult(Result):
         super().__init__(context, action_path + ["empty"], dates)
 
     @cached_property
+    @assert_fieldset
     @trace_datasource
     def datasource(self):
         from climetlab import load_source
@@ -453,7 +398,8 @@ class FunctionResult(Result):
         return f"{self.action.name}({shorten(self.dates)})"
 
     @cached_property
-    @check_references
+    @assert_fieldset
+    @notify_result
     @trace_datasource
     def datasource(self):
         args, kwargs = resolve(self.context, (self.args, self.kwargs))
@@ -483,13 +429,13 @@ class JoinResult(Result):
         self.results = [r for r in results if not r.empty]
 
     @cached_property
-    @check_references
+    @assert_fieldset
+    @notify_result
     @trace_datasource
     def datasource(self):
         ds = EmptyResult(self.context, self.action_path, self._dates).datasource
         for i in self.results:
             ds += i.datasource
-            assert_is_fieldset(ds), i
         return ds
 
     def __repr__(self):
@@ -529,13 +475,13 @@ class ConcatResult(Result):
         self.results = [r for r in results if not r.empty]
 
     @cached_property
-    @check_references
+    @assert_fieldset
+    @notify_result
     @trace_datasource
     def datasource(self):
         ds = EmptyResult(self.context, self.action_path, self._dates).datasource
         for i in self.results:
             ds += i.datasource
-            assert_is_fieldset(ds), i
         return ds
 
     @property
@@ -614,11 +560,10 @@ class StepResult(Result):
         self.action = action
 
     @property
-    @check_references
+    @notify_result
     @trace_datasource
     def datasource(self):
         raise NotImplementedError(f"Not implemented in {self.__class__.__name__}")
-        # return self.upstream_result.datasource
 
 
 class StepAction(Action):
@@ -644,7 +589,8 @@ class StepAction(Action):
 
 class StepFunctionResult(StepResult):
     @cached_property
-    @check_references
+    @assert_fieldset
+    @notify_result
     @trace_datasource
     def datasource(self):
         try:
@@ -664,13 +610,12 @@ class StepFunctionResult(StepResult):
 
 class FilterStepResult(StepResult):
     @property
-    @check_references
+    @notify_result
+    @assert_fieldset
     @trace_datasource
     def datasource(self):
         ds = self.content.datasource
-        assert_is_fieldset(ds)
         ds = ds.sel(**self.action.kwargs)
-        assert_is_fieldset(ds)
         return ds
 
 
@@ -838,58 +783,12 @@ class FunctionContext:
         trace(emoji, *args)
 
 
-class Context:
+class ActionContext(Context):
     def __init__(self, /, order_by, flatten_grid, remapping):
+        super().__init__()
         self.order_by = order_by
         self.flatten_grid = flatten_grid
         self.remapping = build_remapping(remapping)
-
-        self.references = {}
-        self.used_references = set()
-        self.results = {}
-
-    def register_reference(self, action_path, obj):
-        assert isinstance(action_path, (list, tuple)), action_path
-        action_path = tuple(action_path)
-        trace("📚", step(action_path), "register", type(obj))
-        if action_path in self.references:
-            raise ValueError(
-                f"Duplicate reference [{action_path}] {obj} {self.references[action_path]}"
-            )
-        self.references[action_path] = obj
-
-    def find_reference(self, action_path):
-        assert isinstance(action_path, (list, tuple)), action_path
-        action_path = tuple(action_path)
-        if action_path in self.references:
-            return self.references[action_path]
-        # It can happend that the required action_path is not yet registered,
-        # even if it is defined in the config.
-        # Handling this case implies implementing a lazy inheritance resolution
-        # and would complexify the code. This is not implemented.
-
-        raise ValueError(f"Cannot find reference {action_path}")
-
-    def will_need_reference(self, action_path):
-        assert isinstance(action_path, (list, tuple)), action_path
-        action_path = tuple(action_path)
-        self.used_references.add(action_path)
-
-    def notify_result(self, action_path, result):
-        trace("🎯", step(action_path), "notify result", result)
-        assert isinstance(action_path, (list, tuple)), action_path
-        action_path = tuple(action_path)
-        if action_path in self.used_references:
-            if action_path in self.results:
-                raise ValueError(f"Duplicate result {action_path}")
-            self.results[action_path] = result
-
-    def get_result(self, action_path):
-        assert isinstance(action_path, (list, tuple)), action_path
-        action_path = tuple(action_path)
-        if action_path in self.results:
-            return self.results[action_path]
-        raise ValueError(f"Cannot find result {action_path}")
 
 
 class InputBuilder:
@@ -902,12 +801,12 @@ class InputBuilder:
     def select(self, dates):
         """This changes the context."""
         dates = build_groups(dates)
-        context = Context(**self.kwargs)
+        context = ActionContext(**self.kwargs)
         action = action_factory(self.config, context, self.action_path)
         return action.select(dates)
 
     def __repr__(self):
-        context = Context(**self.kwargs)
+        context = ActionContext(**self.kwargs)
         a = action_factory(self.config, context, self.action_path)
         return repr(a)
 
