@@ -1335,7 +1335,7 @@ def _auto_adjust(datasets, kwargs):
         if len(variables) == 0:
             raise ValueError("No common variables")
 
-        adjust["select"] = variables
+        adjust["select"] = sorted(variables)
 
     if kwargs.get("frequency") == "matching":
         kwargs.pop("frequency")
