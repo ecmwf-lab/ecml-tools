@@ -19,10 +19,13 @@ class Scan(Command):
         command_parser.add_argument(
             "--extension", default=".grib", help="Extension of the files to scan"
         )
+        command_parser.add_argument(
+            "--magic", help="File 'magic' to use to identify the file type. Overrides --extension"
+        )
         command_parser.add_argument("paths", nargs="+", help="Paths to scan")
 
     def run(self, args):
-        what = {
+        EXTENSIONS = {
             ".grib": "grib",
             ".grib1": "grib",
             ".grib2": "grib",
@@ -30,24 +33,41 @@ class Scan(Command):
             ".grb": "grib",
             ".nc": "netcdf",
             ".nc4": "netcdf",
-        }[args.extension]
+        }
+
+        MAGICS = {'GRIB': 'grib',}
+
+        if args.magic:
+            what = MAGICS[args.magic]
+            args.magic = args.magic.encode()
+        else:
+            what = EXTENSIONS[args.extension]
+
+        def match(path):
+            if args.magic:
+                with open(path, "rb") as f:
+                    return args.magic == f.read(len(args.magic))
+            else:
+                return path.endswith(args.extension)
 
         paths = []
         for path in args.paths:
             if os.path.isfile(path):
-                if path.endswith(args.extension):
+
                     paths.append(path)
             else:
-                for root, dirs, files in os.walk(path):
+                for root, _, files in os.walk(path):
                     for file in files:
-                        if file.endswith(args.extension):
-                            paths.append(os.path.join(root, file))
+                        full = os.path.join(root, file)
+                        paths.append(full)
 
         dates = set()
         gribs = defaultdict(set)
         unique = defaultdict(lambda: defaultdict(set))
 
         for path in tqdm.tqdm(paths, leave=False):
+            if not match(path):
+                continue
             for field in tqdm.tqdm(cml.load_source("file", path), leave=False):
                 dates.add(field.valid_datetime())
                 mars = field.as_mars()
@@ -86,7 +106,8 @@ class Scan(Command):
 
             config["input"]["join"].append(request)
 
-        print(yaml.dump(config, sort_keys=False))
+        with open("scan-config.yaml", "w") as f:
+            print(yaml.dump(config, sort_keys=False), file=f)
 
 
 command = Scan
