@@ -54,8 +54,6 @@ class Dates:
     @property
     def summary(self):
         return f"📅 {self.values[0]} ... {self.values[-1]}"
-    
-
 
 
 class ValuesDates(Dates):

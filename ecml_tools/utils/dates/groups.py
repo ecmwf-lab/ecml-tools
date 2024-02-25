@@ -6,9 +6,7 @@
 # nor does it submit to any jurisdiction.
 
 
-import datetime
 import itertools
-from collections import defaultdict
 
 from ecml_tools.utils.dates import Dates
 

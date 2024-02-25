@@ -82,7 +82,14 @@ class NewDataField:
         return getattr(self.field, name)
 
 
-def execute(context, input, x_wind, y_wind, projection="epsg:4326"):
+def execute(
+    context,
+    input,
+    x_wind,
+    y_wind,
+    source_projection=None,
+    target_projection="+proj=longlat",
+):
     from pyproj import CRS
 
     result = FieldArray()
@@ -112,7 +119,7 @@ def execute(context, input, x_wind, y_wind, projection="epsg:4326"):
         x = pairs[x_wind]
         y = pairs[y_wind]
 
-        assert x.projection == y.projection
+        assert x.grid_mapping == y.grid_mapping
 
         lats, lons = x.grid_points()
         x_new, y_new = rotate_winds(
@@ -120,8 +127,10 @@ def execute(context, input, x_wind, y_wind, projection="epsg:4326"):
             lons,
             x.to_numpy(reshape=False),
             y.to_numpy(reshape=False),
-            CRS.from_cf(x.projection),
-            CRS.from_string(projection),
+            source_projection
+            if source_projection is not None
+            else CRS.from_cf(x.grid_mapping),
+            target_projection,
         )
 
         result.append(NewDataField(x, x_new))
