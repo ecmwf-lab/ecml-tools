@@ -44,6 +44,9 @@ class DatasetName:
     ):
         self.name = name
         self.parsed = self._parse(name)
+        print('---------------')
+        print(self.parsed)
+        print('---------------')
 
         self.messages = []
 
@@ -77,7 +80,7 @@ class DatasetName:
             raise ValueError(self.error_message)
 
     def _parse(self, name):
-        pattern = r"^(\w+)-([\w-]+)-(\w+)-(\w+)-([\d\-]+)-(\d+h)-v(\d+)-?(.*)$"
+        pattern = r"^(\w+)-([\w-]+)-(\w+)-(\w+)-(\d\d\d\d)-(\d\d\d\d)-(\d+h)-v(\d+)-?(.*)$"
         match = re.match(pattern, name)
 
         assert match, (name, pattern)
@@ -89,20 +92,14 @@ class DatasetName:
                 "labelling",
                 "source",
                 "resolution",
-                "period",
+                "start_date",
+                "end_date",
                 "frequency",
                 "version",
                 "additional",
             ]
             parsed = {k: v for k, v in zip(keys, match.groups())}
 
-            period = parsed["period"].split("-")
-            assert len(period) in (1, 2), (name, period)
-            parsed["start_date"] = period[0]
-            if len(period) == 1:
-                parsed["end_date"] = period[0]
-            if len(period) == 2:
-                parsed["end_date"] = period[1]
 
         return parsed
 
