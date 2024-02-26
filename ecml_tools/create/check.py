@@ -77,17 +77,16 @@ class DatasetName:
             raise ValueError(self.error_message)
 
     def _parse(self, name):
-        pattern = r"^(\w+)-(\w+)-(\w+)-(\w+)-(\w\w\w\w)-(\w+)-(\w+)-([\d\-]+)-(\d+h)-v(\d+)-?(.*)$"
+        pattern = r"^(\w+)-([\w-]+)-(\w+)-(\w+)-([\d\-]+)-(\d+h)-v(\d+)-?(.*)$"
         match = re.match(pattern, name)
+
+        assert match, (name, pattern)
 
         parsed = {}
         if match:
             keys = [
-                "use_case",
-                "class_",
-                "type_",
-                "stream",
-                "expver",
+                "purpose",
+                "labelling",
                 "source",
                 "resolution",
                 "period",
