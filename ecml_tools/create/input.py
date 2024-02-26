@@ -6,6 +6,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
+import datetime
 import importlib
 import logging
 import time
@@ -33,6 +34,38 @@ from .utils import seconds
 LOG = logging.getLogger(__name__)
 
 
+def parse_function_name(name):
+    if "-" in name:
+        name, delta = name.split("-")
+        sign = -1
+
+    elif "+" in name:
+        name, delta = name.split("+")
+        sign = 1
+
+    else:
+        return name, None
+
+    assert delta[-1] == "h", (name, delta)
+    delta = sign * int(delta[:-1])
+    return name, delta
+
+
+def time_delta_to_string(delta):
+    assert isinstance(delta, datetime.timedelta), delta
+    seconds = delta.total_seconds()
+    hours = int(seconds // 3600)
+    assert hours * 3600 == seconds, delta
+    hours = abs(hours)
+
+    if seconds > 0:
+        return f"plus_{hours}h"
+    if seconds == 0:
+        return ""
+    if seconds < 0:
+        return f"minus_{hours}h"
+
+
 def import_function(name, kind):
     return importlib.import_module(
         f"..functions.{kind}.{name}",
@@ -41,6 +74,7 @@ def import_function(name, kind):
 
 
 def is_function(name, kind):
+    name, delta = parse_function_name(name)
     try:
         import_function(name, kind)
         return True
@@ -432,6 +466,78 @@ class JoinResult(Result):
         return super().__repr__(content)
 
 
+class DateShiftAction(Action):
+    def __init__(self, context, action_path, delta, **kwargs):
+        super().__init__(context, action_path, **kwargs)
+
+        if isinstance(delta, str):
+            if delta[0] == "-":
+                delta, sign = int(delta[1:]), -1
+            else:
+                delta, sign = int(delta), 1
+            delta = datetime.timedelta(hours=sign * delta)
+        assert isinstance(delta, int), delta
+        delta = datetime.timedelta(hours=delta)
+        self.delta = delta
+
+        self.content = action_factory(kwargs, context, self.action_path + ["shift"])
+
+    @trace_select
+    def select(self, dates):
+        shifted_dates = [d + self.delta for d in dates]
+        result = self.content.select(shifted_dates)
+        return UnShiftResult(self.context, self.action_path, dates, result, action=self)
+
+    def __repr__(self):
+        return super().__repr__(f"{self.delta}\n{self.content}")
+
+
+class UnShiftResult(Result):
+    def __init__(self, context, action_path, dates, result, action):
+        super().__init__(context, action_path, dates)
+        # dates are the actual requested dates
+        # result does not have the same dates
+        self.action = action
+        self.result = result
+
+    def _trace_datasource(self, *args, **kwargs):
+        return f"{self.action.delta}({shorten(self.dates)})"
+
+    @cached_property
+    @assert_fieldset
+    @notify_result
+    @trace_datasource
+    def datasource(self):
+        from climetlab.indexing.fieldset import FieldArray
+
+        class DateShiftedField:
+            def __init__(self, field, delta):
+                self.field = field
+                self.delta = delta
+
+            def metadata(self, key):
+                value = self.field.metadata(key)
+                if key == "param":
+                    return value + "_" + time_delta_to_string(self.delta)
+                if key == "valid_datetime":
+                    dt = datetime.datetime.fromisoformat(value)
+                    new_dt = dt - self.delta
+                    new_value = new_dt.isoformat()
+                    return new_value
+                if key in ["date", "time", "step", "hdate"]:
+                    raise NotImplementedError(
+                        f"metadata {key} not implemented when shifting dates"
+                    )
+                return value
+
+            def __getattr__(self, name):
+                return getattr(self.field, name)
+
+        ds = self.result.datasource
+        ds = FieldArray([DateShiftedField(fs, self.action.delta) for fs in ds])
+        return ds
+
+
 class FunctionAction(Action):
     def __init__(self, context, action_path, _name, **kwargs):
         super().__init__(context, action_path, **kwargs)
@@ -443,6 +549,7 @@ class FunctionAction(Action):
 
     @property
     def function(self):
+        name, delta = parse_function_name(self.name)
         return import_function(self.name, "actions")
 
     def __repr__(self):
@@ -657,26 +764,26 @@ def action_factory(config, context, action_path):
 
     config = deepcopy(config)
     key = list(config.keys())[0]
-    cls = dict(
-        concat=ConcatAction,
-        join=JoinAction,
-        # label=LabelAction,
-        pipe=PipeAction,
-        # source=SourceAction,
-        function=FunctionAction,
-        dates=DateAction,
-        # dependency=DependencyAction,
-    ).get(key)
 
     if isinstance(config[key], list):
         args, kwargs = config[key], {}
-
     if isinstance(config[key], dict):
         args, kwargs = [], config[key]
 
+    cls = dict(
+        date_shift=DateShiftAction,
+        # date_filter=DateFilterAction,
+        # include=IncludeAction,
+        concat=ConcatAction,
+        join=JoinAction,
+        pipe=PipeAction,
+        function=FunctionAction,
+        dates=DateAction,
+    ).get(key)
+
     if cls is None:
         if not is_function(key, "actions"):
-            raise ValueError(f"Unknown action {key}")
+            raise ValueError(f"Unknown action '{key}' in {config}")
         cls = FunctionAction
         args = [key] + args
 
@@ -714,9 +821,8 @@ def step_factory(config, context, action_path, previous_step):
 
 
 class FunctionContext:
-    """A FunctionContext is passed to all functions, it will be used to
-    pass information to the functions from the other actions and steps and results.
-    """
+    """A FunctionContext is passed to all functions, it will be used to pass information
+    to the functions from the other actions and steps and results."""
 
     def __init__(self, owner):
         self.owner = owner
