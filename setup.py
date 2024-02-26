@@ -53,6 +53,7 @@ create_requires = [
     "tqdm",
     "climetlab",  # "earthkit-data"
     "earthkit-meteo",
+    "pyproj",
 ]
 
 
@@ -80,7 +81,6 @@ setuptools.setup(
     },
     zip_safe=True,
     keywords="tool",
-    entry_points={},
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -93,4 +93,5 @@ setuptools.setup(
         "Programming Language :: Python :: Implementation :: PyPy",
         "Operating System :: OS Independent",
     ],
+    entry_points={"console_scripts": ["anemoi-datasets=ecml_tools.__main__:main"]},
 )

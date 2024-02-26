@@ -4,7 +4,6 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-
 import datetime
 import logging
 import os
@@ -15,10 +14,10 @@ import numpy as np
 import zarr
 
 from ecml_tools.data import open_dataset
+from ecml_tools.utils.dates.groups import Groups
 
 from .check import DatasetName
 from .config import build_output, loader_config
-from .group import build_groups
 from .input import build_input
 from .statistics import (
     StatisticsRegistry,
@@ -43,7 +42,7 @@ VERSION = "0.20"
 class Loader:
     def __init__(self, *, path, print=print, **kwargs):
         # Catch all floating point errors, including overflow, sqrt(<0), etc
-        np.seterr(all="raise")
+        np.seterr(all="raise", under="warn")
 
         assert isinstance(path, str), path
 
@@ -114,6 +113,7 @@ class Loader:
         z.create_group("_build")
 
     def update_metadata(self, **kwargs):
+        print("Updating metadata", kwargs)
         z = zarr.open(self.path, mode="w+")
         for k, v in kwargs.items():
             if isinstance(v, np.datetime64):
@@ -145,49 +145,41 @@ class InitialiseLoader(Loader):
 
         self.statistics_registry.delete()
 
-        self.groups = build_groups(*self.main_config.loop)
+        print(self.main_config.dates)
+        self.groups = Groups(**self.main_config.dates)
+        print("✅ GROUPS")
+
         self.output = build_output(self.main_config.output, parent=self)
         self.input = self.build_input()
 
         print(self.input)
-        self.inputs = self.input.select(dates=None)
-        all_dates = self.inputs.dates
-        self.minimal_input = self.input.select(dates=[all_dates[0]])
+        all_dates = self.groups.dates
+        self.minimal_input = self.input.select([all_dates[0]])
 
         print("✅ GROUPS")
         print(self.groups)
-        print("✅ ALL INPUTS")
-        print(self.inputs)
         print("✅ MINIMAL INPUT")
         print(self.minimal_input)
 
     def initialise(self, check_name=True):
-        """Create empty dataset"""
+        """Create empty dataset."""
 
         self.print("Config loaded ok:")
         print(self.main_config)
         print("-------------------------")
 
-        dates = self.inputs.dates
-        if self.groups.frequency != self.inputs.frequency:
-            raise ValueError(
-                f"Frequency mismatch: {self.groups.frequency} != {self.inputs.frequency}"
-            )
-        if self.groups.values[0] != self.inputs.dates[0]:
-            raise ValueError(
-                f"First date mismatch: {self.groups.values[0]} != {self.inputs.dates[0]}"
-            )
+        dates = self.groups.dates
         print("-------------------------")
 
-        frequency = self.inputs.frequency
+        frequency = dates.frequency
         assert isinstance(frequency, int), frequency
 
         self.print(f"Found {len(dates)} datetimes.")
         print(
-            f"Dates: Found {len(dates)} datetimes, in {self.groups.n_groups} groups: ",
+            f"Dates: Found {len(dates)} datetimes, in {len(self.groups)} groups: ",
             end="",
         )
-        lengths = [len(g) for g in self.groups.groups]
+        lengths = [len(g) for g in self.groups]
         self.print(
             f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}."
         )
@@ -251,9 +243,6 @@ class InitialiseLoader(Loader):
         metadata["start_date"] = dates[0].isoformat()
         metadata["end_date"] = dates[-1].isoformat()
 
-        # metadata["statistics_start_date"]=self.output.get("statistics_start")
-        # metadata["statistics_end_date"]=self.output.get("statistics_end")
-
         if check_name:
             basename, ext = os.path.splitext(os.path.basename(self.path))
             ds_name = DatasetName(
@@ -309,7 +298,7 @@ class ContentLoader(Loader):
         super().__init__(**kwargs)
         self.main_config = loader_config(config)
 
-        self.groups = build_groups(*self.main_config.loop)
+        self.groups = Groups(**self.main_config.dates)
         self.output = build_output(self.main_config.output, parent=self)
         self.input = self.build_input()
         self.read_dataset_metadata()
@@ -323,19 +312,21 @@ class ContentLoader(Loader):
         )
 
         total = len(self.registry.get_flags())
-        n_groups = len(self.groups.groups)
         filter = CubesFilter(parts=parts, total=total)
-        for igroup, group in enumerate(self.groups.groups):
+        for igroup, group in enumerate(self.groups):
             if self.registry.get_flag(igroup):
-                LOG.info(f" -> Skipping {igroup} total={n_groups} (already done)")
+                LOG.info(
+                    f" -> Skipping {igroup} total={len(self.groups)} (already done)"
+                )
                 continue
             if not filter(igroup):
                 continue
-            self.print(f" -> Processing {igroup} total={n_groups}")
+            self.print(f" -> Processing {igroup} total={len(self.groups)}")
+            print("========", group)
             assert isinstance(group[0], datetime.datetime), group
 
-            inputs = self.input.select(dates=group)
-            data_writer.write(inputs, igroup)
+            result = self.input.select(dates=group)
+            data_writer.write(result, igroup, group)
 
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
@@ -469,10 +460,8 @@ class StatisticsLoader(Loader):
         self.statistics_registry.create(exist_ok=True)
 
         self.print(
-            (
-                f"Building temporary statistics from data {self.path}. "
-                f"From {self.date_start} to {self.date_end}"
-            )
+            f"Building temporary statistics from data {self.path}. "
+            f"From {self.date_start} to {self.date_end}"
         )
 
         shape = (self.i_end + 1 - self.i_start, len(self.variables_names))
@@ -511,11 +500,9 @@ class StatisticsLoader(Loader):
             dates = open_dataset(self.path).dates
             missing_dates = dates[missing_index[0]]
             print(
-                (
-                    f"Missing dates: "
-                    f"{missing_dates[0]} ... {missing_dates[len(missing_dates)-1]} "
-                    f"({missing_dates.shape[0]} missing)"
-                )
+                f"Missing dates: "
+                f"{missing_dates[0]} ... {missing_dates[len(missing_dates)-1]} "
+                f"({missing_dates.shape[0]} missing)"
             )
             raise
 
@@ -581,3 +568,9 @@ class SizeLoader(Loader):
         print(f"Total number of files: {n}")
 
         self.update_metadata(total_size=size, total_number_of_files=n)
+
+
+class CleanupLoader(Loader):
+    def run(self):
+        self.statistics_registry.delete()
+        self.registry.clean()

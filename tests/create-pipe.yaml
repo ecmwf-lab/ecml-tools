@@ -4,72 +4,56 @@ purpose: aifs
 name: test-small
 config_format_version: 2
 
-
 common:
   mars_request: &mars_request
-    name: mars
-    expver: '0001'
+    expver: "0001"
     class: ea
     grid: 20./20.
-    stream: oper
-    type: an
-    date: $datetime_format($dates,%Y%m%d)
-    time: $datetime_format($dates,%H%M)
-  dates: &dates_anchor
-    start: 2020-12-30 00:00:00
-    end: 2021-01-03 12:00:00
-    frequency: 12h
 
-loop:
-- dates:
-    "<<": *dates_anchor
-    group_by: monthly
+dates: &dates_anchor
+  start: 2020-12-30 00:00:00
+  end: 2021-01-03 12:00:00
+  frequency: 12h
+  group_by: monthly
 
 input:
-  dates:
-    "<<": *dates_anchor
-    join:
-    - label:
-        name: previous_data
-        source:
-          '<<': *mars_request
-          param: [2t]
-          levtype: sfc
+  join:
+    - mars:
+        <<: *mars_request
+        param: [2t]
+        levtype: sfc
 
     - pipe:
-      - source:
-          '<<': *mars_request
-          param: [q, t]
-          levtype: pl
-          level: [50, 100]
-      - filter:
-          param: [q]
-      - filter:
-          level: [50]
+        - mars:
+            <<: *mars_request
+            param: [q, t]
+            levtype: pl
+            level: [50, 100]
+            stream: oper
+            type: an
+        - filter:
+            param: [q]
+        - filter:
+            level: [50]
 
-    - source:
-        '<<': *mars_request
-        name: era5-accumulations
+    - accumulations:
+        <<: *mars_request
         param: [cp, tp]
-        # era5-accumulations requires time in hours
-        time: $datetime_format($dates,%H)
 
-    - source:
-        name: constants
+    - constants:
+        template: ${input.join.0.mars}
         param:
-        - cos_latitude
-        source_or_dataset: $previous_data
-        date: $dates
+          - cos_latitude
 
 output:
-  chunking: {dates: 1}
+  chunking: { dates: 1, ensembles: 1 }
   dtype: float32
   flatten_grid: True
   order_by:
-  - valid_datetime
-  - param_level
-  - number
+    - valid_datetime
+    - param_level
+    - number
   statistics: param_level
   statistics_end: 2021
   remapping: &remapping
-    param_level: '{param}_{levelist}'
+    param_level: "{param}_{levelist}"

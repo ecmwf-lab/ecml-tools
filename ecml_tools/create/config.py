@@ -9,7 +9,6 @@
 import datetime
 import logging
 import os
-import warnings
 from copy import deepcopy
 
 import yaml
@@ -143,21 +142,31 @@ class LoadersConfig(Config):
 
         # deprecated/obsolete
         if "order" in self.output:
-            raise ValueError(f"Do not use 'order'. Use order_by in {self}")
+            raise ValueError(
+                f"Do not use 'order'. Use order_by instead. {list(self.keys())}"
+            )
         if "loops" in self:
-            assert "loop" not in self
-            warnings.warn("Should use loop instead of loops in config")
-            self.loop = self.pop("loops")
+            raise ValueError(
+                f"Do not use 'loops'. Use dates instead. {list(self.keys())}"
+            )
+        if "loop" in self:
+            raise ValueError(
+                f"Do not use 'loop'. Use dates instead. {list(self.keys())}"
+            )
+
+        if not isinstance(self.dates, dict):
+            raise ValueError(f"Dates must be a dict. Got {self.dates}")
+
+        if "licence" not in self:
+            raise ValueError("Must provide a licence in the config.")
+        if "copyright" not in self:
+            raise ValueError("Must provide a copyright in the config.")
 
         self.normalise()
 
     def normalise(self):
         if isinstance(self.input, (tuple, list)):
             self.input = dict(concat=self.input)
-
-        if not isinstance(self.loop, list):
-            assert isinstance(self.loop, dict), self.loop
-            self.loop = [dict(loop_a=self.loop)]
 
         if "order_by" in self.output:
             self.output.order_by = normalize_order_by(self.output.order_by)
@@ -217,6 +226,12 @@ class LoadersConfig(Config):
 
         return lst[:index] + [elt] + lst[index:]
 
+    def get_serialisable_dict(self):
+        return _prepare_serialisation(self)
+
+    def get_variables_names(self):
+        return self.output.order_by[self.output.statistics]
+
 
 class UnknownPurposeConfig(LoadersConfig):
     purpose = "unknown"
@@ -252,12 +267,6 @@ class AifsPurposeConfig(LoadersConfig):
         assert self._get_first_key_if_dict(order_by[2]) == "number", order_by
 
         super().normalise()  # must be called last
-
-    def get_serialisable_dict(self):
-        return _prepare_serialisation(self)
-
-    def get_variables_names(self):
-        return self.output.order_by[self.output.statistics]
 
 
 def _prepare_serialisation(o):

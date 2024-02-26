@@ -784,6 +784,12 @@ class Grids(GivenAxis):
         # Shape: (dates, variables, ensemble, 1d-values)
         assert len(datasets[0].shape) == 4, "Grids must be 1D for now"
 
+    def check_same_grid(self, d1, d2):
+        # We don't check the grid, because we want to be able to combine
+        pass
+
+
+class ConcatGrids(Grids):
     # TODO: select the statistics of the most global grid?
     @property
     def latitudes(self):
@@ -793,9 +799,74 @@ class Grids(GivenAxis):
     def longitudes(self):
         return np.concatenate([d.longitudes for d in self.datasets])
 
-    def check_same_grid(self, d1, d2):
-        # We don't check the grid, because we want to be able to combine
+
+class CutoutGrids(Grids):
+    def __init__(self, datasets, axis):
+        from .grids import cutout_mask
+
+        super().__init__(datasets, axis)
+        assert len(datasets) == 2, "CutoutGrids requires two datasets"
+        assert axis == 3, "CutoutGrids requires axis=3"
+
+        # We assume that the LAM is the first dataset, and the global is the second
+        # Note: the second fields does not really need to be global
+
+        self.lam, self.globe = datasets
+        self.mask = cutout_mask(
+            self.lam.latitudes,
+            self.lam.longitudes,
+            self.globe.latitudes,
+            self.globe.longitudes,
+            plot="cutout",
+        )
+        assert len(self.mask) == self.globe.shape[3], (
+            len(self.mask),
+            self.globe.shape[3],
+        )
+
+    @cached_property
+    def shape(self):
+        shape = self.lam.shape
+        # Number of non-zero masked values in the globe dataset
+        nb_globe = np.count_nonzero(self.mask)
+        return shape[:-1] + (shape[-1] + nb_globe,)
+
+    def check_same_resolution(self, d1, d2):
+        # Turned off because we are combining different resolutions
         pass
+
+    @property
+    def latitudes(self):
+        return np.concatenate([self.lam.latitudes, self.globe.latitudes[self.mask]])
+
+    @property
+    def longitudes(self):
+        return np.concatenate([self.lam.longitudes, self.globe.longitudes[self.mask]])
+
+    def __getitem__(self, index):
+        if isinstance(index, (int, slice)):
+            index = (index, slice(None), slice(None), slice(None))
+        return self._get_tuple(index)
+
+    @debug_indexing
+    @expand_list_indexing
+    def _get_tuple(self, index):
+        assert index[self.axis] == slice(
+            None
+        ), "No support for selecting a subset of the 1D values"
+        index, changes = index_to_slices(index, self.shape)
+
+        # In case index_to_slices has changed the last slice
+        index, _ = update_tuple(index, self.axis, slice(None))
+
+        lam_data = self.lam[index]
+        globe_data = self.globe[index]
+
+        globe_data = globe_data[:, :, :, self.mask]
+
+        result = np.concatenate([lam_data, globe_data], axis=self.axis)
+
+        return apply_index_to_slices_changes(result, changes)
 
 
 class Join(Combined):
@@ -1108,7 +1179,8 @@ def _frequency_to_hours(frequency):
 
 def _as_date(d, dates, last):
     if isinstance(d, datetime.datetime):
-        assert d.minutes == 0 and d.hours == 0 and d.seconds == 0, d
+        if not d.minute == 0 and d.hour == 0 and d.second == 0:
+            return np.datetime64(d)
         d = datetime.date(d.year, d.month, d.day)
 
     if isinstance(d, datetime.date):
@@ -1116,7 +1188,7 @@ def _as_date(d, dates, last):
 
     try:
         d = int(d)
-    except ValueError:
+    except (ValueError, TypeError):
         pass
 
     if isinstance(d, int):
@@ -1184,12 +1256,14 @@ def _as_last_date(d, dates):
     return _as_date(d, dates, last=True)
 
 
-def _concat_or_join(datasets):
+def _concat_or_join(datasets, kwargs):
+    datasets, kwargs = _auto_adjust(datasets, kwargs)
+
     # Study the dates
     ranges = [(d.dates[0].astype(object), d.dates[-1].astype(object)) for d in datasets]
 
     if len(set(ranges)) == 1:
-        return Join(datasets)._overlay()
+        return Join(datasets)._overlay(), kwargs
 
     # Make sure the dates are disjoint
     for i in range(len(ranges)):
@@ -1214,7 +1288,7 @@ def _concat_or_join(datasets):
                 f"{r} and {s} ({datasets[i]} {datasets[i+1]})"
             )
 
-    return Concat(datasets)
+    return Concat(datasets), kwargs
 
 
 def _open(a, zarr_root):
@@ -1239,6 +1313,48 @@ def _open(a, zarr_root):
     raise NotImplementedError()
 
 
+def _auto_adjust(datasets, kwargs):
+    """Adjust the datasets for concatenation or joining based
+    on parameters set to 'matching'"""
+
+    if kwargs.get("ajust") == "matching":
+        kwargs.pop("ajust")
+        for p in ("select", "frequency", "start", "end"):
+            kwargs[p] = "matching"
+
+    adjust = {}
+
+    if kwargs.get("select") == "matching":
+        kwargs.pop("select")
+        variables = None
+        for d in datasets:
+            if variables is None:
+                variables = set(d.variables)
+            else:
+                variables &= set(d.variables)
+        if len(variables) == 0:
+            raise ValueError("No common variables")
+
+        adjust["select"] = sorted(variables)
+
+    if kwargs.get("frequency") == "matching":
+        kwargs.pop("frequency")
+        adjust["frequency"] = max(d.frequency for d in datasets)
+
+    if kwargs.get("start") == "matching":
+        kwargs.pop("start")
+        adjust["start"] = max(d.dates[0] for d in datasets).astype(object)
+
+    if kwargs.get("end") == "matching":
+        kwargs.pop("end")
+        adjust["end"] = max(d.dates[-1] for d in datasets).astype(object)
+
+    if adjust:
+        datasets = [d._subset(**adjust) for d in datasets]
+
+    return datasets, kwargs
+
+
 def _open_dataset(*args, zarr_root, **kwargs):
     sets = []
     for a in args:
@@ -1247,22 +1363,40 @@ def _open_dataset(*args, zarr_root, **kwargs):
     if "ensemble" in kwargs:
         if "grids" in kwargs:
             raise NotImplementedError("Cannot use both 'ensemble' and 'grids'")
+
         ensemble = kwargs.pop("ensemble")
         axis = kwargs.pop("axis", 2)
         assert len(args) == 0
         assert isinstance(ensemble, (list, tuple))
-        return Ensemble([_open(e, zarr_root) for e in ensemble], axis=axis)._subset(
-            **kwargs
-        )
+
+        datasets = [_open(e, zarr_root) for e in ensemble]
+        datasets, kwargs = _auto_adjust(datasets, kwargs)
+
+        return Ensemble(datasets, axis=axis)._subset(**kwargs)
 
     if "grids" in kwargs:
         if "ensemble" in kwargs:
             raise NotImplementedError("Cannot use both 'ensemble' and 'grids'")
+
         grids = kwargs.pop("grids")
+        mode = kwargs.pop("mode", "concatenate")
         axis = kwargs.pop("axis", 3)
         assert len(args) == 0
         assert isinstance(grids, (list, tuple))
-        return Grids([_open(e, zarr_root) for e in grids], axis=axis)._subset(**kwargs)
+
+        KLASSES = {
+            "concatenate": ConcatGrids,
+            "cutout": CutoutGrids,
+        }
+        if mode not in KLASSES:
+            raise ValueError(
+                f"Unknown grids mode: {mode}, values are {list(KLASSES.keys())}"
+            )
+
+        datasets = [_open(e, zarr_root) for e in grids]
+        datasets, kwargs = _auto_adjust(datasets, kwargs)
+
+        return KLASSES[mode](datasets, axis=axis)._subset(**kwargs)
 
     for name in ("datasets", "dataset"):
         if name in kwargs:
@@ -1275,7 +1409,8 @@ def _open_dataset(*args, zarr_root, **kwargs):
     assert len(sets) > 0, (args, kwargs)
 
     if len(sets) > 1:
-        return _concat_or_join(sets)._subset(**kwargs)
+        dataset, kwargs = _concat_or_join(sets, kwargs)
+        return dataset._subset(**kwargs)
 
     return sets[0]._subset(**kwargs)
 

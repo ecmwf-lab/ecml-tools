@@ -176,3 +176,5 @@ bar
 *.zarr/
 ~$images.pptx
 test.py
+cutout.png
+*.out

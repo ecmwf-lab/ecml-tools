@@ -21,14 +21,12 @@ class Creator:
         overwrite=False,
         **kwargs,
     ):
-        self.path = path
+        self.path = path  # Output path
         self.config = config
         self.cache = cache
         self.print = print
         self.statistics_tmp = statistics_tmp
         self.overwrite = overwrite
-        # if kwargs:
-        #    raise ValueError(f"Unknown arguments {kwargs}")
 
     def init(self, check_name=False):
         # check path
@@ -41,10 +39,8 @@ class Creator:
                 f"{self.path} already exists. Use overwrite=True to overwrite."
             )
 
-        cls = InitialiseLoader
-
         with self._cache_context():
-            obj = cls.from_config(
+            obj = InitialiseLoader.from_config(
                 path=self.path,
                 config=self.config,
                 statistics_tmp=self.statistics_tmp,
@@ -103,6 +99,16 @@ class Creator:
         loader = SizeLoader.from_dataset(path=self.path, print=self.print)
         loader.add_total_size()
 
+    def cleanup(self):
+        from .loaders import CleanupLoader
+
+        loader = CleanupLoader.from_dataset(
+            path=self.path,
+            print=self.print,
+            statistics_tmp=self.statistics_tmp,
+        )
+        loader.run()
+
     def patch(self, **kwargs):
         from .patch import apply_patch
 
@@ -116,6 +122,7 @@ class Creator:
         self.init()
         self.load()
         self.finalise()
+        self.cleanup()
 
     def _cache_context(self):
         from .utils import cache_context

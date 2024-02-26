@@ -4,36 +4,38 @@ purpose: aifs
 name: test-small
 config_format_version: 2
 
+common:
+  mars_request: &mars_request
+    expver: "0001"
+    class: ea
+    grid: 20./20.
+
 dates:
   start: 2020-12-30 00:00:00
   end: 2021-01-03 12:00:00
   frequency: 12h
   group_by: monthly
 
-common:
-  mars_request: &mars_request
-    expver: "0001"
-    class: ea
-    grid: 20./20.
-    levtype: sfc
-    stream: oper
-    type: an
-    param: [2t]
-
 input:
-  concat:
-    - dates:
-        start: 2020-12-30 00:00:00
-        end: 2021-01-01 12:00:00
-        frequency: 12h
-        mars:
-          <<: *mars_request
-    - dates:
-        start: 2021-01-02 00:00:00
-        end: 2021-01-03 12:00:00
-        frequency: 12h
-        mars:
-          <<: *mars_request
+  join:
+    - mars:
+        <<: *mars_request
+        param: [2t]
+        levtype: sfc
+        stream: oper
+        type: an
+
+    - constants:
+        template: ${input.join.0.mars}
+        param:
+          - insolation
+
+    - date_shift:
+        delta: -25
+        constants:
+          template: ${input.join.0.mars}
+          param:
+            - insolation
 
 output:
   chunking: { dates: 1, ensembles: 1 }

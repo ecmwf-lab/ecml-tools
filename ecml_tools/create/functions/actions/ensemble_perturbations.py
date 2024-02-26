@@ -1,4 +1,4 @@
-# (C) Copyright 2020 ECMWF.
+# (C) Copyright 2024 ECMWF.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -7,51 +7,65 @@
 # nor does it submit to any jurisdiction.
 #
 import warnings
+from copy import deepcopy
 
 import numpy as np
 import tqdm
-from climetlab import load_source
 from climetlab.core.temporary import temp_file
 from climetlab.readers.grib.output import new_grib_output
 
 from ecml_tools.create.check import check_data_values
+from ecml_tools.create.functions import assert_is_fieldset, wrapped_mars_source
 
 
-def get_unique_field(ds, selection):
-    ds = ds.sel(**selection)
-    assert len(ds) == 1, (ds, selection)
-    return ds[0]
+def to_list(x):
+    if isinstance(x, (list, tuple)):
+        return x
+    if isinstance(x, str):
+        return x.split("/")
+    return [x]
 
 
 def normalise_number(number):
-    if isinstance(number, (tuple, list, int)):
-        return number
+    number = to_list(number)
 
-    assert isinstance(number, str), (type(number), number)
-
-    number = number.split("/")
     if len(number) > 4 and (number[1] == "to" and number[3] == "by"):
         return list(range(int(number[0]), int(number[2]) + 1, int(number[4])))
 
     if len(number) > 2 and number[1] == "to":
         return list(range(int(number[0]), int(number[2]) + 1))
 
-    assert isinstance(number, list), (type(number), number)
     return number
 
 
+def normalise_request(request):
+    request = deepcopy(request)
+    if "number" in request:
+        request["number"] = normalise_number(request["number"])
+    if "time" in request:
+        request["time"] = to_list(request["time"])
+    request["param"] = to_list(request["param"])
+    return request
+
+
 def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
-    number_list = normalise_number(ensembles["number"])
+    from climetlab import load_source
+
+    ensembles = normalise_request(ensembles)
+    center = normalise_request(center)
+    mean = normalise_request(mean)
+
+    number_list = ensembles["number"]
     n_numbers = len(number_list)
 
     keys = ["param", "level", "valid_datetime", "date", "time", "step", "number"]
 
     print(f"Retrieving ensemble data with {ensembles}")
-    ensembles = load_source(**ensembles).order_by(*keys)
+    ensembles = wrapped_mars_source(**ensembles).order_by(*keys)
     print(f"Retrieving center data with {center}")
-    center = load_source(**center).order_by(*keys)
+    center = wrapped_mars_source(**center).order_by(*keys)
     print(f"Retrieving mean data with {mean}")
-    mean = load_source(**mean).order_by(*keys)
+    mean = wrapped_mars_source(**mean).order_by(*keys)
 
     assert len(mean) * n_numbers == len(ensembles), (
         len(mean),
@@ -99,11 +113,17 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
         c = center_field.to_numpy()
         assert m.shape == c.shape, (m.shape, c.shape)
 
+        FORCED_POSITIVE = [
+            "q",
+            "cp",
+            "lsp",
+            "tp",
+        ]  # add "swl4", "swl3", "swl2", "swl1", "swl0", and more ?
         #################################
         # Actual computation happens here
         x = c - m + e
-        if param == "q":
-            warnings.warn("Clipping q")
+        if param in FORCED_POSITIVE:
+            warnings.warn(f"Clipping {param} to be positive")
             x = np.maximum(x, 0)
         #################################
 
@@ -115,6 +135,7 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
     out.close()
 
     ds = load_source("file", path)
+    assert_is_fieldset(ds)
     # save a reference to the tmp file so it is deleted
     # only when the dataset is not used anymore
     ds._tmp = tmp
