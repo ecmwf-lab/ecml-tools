@@ -20,7 +20,8 @@ class Scan(Command):
             "--extension", default=".grib", help="Extension of the files to scan"
         )
         command_parser.add_argument(
-            "--magic", help="File 'magic' to use to identify the file type. Overrides --extension"
+            "--magic",
+            help="File 'magic' to use to identify the file type. Overrides --extension",
         )
         command_parser.add_argument("paths", nargs="+", help="Paths to scan")
 
@@ -34,7 +35,9 @@ class Scan(Command):
             ".nc4": "netcdf",
         }
 
-        MAGICS = {'GRIB': 'grib',}
+        MAGICS = {
+            "GRIB": "grib",
+        }
 
         if args.magic:
             what = MAGICS[args.magic]
@@ -53,7 +56,7 @@ class Scan(Command):
         for path in args.paths:
             if os.path.isfile(path):
 
-                    paths.append(path)
+                paths.append(path)
             else:
                 for root, _, files in os.walk(path):
                     for file in files:

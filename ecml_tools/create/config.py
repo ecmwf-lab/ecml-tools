@@ -221,6 +221,12 @@ class LoadersConfig(Config):
 
         return lst[:index] + [elt] + lst[index:]
 
+    def get_serialisable_dict(self):
+        return _prepare_serialisation(self)
+
+    def get_variables_names(self):
+        return self.output.order_by[self.output.statistics]
+
 
 class UnknownPurposeConfig(LoadersConfig):
     purpose = "unknown"
@@ -256,12 +262,6 @@ class AifsPurposeConfig(LoadersConfig):
         assert self._get_first_key_if_dict(order_by[2]) == "number", order_by
 
         super().normalise()  # must be called last
-
-    def get_serialisable_dict(self):
-        return _prepare_serialisation(self)
-
-    def get_variables_names(self):
-        return self.output.order_by[self.output.statistics]
 
 
 def _prepare_serialisation(o):
