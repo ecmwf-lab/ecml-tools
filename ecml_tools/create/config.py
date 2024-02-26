@@ -157,6 +157,11 @@ class LoadersConfig(Config):
         if not isinstance(self.dates, dict):
             raise ValueError(f"Dates must be a dict. Got {self.dates}")
 
+        if "licence" not in self:
+            raise ValueError("Must provide a licence in the config.")
+        if "copyright" not in self:
+            raise ValueError("Must provide a copyright in the config.")
+
         self.normalise()
 
     def normalise(self):

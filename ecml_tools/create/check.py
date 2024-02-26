@@ -148,7 +148,7 @@ class DatasetName:
         if start_date is None:
             return
         start_date_str = str(start_date.year)
-        self._check_missing("first date", start_date_str)
+        self._check_missing("start_date", start_date_str)
         self._check_mismatch("start_date", start_date_str)
 
     def check_end_date(self, end_date):
