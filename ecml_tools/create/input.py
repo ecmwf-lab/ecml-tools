@@ -466,24 +466,21 @@ class JoinResult(Result):
         return super().__repr__(content)
 
 
-class _DatesShiftAction(Action):
-    def __init__(self, context, action_path, _delta, **kwargs):
+class DateShiftAction(Action):
+    def __init__(self, context, action_path, delta, **kwargs):
         super().__init__(context, action_path, **kwargs)
 
-        if isinstance(_delta, str):
-            if _delta[0] == "-":
-                _delta, sign = int(_delta[1:]), -1
+        if isinstance(delta, str):
+            if delta[0] == "-":
+                delta, sign = int(delta[1:]), -1
             else:
-                _delta, sign = int(_delta), 1
-            _delta = datetime.timedelta(hours=sign * _delta)
-        assert isinstance(_delta, int), _delta
-        _delta = datetime.timedelta(hours=_delta)
-        self.delta = _delta
+                delta, sign = int(delta), 1
+            delta = datetime.timedelta(hours=sign * delta)
+        assert isinstance(delta, int), delta
+        delta = datetime.timedelta(hours=delta)
+        self.delta = delta
 
         self.content = action_factory(kwargs, context, self.action_path + ["shift"])
-
-    def is_shift_action(cls, name):
-        return "-" in name or "+" in name
 
     @trace_select
     def select(self, dates):
@@ -773,23 +770,16 @@ def action_factory(config, context, action_path):
     if isinstance(config[key], dict):
         args, kwargs = [], config[key]
 
-    if "-" in key or "+" in key:
-        new_key, delta = parse_function_name(key)
-        new_config = dict(_dates_shift={"_delta": delta, new_key: config[key]})
-        return action_factory(new_config, context, action_path)
-
-    else:
-        cls = dict(
-            _dates_shift=_DatesShiftAction,
-            concat=ConcatAction,
-            join=JoinAction,
-            # label=LabelAction,
-            pipe=PipeAction,
-            # source=SourceAction,
-            function=FunctionAction,
-            dates=DateAction,
-            # dependency=DependencyAction,
-        ).get(key)
+    cls = dict(
+        date_shift=DateShiftAction,
+        # date_filter=DateFilterAction,
+        # include=IncludeAction,
+        concat=ConcatAction,
+        join=JoinAction,
+        pipe=PipeAction,
+        function=FunctionAction,
+        dates=DateAction,
+    ).get(key)
 
     if cls is None:
         if not is_function(key, "actions"):

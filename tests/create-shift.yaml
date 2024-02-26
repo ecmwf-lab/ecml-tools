@@ -30,19 +30,8 @@ input:
         param:
           - insolation
 
-
-    - constants-3h:
-        template: ${input.join.0.mars}
-        param:
-          - insolation
-    - constants+6h:
-        template: ${input.join.0.mars}
-        param:
-          - insolation
-
-    - _dates_shift: # private, do not use directly
-        #_delta: 6
-        _delta: -25
+    - date_shift:
+        delta: -25
         constants:
           template: ${input.join.0.mars}
           param:
