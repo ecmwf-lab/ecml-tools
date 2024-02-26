@@ -44,9 +44,9 @@ class DatasetName:
     ):
         self.name = name
         self.parsed = self._parse(name)
-        print('---------------')
+        print("---------------")
         print(self.parsed)
-        print('---------------')
+        print("---------------")
 
         self.messages = []
 
@@ -63,10 +63,6 @@ class DatasetName:
             )
 
     @property
-    def is_valid(self):
-        return not self.messages
-
-    @property
     def error_message(self):
         out = " And ".join(self.messages)
         if out:
@@ -74,13 +70,15 @@ class DatasetName:
         return out
 
     def raise_if_not_valid(self, print=print):
-        if not self.is_valid:
+        if self.messages:
             for m in self.messages:
                 print(m)
             raise ValueError(self.error_message)
 
     def _parse(self, name):
-        pattern = r"^(\w+)-([\w-]+)-(\w+)-(\w+)-(\d\d\d\d)-(\d\d\d\d)-(\d+h)-v(\d+)-?(.*)$"
+        pattern = (
+            r"^(\w+)-([\w-]+)-(\w+)-(\w+)-(\d\d\d\d)-(\d\d\d\d)-(\d+h)-v(\d+)-?(.*)$"
+        )
         match = re.match(pattern, name)
 
         assert match, (name, pattern)
@@ -100,7 +98,6 @@ class DatasetName:
             ]
             parsed = {k: v for k, v in zip(keys, match.groups())}
 
-
         return parsed
 
     def __str__(self):
@@ -109,11 +106,9 @@ class DatasetName:
     def check_parsed(self):
         if not self.parsed:
             self.messages.append(
-                (
-                    f"the dataset name {self} does not follow naming convention. "
-                    "See here for details: "
-                    "https://confluence.ecmwf.int/display/DWF/Datasets+available+as+zarr"
-                )
+                f"the dataset name {self} does not follow naming convention. "
+                "See here for details: "
+                "https://confluence.ecmwf.int/display/DWF/Datasets+available+as+zarr"
             )
 
     def check_resolution(self, resolution):
@@ -122,10 +117,8 @@ class DatasetName:
             and self.parsed["resolution"][0] not in "0123456789on"
         ):
             self.messages.append(
-                (
-                    f"the resolution {self.parsed['resolution'] } should start "
-                    f"with a number or 'o' or 'n' in the dataset name {self}."
-                )
+                f"the resolution {self.parsed['resolution'] } should start "
+                f"with a number or 'o' or 'n' in the dataset name {self}."
             )
 
         if resolution is None:
@@ -158,13 +151,13 @@ class DatasetName:
     def _check_missing(self, key, value):
         if value not in self.name:
             self.messages.append(
-                (f"the {key} is {value}, but is missing in {self.name}.")
+                f"the {key} is {value}, but is missing in {self.name}."
             )
 
     def _check_mismatch(self, key, value):
         if self.parsed.get(key) and self.parsed[key] != value:
             self.messages.append(
-                (f"the {key} is {value}, but is {self.parsed[key]} in {self.name}.")
+                f"the {key} is {value}, but is {self.parsed[key]} in {self.name}."
             )
 
 
@@ -191,17 +184,13 @@ def check_data_values(arr, *, name: str, log=[]):
     if name in limits:
         if min < limits[name]["minimum"]:
             raise StatisticsValueError(
-                (
-                    f"For {name}: minimum value in the data is {min}. "
-                    "Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
-                )
+                f"For {name}: minimum value in the data is {min}. "
+                "Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
             )
         if max > limits[name]["maximum"]:
             raise StatisticsValueError(
-                (
-                    f"For {name}: maximum value in the data is {max}. "
-                    "Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
-                )
+                f"For {name}: maximum value in the data is {max}. "
+                "Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
             )
 
 
