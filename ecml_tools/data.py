@@ -1043,6 +1043,9 @@ class Subset(Forwards):
     def source(self, index):
         return Source(self, index, self.forward.source(index))
 
+    def __repr__(self):
+        return f"Subset({self.dates[0]}, {self.dates[-1]}, {self.frequency})"
+
 
 class Select(Forwards):
     """
@@ -1317,8 +1320,8 @@ def _auto_adjust(datasets, kwargs):
     """Adjust the datasets for concatenation or joining based
     on parameters set to 'matching'"""
 
-    if kwargs.get("ajust") == "matching":
-        kwargs.pop("ajust")
+    if kwargs.get("adjust") == "matching":
+        kwargs.pop("adjust")
         for p in ("select", "frequency", "start", "end"):
             kwargs[p] = "matching"
 
@@ -1327,19 +1330,17 @@ def _auto_adjust(datasets, kwargs):
     if kwargs.get("select") == "matching":
         kwargs.pop("select")
         variables = None
+        
         for d in datasets:
             if variables is None:
                 variables = set(d.variables)
             else:
                 variables &= set(d.variables)
+
         if len(variables) == 0:
             raise ValueError("No common variables")
 
         adjust["select"] = sorted(variables)
-
-    if kwargs.get("frequency") == "matching":
-        kwargs.pop("frequency")
-        adjust["frequency"] = max(d.frequency for d in datasets)
 
     if kwargs.get("start") == "matching":
         kwargs.pop("start")
@@ -1347,7 +1348,11 @@ def _auto_adjust(datasets, kwargs):
 
     if kwargs.get("end") == "matching":
         kwargs.pop("end")
-        adjust["end"] = max(d.dates[-1] for d in datasets).astype(object)
+        adjust["end"] = min(d.dates[-1] for d in datasets).astype(object)
+
+    if kwargs.get("frequency") == "matching":
+        kwargs.pop("frequency")
+        adjust["frequency"] = max(d.frequency for d in datasets)
 
     if adjust:
         datasets = [d._subset(**adjust) for d in datasets]
