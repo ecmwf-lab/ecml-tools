@@ -28,9 +28,7 @@ def compute_directory_size(path):
         return None, None
     size = 0
     n = 0
-    for dirpath, _, filenames in tqdm.tqdm(
-        os.walk(path), desc="Computing size", leave=False
-    ):
+    for dirpath, _, filenames in tqdm.tqdm(os.walk(path), desc="Computing size", leave=False):
         for filename in filenames:
             file_path = os.path.join(dirpath, filename)
             size += os.path.getsize(file_path)
@@ -155,6 +153,12 @@ class Version:
             return self.data.shape
 
     @property
+    def n_missing_dates(self):
+        if "missing_dates" in self.metadata:
+            return len(self.metadata["missing_dates"])
+        return None
+
+    @property
     def uncompressed_data_size(self):
         if self.data and hasattr(self.data, "dtype") and hasattr(self.data, "size"):
             return self.data.dtype.itemsize * self.data.size
@@ -164,6 +168,8 @@ class Version:
         print(f'📅 Start     : {self.first_date.strftime("%Y-%m-%d %H:%M")}')
         print(f'📅 End       : {self.last_date.strftime("%Y-%m-%d %H:%M")}')
         print(f"⏰ Frequency : {self.frequency}h")
+        if self.n_missing_dates is not None:
+            print(f"🚫 Missing : {self.n_missing_dates}")
         print(f"🌎 Resolution: {self.resolution}")
 
         print()
@@ -303,11 +309,7 @@ class Version:
         assert build_flags.size == build_lengths.size
 
         latest_write_timestamp = self.zarr.attrs.get("latest_write_timestamp")
-        latest = (
-            datetime.datetime.fromisoformat(latest_write_timestamp)
-            if latest_write_timestamp
-            else None
-        )
+        latest = datetime.datetime.fromisoformat(latest_write_timestamp) if latest_write_timestamp else None
 
         if not all(build_flags):
             if latest:
@@ -315,9 +317,7 @@ class Version:
             else:
                 print("🪫  Dataset not ready.")
             total = sum(build_lengths)
-            built = sum(
-                ln if flag else 0 for ln, flag in zip(build_lengths, build_flags)
-            )
+            built = sum(ln if flag else 0 for ln, flag in zip(build_lengths, build_flags))
             print(
                 "📈 Progress:",
                 progress(built, total, width=50),
@@ -403,9 +403,7 @@ class NoVersion(Version):
         assert isinstance(time, int), (time, type(time))
         if time > 100:
             time = time // 100
-        return datetime.datetime.fromisoformat(monthly["stop"]) + datetime.timedelta(
-            hours=time
-        )
+        return datetime.datetime.fromisoformat(monthly["stop"]) + datetime.timedelta(hours=time)
 
     @property
     def frequency(self):
@@ -464,12 +462,8 @@ class Version0_4(Version):
 
         # for backward compatibility
         if "climetlab" in z.attrs:
-            climetlab_version = (
-                z.attrs["climetlab"].get("versions", {}).get("climetlab", "unkwown")
-            )
-            print(
-                f"climetlab version used to create this zarr: {climetlab_version}. Not supported."
-            )
+            climetlab_version = z.attrs["climetlab"].get("versions", {}).get("climetlab", "unkwown")
+            print(f"climetlab version used to create this zarr: {climetlab_version}. Not supported.")
             return
 
         version = z.attrs.get("version")
@@ -495,12 +489,7 @@ class Version0_6(Version):
                 return datetime.datetime.fromisoformat(record["timestamp"])
 
         # Sometimes the first record is missing
-        timestamps = sorted(
-            [
-                datetime.datetime.fromisoformat(d["timestamp"])
-                for d in self.metadata.get("history", [])
-            ]
-        )
+        timestamps = sorted([datetime.datetime.fromisoformat(d["timestamp"]) for d in self.metadata.get("history", [])])
         if timestamps:
             return timestamps[0]
 
