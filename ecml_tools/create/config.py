@@ -153,9 +153,6 @@ class LoadersConfig(Config):
             raise ValueError(f"Dates must be a dict. Got {self.dates}")
 
     def normalise(self):
-        if isinstance(self.input, (tuple, list)):
-            self.input = dict(concat=self.input)
-
         if "order_by" in self.output:
             self.output.order_by = normalize_order_by(self.output.order_by)
 

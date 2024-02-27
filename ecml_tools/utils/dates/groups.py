@@ -26,18 +26,48 @@ class Groups:
     3
     >>> len(list(g)[1])
     2
+    >>> g = Groups(group_by=3,
+    ...            start="2023-01-01 00:00",
+    ...            end="2023-01-05 00:00",
+    ...            frequency=24,
+    ...            missing=["2023-01-02 00:00"])
+    >>> len(list(g))
+    2
+    >>> len(list(g)[0])
+    2
+    >>> len(list(g)[1])
+    2
     """
 
     def __init__(self, **kwargs):
         group_by = kwargs.pop("group_by")
         self.dates = Dates.from_config(**kwargs)
         self.grouper = Grouper.from_config(group_by)
+        self.filter = Filter(self.dates.missing)
 
     def __iter__(self):
-        return self.grouper(self.dates)
+        for dates in self.grouper(self.dates):
+            dates = self.filter(dates)
+            if not dates:
+                continue
+            yield dates
 
     def __len__(self):
-        return len(list(self.grouper(self.dates)))
+        count = 0
+        for dates in self.grouper(self.dates):
+            dates = self.filter(dates)
+            if not dates:
+                continue
+            count += 1
+        return count
+
+
+class Filter:
+    def __init__(self, missing):
+        self.missing = missing
+
+    def __call__(self, dates):
+        return [d for d in dates if d not in self.missing]
 
 
 class Grouper:

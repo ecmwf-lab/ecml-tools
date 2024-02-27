@@ -7,6 +7,7 @@
 
 
 import datetime
+import warnings
 
 
 def frequency_to_hours(frequency):
@@ -17,6 +18,12 @@ def frequency_to_hours(frequency):
     unit = frequency[-1].lower()
     v = int(frequency[:-1])
     return {"h": v, "d": v * 24}[unit]
+
+
+def normalize_date(x):
+    if isinstance(x, str):
+        return datetime.datetime.fromisoformat(x)
+    return x
 
 
 class Dates:
@@ -33,7 +40,24 @@ class Dates:
 
     >>> len(Dates.from_config(start="2023-01-01 00:00", end="2023-01-02 00:00", frequency=12))
     3
+    >>> len(Dates.from_config(start="2023-01-01 00:00",
+    ...                   end="2023-01-02 00:00",
+    ...                   frequency=12,
+    ...                   missing=["2023-01-01 12:00"]))
+    3
+    >>> len(Dates.from_config(start="2023-01-01 00:00",
+    ...                   end="2023-01-02 00:00",
+    ...                   frequency=12,
+    ...                   missing=["2099-01-01 12:00"]))
+    3
     """
+
+    def __init__(self, missing=None):
+        if not missing:
+            missing = []
+        self.missing = [normalize_date(x) for x in missing]
+        if set(self.missing) - set(self.values):
+            warnings.warn(f"Missing dates {self.missing} not in list.")
 
     @classmethod
     def from_config(cls, **kwargs):
@@ -42,8 +66,7 @@ class Dates:
         return StartEndDates(**kwargs)
 
     def __iter__(self):
-        for v in self.values:
-            yield v
+        yield from self.values
 
     def __getitem__(self, i):
         return self.values[i]
@@ -59,7 +82,7 @@ class Dates:
 class ValuesDates(Dates):
     def __init__(self, values, **kwargs):
         self.values = sorted(values)
-        assert not kwargs, f"Unexpected arguments {kwargs}"
+        super().__init__(**kwargs)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.values[0]}..{self.values[-1]})"
@@ -70,8 +93,6 @@ class ValuesDates(Dates):
 
 class StartEndDates(Dates):
     def __init__(self, start, end, frequency=1, **kwargs):
-        assert not kwargs, f"Unexpected arguments {kwargs}"
-
         frequency = frequency_to_hours(frequency)
 
         def _(x):
@@ -82,9 +103,7 @@ class StartEndDates(Dates):
         start = _(start)
         end = _(end)
 
-        if isinstance(start, datetime.date) and not isinstance(
-            start, datetime.datetime
-        ):
+        if isinstance(start, datetime.date) and not isinstance(start, datetime.datetime):
             start = datetime.datetime(start.year, start.month, start.day)
 
         if isinstance(end, datetime.date) and not isinstance(end, datetime.datetime):
@@ -104,6 +123,8 @@ class StartEndDates(Dates):
         while date <= end:
             self.values.append(date)
             date += increment
+
+        super().__init__(**kwargs)
 
     def as_dict(self):
         return {
