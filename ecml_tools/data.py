@@ -1330,7 +1330,7 @@ def _auto_adjust(datasets, kwargs):
     if kwargs.get("select") == "matching":
         kwargs.pop("select")
         variables = None
-        
+
         for d in datasets:
             if variables is None:
                 variables = set(d.variables)
