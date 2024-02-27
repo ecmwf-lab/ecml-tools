@@ -15,7 +15,7 @@ dates:
   end: 2021-01-03 12:00:00
   frequency: 12h
   group_by: monthly
-  missing: ['2021-01-03 0:00:00']
+  missing: ['2021-01-03 00:00:00']
 
 
 input:
