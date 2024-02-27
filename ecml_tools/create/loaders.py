@@ -81,6 +81,7 @@ class Loader:
 
         builder = build_input(
             self.main_config.input,
+            include=self.main_config.get("include", {}),
             order_by=self.output.order_by,
             flatten_grid=self.output.flatten_grid,
             remapping=build_remapping(self.output.remapping),

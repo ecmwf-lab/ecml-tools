@@ -688,6 +688,41 @@ class ConcatResult(Result):
         return super().__repr__(content)
 
 
+class IncludeResult(Result):
+    def __init__(self, context, action_path, dates, result, results):
+        super().__init__(context, action_path, dates)
+        # result is the content of the include
+        self.result = result
+        # results is the list of the included results
+        self.results = results
+
+    @cached_property
+    def datasource(self):
+        for i in self.results:
+            # for each include trigger the datasource to be computed
+            # and saved in context but drop it
+            i.datasource
+        # then return the content of the result
+        # which can use the datasources of the included results
+        return self.result.datasource
+
+
+class IncludeAction(ActionWithList):
+    def __init__(self, context, action_path, includes, content):
+        super().__init__(context, ["include"], *includes)
+        self.content = action_factory(content, context, ["input"])
+
+    def select(self, dates):
+        results = [a.select(dates) for a in self.actions]
+        return IncludeResult(
+            self.context,
+            self.action_path,
+            dates,
+            self.content.select(dates),
+            results,
+        )
+
+
 class ConcatAction(Action):
     def __init__(self, context, action_path, *configs):
         super().__init__(context, action_path, *configs)
@@ -745,7 +780,7 @@ def action_factory(config, context, action_path):
     cls = dict(
         date_shift=DateShiftAction,
         # date_filter=DateFilterAction,
-        # include=IncludeAction,
+        include=IncludeAction,
         concat=ConcatAction,
         join=JoinAction,
         pipe=PipeAction,
@@ -811,8 +846,17 @@ class ActionContext(Context):
 
 
 class InputBuilder:
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, include, **kwargs):
         self.kwargs = kwargs
+
+        config = deepcopy(config)
+        if include:
+            config = dict(
+                include=dict(
+                    includes=include,
+                    content=config,
+                )
+            )
         self.config = config
         self.action_path = ["input"]
 
