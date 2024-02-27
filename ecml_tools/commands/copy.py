@@ -50,6 +50,12 @@ class Create(Command):
         command_parser.add_argument("--block-size", type=int, default=100)
         command_parser.add_argument("--overwrite", action="store_true")
         command_parser.add_argument("--progress", action="store_true")
+        command_parser.add_argument(
+            "--rechunk",
+            nargs="+",
+            help="Rechunk given array. Example: data=10,1000,,",
+            metavar="array=i,j,k,l",
+        )
 
     def _store(self, path):
         return path
@@ -68,16 +74,24 @@ class Create(Command):
             target[i] = source[i]
         return slice(n, m)
 
-    def copy_data(self, source, target, transfers, block_size, _copy, progress):
+    def copy_data(self, source, target, transfers, block_size, _copy, progress, rechunking):
         LOG.info("Copying data")
         source_data = source["data"]
+
+        chunks = list(source_data.chunks)
+        if "data" in rechunking:
+            assert len(chunks) == len(rechunking["data"]), (chunks, rechunking["data"])
+            for i, c in enumerate(rechunking["data"]):
+                if c != -1:
+                    chunks[i] = c
+
         target_data = (
             target["data"]
             if "data" in target
             else target.create_dataset(
                 "data",
                 shape=source_data.shape,
-                chunks=source_data.chunks,
+                chunks=chunks,
                 dtype=source_data.dtype,
             )
         )
@@ -110,7 +124,7 @@ class Create(Command):
 
         LOG.info("Copied data")
 
-    def copy_array(self, name, source, target, transfers, block_size, _copy, progress):
+    def copy_array(self, name, source, target, transfers, block_size, _copy, progress, rechunking):
         for k, v in source.attrs.items():
             target.attrs[k] = v
 
@@ -118,14 +132,14 @@ class Create(Command):
             return
 
         if name == "data":
-            self.copy_data(source, target, transfers, block_size, _copy, progress)
+            self.copy_data(source, target, transfers, block_size, _copy, progress, rechunking)
             return
 
         LOG.info(f"Copying {name}")
         target[name] = source[name]
         LOG.info(f"Copied {name}")
 
-    def copy_group(self, source, target, transfers, block_size, _copy, progress):
+    def copy_group(self, source, target, transfers, block_size, _copy, progress, rechunking):
         import zarr
 
         for k, v in source.attrs.items():
@@ -134,11 +148,28 @@ class Create(Command):
         for name in sorted(source.keys()):
             if isinstance(source[name], zarr.hierarchy.Group):
                 group = target[name] if name in target else target.create_group(name)
-                self.copy_group(source[name], group, transfers, block_size, _copy, progress)
+                self.copy_group(
+                    source[name],
+                    group,
+                    transfers,
+                    block_size,
+                    _copy,
+                    progress,
+                    rechunking,
+                )
             else:
-                self.copy_array(name, source, target, transfers, block_size, _copy, progress)
+                self.copy_array(
+                    name,
+                    source,
+                    target,
+                    transfers,
+                    block_size,
+                    _copy,
+                    progress,
+                    rechunking,
+                )
 
-    def copy(self, source, target, transfers, block_size, progress):
+    def copy(self, source, target, transfers, block_size, progress, rechunking):
         import zarr
 
         if "_copy" not in target:
@@ -149,7 +180,7 @@ class Create(Command):
         _copy = target["_copy"]
         _copy_np = _copy[:]
 
-        self.copy_group(source, target, transfers, block_size, _copy_np, progress)
+        self.copy_group(source, target, transfers, block_size, _copy_np, progress, rechunking)
         del target["_copy"]
 
     def run(self, args):
@@ -158,8 +189,18 @@ class Create(Command):
         # base, ext = os.path.splitext(os.path.basename(args.source))
         # assert ext == ".zarr", ext
         # assert "." not in base, base
-
         LOG.info(f"Copying {args.source} to {args.target}")
+
+        rechunking = {}
+        for r in args.rechunk or []:
+            k, v = r.split("=")
+            values = v.split(",")
+            values = [-1 if x == "" else x for x in values]
+            values = tuple(int(x) for x in values)
+            rechunking[k] = values
+
+        for k, v in rechunking.items():
+            LOG.info(f"Rechunking {k} to {v}")
 
         try:
             target = zarr.open(self._store(args.target), mode="r")
@@ -187,7 +228,7 @@ class Create(Command):
                 target = zarr.open(self._store(args.target), mode="w+")
             except ValueError:
                 target = zarr.open(self._store(args.target), mode="w")
-        self.copy(source, target, args.transfers, args.block_size, args.progress)
+        self.copy(source, target, args.transfers, args.block_size, args.progress, rechunking)
 
 
 command = Create
