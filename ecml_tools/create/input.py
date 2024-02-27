@@ -138,9 +138,7 @@ def _data_request(data):
     params_steps = sort(params_steps)
     params_levels = sort(params_levels)
 
-    return dict(
-        param_level=params_levels, param_step=params_steps, area=area, grid=grid
-    )
+    return dict(param_level=params_levels, param_step=params_steps, area=area, grid=grid)
 
 
 class Coords:
@@ -162,14 +160,7 @@ class Coords:
         ensembles_key = list(from_config.keys())[2]
 
         if isinstance(from_config[variables_key], (list, tuple)):
-            assert all(
-                [
-                    v == w
-                    for v, w in zip(
-                        from_data[variables_key], from_config[variables_key]
-                    )
-                ]
-            ), (
+            assert all([v == w for v, w in zip(from_data[variables_key], from_config[variables_key])]), (
                 from_data[variables_key],
                 from_config[variables_key],
             )
@@ -413,9 +404,7 @@ class FunctionResult(Result):
         assert isinstance(action, Action), type(action)
         self.action = action
 
-        self.args, self.kwargs = substitute(
-            context, (self.action.args, self.action.kwargs)
-        )
+        self.args, self.kwargs = substitute(context, (self.action.args, self.action.kwargs))
 
     def _trace_datasource(self, *args, **kwargs):
         return f"{self.action.name}({shorten(self.dates)})"
@@ -428,9 +417,7 @@ class FunctionResult(Result):
         args, kwargs = resolve(self.context, (self.args, self.kwargs))
 
         try:
-            return self.action.function(
-                FunctionContext(self), self.dates, *args, **kwargs
-            )
+            return self.action.function(FunctionContext(self), self.dates, *args, **kwargs)
         except Exception:
             LOG.error(f"Error in {self.action.function.__name__}", exc_info=True)
             raise
@@ -525,9 +512,7 @@ class UnShiftResult(Result):
                     new_value = new_dt.isoformat()
                     return new_value
                 if key in ["date", "time", "step", "hdate"]:
-                    raise NotImplementedError(
-                        f"metadata {key} not implemented when shifting dates"
-                    )
+                    raise NotImplementedError(f"metadata {key} not implemented when shifting dates")
                 return value
 
             def __getattr__(self, name):
@@ -555,9 +540,7 @@ class FunctionAction(Action):
     def __repr__(self):
         content = ""
         content += ",".join([self._short_str(a) for a in self.args])
-        content += " ".join(
-            [self._short_str(f"{k}={v}") for k, v in self.kwargs.items()]
-        )
+        content += " ".join([self._short_str(f"{k}={v}") for k, v in self.kwargs.items()])
         content = self._short_str(content)
         return super().__repr__(_inline_=content, _indent_=" ")
 
@@ -565,48 +548,10 @@ class FunctionAction(Action):
         return f"{self.name}({shorten(dates)})"
 
 
-class ConcatResult(Result):
-    def __init__(self, context, action_path, dates, results, **kwargs):
-        super().__init__(context, action_path, dates)
-        self.results = [r for r in results if not r.empty]
-
-    @cached_property
-    @assert_fieldset
-    @notify_result
-    @trace_datasource
-    def datasource(self):
-        ds = EmptyResult(self.context, self.action_path, self.dates).datasource
-        for i in self.results:
-            ds += i.datasource
-        return ds
-
-    @property
-    def variables(self):
-        """Check that all the results objects have the same variables."""
-        variables = None
-        for f in self.results:
-            if f.empty:
-                continue
-            if variables is None:
-                variables = f.variables
-            assert variables == f.variables, (variables, f.variables)
-        assert variables is not None, self.results
-        return variables
-
-    def __repr__(self):
-        content = "\n".join([str(i) for i in self.results])
-        return super().__repr__(content)
-
-
 class ActionWithList(Action):
-    result_class = None
-
     def __init__(self, context, action_path, *configs):
         super().__init__(context, action_path, *configs)
-        self.actions = [
-            action_factory(c, context, action_path + [str(i)])
-            for i, c in enumerate(configs)
-        ]
+        self.actions = [action_factory(c, context, action_path + [str(i)]) for i, c in enumerate(configs)]
 
     def __repr__(self):
         content = "\n".join([str(i) for i in self.actions])
@@ -619,9 +564,7 @@ class PipeAction(Action):
         assert len(configs) > 1, configs
         current = action_factory(configs[0], context, action_path + ["0"])
         for i, c in enumerate(configs[1:]):
-            current = step_factory(
-                c, context, action_path + [str(i + 1)], previous_step=current
-            )
+            current = step_factory(c, context, action_path + [str(i + 1)], previous_step=current)
         self.last_step = current
 
     @trace_select
@@ -704,53 +647,84 @@ class FilterStepAction(StepAction):
 
 
 class FunctionStepAction(StepAction):
+    result_class = StepFunctionResult
+
     def __init__(self, context, action_path, previous_step, *args, **kwargs):
         super().__init__(context, action_path, previous_step, *args, **kwargs)
         self.name = args[0]
         self.function = import_function(self.name, "steps")
 
-    result_class = StepFunctionResult
+
+class ConcatResult(Result):
+    def __init__(self, context, action_path, dates, results, **kwargs):
+        super().__init__(context, action_path, dates)
+        self.results = [r for r in results if not r.empty]
+
+    @cached_property
+    @assert_fieldset
+    @notify_result
+    @trace_datasource
+    def datasource(self):
+        ds = EmptyResult(self.context, self.action_path, self.dates).datasource
+        for i in self.results:
+            ds += i.datasource
+        return ds
+
+    @property
+    def variables(self):
+        """Check that all the results objects have the same variables."""
+        variables = None
+        for f in self.results:
+            if f.empty:
+                continue
+            if variables is None:
+                variables = f.variables
+            assert variables == f.variables, (variables, f.variables)
+        assert variables is not None, self.results
+        return variables
+
+    def __repr__(self):
+        content = "\n".join([str(i) for i in self.results])
+        return super().__repr__(content)
 
 
-class ConcatAction(ActionWithList):
+class ConcatAction(Action):
+    def __init__(self, context, action_path, *configs):
+        super().__init__(context, action_path, *configs)
+        parts = []
+        for i, cfg in enumerate(configs):
+            if "dates" not in cfg:
+                raise ValueError(f"Missing 'dates' in {cfg}")
+            cfg = deepcopy(cfg)
+            dates_cfg = cfg.pop("dates")
+            assert isinstance(dates_cfg, dict), dates_cfg
+            filtering_dates = Dates.from_config(**dates_cfg)
+            action = action_factory(cfg, context, action_path + [str(i)])
+            parts.append((filtering_dates, action))
+        self.parts = parts
+
+    def __repr__(self):
+        content = "\n".join([str(i) for i in self.parts])
+        return super().__repr__(content)
+
     @trace_select
     def select(self, dates):
-        return ConcatResult(
-            self.context,
-            self.action_path,
-            dates,
-            [a.select(dates) for a in self.actions],
-        )
+        results = []
+        for filtering_dates, action in self.parts:
+            newdates = sorted(set(dates) & set(filtering_dates))
+            if newdates:
+                results.append(action.select(newdates))
+        if not results:
+            return EmptyResult(self.context, self.action_path, dates)
+
+        return ConcatResult(self.context, self.action_path, dates, results)
 
 
 class JoinAction(ActionWithList):
     @trace_select
     def select(self, dates):
-        return JoinResult(
-            self.context,
-            self.action_path,
-            dates,
-            [a.select(dates) for a in self.actions],
-        )
-
-
-class DateAction(Action):
-    def __init__(self, context, action_path, start, end, frequency, **kwargs):
-        super().__init__(context, action_path, **kwargs)
-        self.filtering_dates = Dates.from_config(
-            start=start, end=end, frequency=frequency
-        )
-        self.content = action_factory(kwargs, context, self.action_path + ["dates"])
-
-    @trace_select
-    def select(self, dates):
-        newdates = sorted(set(dates) & set(self.filtering_dates))
-        if not newdates:
-            return EmptyResult(self.context, self.action_path, newdates)
-        return self.content.select(newdates)
-
-    def __repr__(self):
-        return super().__repr__(f"{self.filtering_dates}\n{self.content}")
+        results = [a.select(dates) for a in self.actions]
+        return JoinResult(self.context, self.action_path, dates, results)
 
 
 def action_factory(config, context, action_path):
@@ -758,9 +732,7 @@ def action_factory(config, context, action_path):
     if not isinstance(config, dict):
         raise ValueError(f"Invalid input config {config}")
     if len(config) != 1:
-        raise ValueError(
-            f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}"
-        )
+        raise ValueError(f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}")
 
     config = deepcopy(config)
     key = list(config.keys())[0]
@@ -778,7 +750,6 @@ def action_factory(config, context, action_path):
         join=JoinAction,
         pipe=PipeAction,
         function=FunctionAction,
-        dates=DateAction,
     ).get(key)
 
     if cls is None:
