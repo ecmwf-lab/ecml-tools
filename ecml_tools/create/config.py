@@ -27,9 +27,7 @@ class DictObj(dict):
                 self[key] = DictObj(value)
                 continue
             if isinstance(value, list):
-                self[key] = [
-                    DictObj(item) if isinstance(item, dict) else item for item in value
-                ]
+                self[key] = [DictObj(item) if isinstance(item, dict) else item for item in value]
                 continue
 
     def __getattr__(self, attr):
@@ -128,41 +126,31 @@ class LoadersConfig(Config):
         if "config_format_version" not in self:
             # Should be changed to 2
             self.config_format_version = 1
-            print(
-                f"Setting config_format_version={self.config_format_version} because it was not provided."
-            )
+            print(f"Setting config_format_version={self.config_format_version} because it was not provided.")
 
         if self.config_format_version != 2:
-            raise ValueError(
-                "Config format has changed. Must provide config with format version >= 2."
-            )
+            raise ValueError("Config format has changed. Must provide config with format version >= 2.")
 
         if "dates" in self.output:
             raise ValueError("Obsolete: Dates should not be provided in output config.")
 
         # deprecated/obsolete
         if "order" in self.output:
-            raise ValueError(
-                f"Do not use 'order'. Use order_by instead. {list(self.keys())}"
-            )
+            raise ValueError(f"Do not use 'order'. Use order_by instead. {list(self.keys())}")
         if "loops" in self:
-            raise ValueError(
-                f"Do not use 'loops'. Use dates instead. {list(self.keys())}"
-            )
+            raise ValueError(f"Do not use 'loops'. Use dates instead. {list(self.keys())}")
         if "loop" in self:
-            raise ValueError(
-                f"Do not use 'loop'. Use dates instead. {list(self.keys())}"
-            )
+            raise ValueError(f"Do not use 'loop'. Use dates instead. {list(self.keys())}")
 
-        if not isinstance(self.dates, dict):
-            raise ValueError(f"Dates must be a dict. Got {self.dates}")
+        self.normalise()
 
         if "licence" not in self:
             raise ValueError("Must provide a licence in the config.")
         if "copyright" not in self:
             raise ValueError("Must provide a copyright in the config.")
 
-        self.normalise()
+        if not isinstance(self.dates, dict):
+            raise ValueError(f"Dates must be a dict. Got {self.dates}")
 
     def normalise(self):
         if isinstance(self.input, (tuple, list)):
@@ -189,9 +177,7 @@ class LoadersConfig(Config):
             if k == statistics_axis_name:
                 statistics_axis = i
 
-        assert (
-            statistics_axis >= 0
-        ), f"{self.output.statistics} not in {list(self.output.order_by.keys())}"
+        assert statistics_axis >= 0, f"{self.output.statistics} not in {list(self.output.order_by.keys())}"
 
         self.statistics_names = self.output.order_by[statistics_axis_name]
 
@@ -208,9 +194,7 @@ class LoadersConfig(Config):
         if key in dic:
             if dic[key] == value:
                 return
-            raise ValueError(
-                f"Cannot use {key}={dic[key]} with {self.purpose} purpose. Must use {value}."
-            )
+            raise ValueError(f"Cannot use {key}={dic[key]} with {self.purpose} purpose. Must use {value}.")
         print(f"Setting {key}={value} because purpose={self.purpose}")
         dic[key] = value
 

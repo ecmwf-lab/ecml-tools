@@ -53,7 +53,7 @@ class Create(Command):
         command_parser.add_argument(
             "--rechunk",
             nargs="+",
-            help="Rechunk given array. Example: data=10,1000,,",
+            help="Rechunk given array.",
             metavar="array=i,j,k,l",
         )
 
@@ -192,15 +192,17 @@ class Create(Command):
         LOG.info(f"Copying {args.source} to {args.target}")
 
         rechunking = {}
-        for r in args.rechunk or []:
-            k, v = r.split("=")
-            values = v.split(",")
-            values = [-1 if x == "" else x for x in values]
-            values = tuple(int(x) for x in values)
-            rechunking[k] = values
-
-        for k, v in rechunking.items():
-            LOG.info(f"Rechunking {k} to {v}")
+        if args.rechunk:
+            for r in args.rechunk:
+                k, v = r.split("=")
+                if k != "data":
+                    raise ValueError(f"Only rechunking data is supported: {k}")
+                values = v.split(",")
+                values = [-1 if x == "" else x for x in values]
+                values = tuple(int(x) for x in values)
+                rechunking[k] = values
+            for k, v in rechunking.items():
+                LOG.info(f"Rechunking {k} to {v}")
 
         try:
             target = zarr.open(self._store(args.target), mode="r")
