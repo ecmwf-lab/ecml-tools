@@ -44,20 +44,25 @@ class Create(Command):
     timestamp = True
 
     def add_arguments(self, command_parser):
-        command_parser.add_argument("--source", required=True)
-        command_parser.add_argument("--target", required=True)
         command_parser.add_argument("--transfers", type=int, default=8)
         command_parser.add_argument("--block-size", type=int, default=100)
         command_parser.add_argument("--overwrite", action="store_true")
         command_parser.add_argument("--progress", action="store_true")
+        command_parser.add_argument("--nested", action="store_true", help="Use ZARR's nested directpry backend.")
         command_parser.add_argument(
             "--rechunk",
             nargs="+",
             help="Rechunk given array.",
             metavar="array=i,j,k,l",
         )
+        command_parser.add_argument("source")
+        command_parser.add_argument("target")
 
-    def _store(self, path):
+    def _store(self, path, nested=False):
+        if nested:
+            import zarr
+
+            return zarr.storage.NestedDirectoryStore(path)
         return path
 
     def copy_chunk(self, n, m, source, target, block_size, _copy, progress):
@@ -205,7 +210,7 @@ class Create(Command):
                 LOG.info(f"Rechunking {k} to {v}")
 
         try:
-            target = zarr.open(self._store(args.target), mode="r")
+            target = zarr.open(self._store(args.target, args.nested), mode="r")
             if "_copy" in target:
                 done = sum(1 if x else 0 for x in target["_copy"])
                 todo = len(target["_copy"])
@@ -224,12 +229,12 @@ class Create(Command):
 
         source = zarr.open(self._store(args.source), mode="r")
         if args.overwrite:
-            target = zarr.open(self._store(args.target), mode="w")
+            target = zarr.open(self._store(args.target, args.nested), mode="w")
         else:
             try:
-                target = zarr.open(self._store(args.target), mode="w+")
+                target = zarr.open(self._store(args.target, args.nested), mode="w+")
             except ValueError:
-                target = zarr.open(self._store(args.target), mode="w")
+                target = zarr.open(self._store(args.target, args.nested), mode="w")
         self.copy(source, target, args.transfers, args.block_size, args.progress, rechunking)
 
 
