@@ -15,8 +15,7 @@ import os
 import pickle
 import shutil
 import socket
-from collections import Counter, defaultdict
-from functools import cached_property
+from collections import defaultdict
 
 import numpy as np
 
@@ -125,12 +124,9 @@ class TempStatistics:
         except FileNotFoundError:
             pass
 
-    def _hash_key(self, key):
-        return hashlib.sha256(str(key).encode("utf-8")).hexdigest()
-
     def write(self, key, data, dates):
         self.create(exist_ok=True)
-        h = self._hash_key(dates)
+        h = hashlib.sha256(str(dates).encode("utf-8")).hexdigest()
         path = os.path.join(self.dirname, f"{h}.npz")
 
         if not self.overwrite:
@@ -146,26 +142,11 @@ class TempStatistics:
     def _gather_data(self):
         # use glob to read all pickles
         files = glob.glob(self.dirname + "/*.npz")
-        LOG.info(f"Reading stats data, found {len(files)} in {self.dirname}")
+        LOG.info(f"Reading stats data, found {len(files)} files in {self.dirname}")
         assert len(files) > 0, f"No files found in {self.dirname}"
         for f in files:
             with open(f, "rb") as f:
                 yield pickle.load(f)
-
-    @property
-    def dates_computed(self):
-        all_dates = []
-        for _, dates, data in self._gather_data():
-            all_dates += dates
-
-        # assert no duplicates
-        duplicates = [item for item, count in Counter(all_dates).items() if count > 1]
-        if duplicates:
-            raise StatisticsValueError(f"Duplicate dates found in statistics: {duplicates}")
-
-        all_dates = normalise_dates(all_dates)
-        all_dates = sorted(all_dates)
-        return all_dates
 
     def get_aggregated(self, dates, variables_names):
         aggregator = StatAggregator(dates, variables_names, self)
@@ -245,13 +226,13 @@ class StatAggregator:
         for d in self.dates:
             assert d in available_dates, f"Statistics for date {d} not precomputed."
         assert len(available_dates) == len(self.dates)
+        print(f"Statistics for {len(available_dates)} dates found.")
 
     def aggregate(self):
         if not np.all(self.flags):
             not_found = np.where(self.flags == False)  # noqa: E712
             raise Exception(f"Statistics not precomputed for {not_found}", not_found)
 
-        print(f"Aggregating statistics on {self.minimum.shape}")
         for name in self.NAMES:
             if name == "count":
                 continue
@@ -273,7 +254,7 @@ class StatAggregator:
         check_variance(x, self.variables_names, minimum, maximum, mean, count, sums, squares)
         stdev = np.sqrt(x)
 
-        stats = Statistics(
+        return Statistics(
             minimum=minimum,
             maximum=maximum,
             mean=mean,
@@ -284,16 +265,13 @@ class StatAggregator:
             variables_names=self.variables_names,
         )
 
-        return stats
-
 
 class Statistics(dict):
     STATS_NAMES = ["minimum", "maximum", "mean", "stdev"]  # order matter for __str__.
 
-    def __init__(self, *args, check=True, **kwargs):
-        super().__init__(*args, **kwargs)
-        if check:
-            self.check()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.check()
 
     @property
     def size(self):
@@ -324,12 +302,14 @@ class Statistics(dict):
                 raise
 
     def __str__(self):
-        header = ["Variables"] + [self[name] for name in self.STATS_NAMES]
-        out = " ".join(header)
+        header = ["Variables"] + self.STATS_NAMES
+        out = [" ".join(header)]
 
-        for i, v in enumerate(self["variables_names"]):
-            out += " ".join([v] + [f"{x[i]:.2f}" for x in self.values()])
-        return out
+        out += [
+            " ".join([v] + [f"{self[n][i]:.2f}" for n in self.STATS_NAMES])
+            for i, v in enumerate(self["variables_names"])
+        ]
+        return "\n".join(out)
 
     def save(self, filename, provenance=None):
         assert filename.endswith(".json"), filename

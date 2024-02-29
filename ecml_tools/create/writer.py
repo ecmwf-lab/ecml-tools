@@ -106,21 +106,26 @@ class ReindexFirst:
 
 
 class DataWriter:
-    def __init__(self, parts, full_array, parent, print=print):
-        self.parent = parent
+    def __init__(self, parts, full_array, owner):
         self.full_array = full_array
 
-        self.path = parent.path
-        self.statistics_registry = parent.statistics_registry
-        self.registry = parent.registry
-        self.print = parent.print
+        self.path = owner.path
+        self.statistics_registry = owner.statistics_registry
+        self.registry = owner.registry
+        self.print = owner.print
+        self.dates = owner.dates
+        self.variables_names = owner.variables_names
 
-        self.append_axis = parent.output.append_axis
-        self.n_groups = len(parent.groups)
+        self.append_axis = owner.output.append_axis
+        self.n_groups = len(owner.groups)
 
-    @property
-    def variables_names(self):
-        return self.parent.variables_names
+    def date_to_index(self, date):
+        if isinstance(date, str):
+            date = np.datetime64(date)
+        if isinstance(date, datetime.datetime):
+            date = np.datetime64(date)
+        assert type(date) is type(self.dates[0]), (type(date), type(self.dates[0]))
+        return np.where(self.dates == date)[0][0]
 
     def write(self, result, igroup, dates):
         cube = result.get_cube()
@@ -137,7 +142,7 @@ class DataWriter:
         LOG.info(msg)
         self.print(msg)
 
-        indexes = [self.parent.date_to_index(d) for d in dates_in_data]
+        indexes = [self.date_to_index(d) for d in dates_in_data]
         array = ViewCacheArray(self.full_array, shape=shape, indexes=indexes)
         self.load_datacube(cube, array)
 
