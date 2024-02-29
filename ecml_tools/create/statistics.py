@@ -6,16 +6,17 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
+import datetime
 import glob
+import hashlib
 import json
 import logging
 import os
 import pickle
 import shutil
 import socket
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from functools import cached_property
-
 
 import numpy as np
 
@@ -24,6 +25,18 @@ from ecml_tools.provenance import gather_provenance_info
 from .check import StatisticsValueError, check_data_values, check_stats
 
 LOG = logging.getLogger(__name__)
+
+
+def to_datetime(date):
+    if isinstance(date, str):
+        return np.datetime64(date)
+    if isinstance(date, datetime.datetime):
+        return np.datetime64(date)
+    return date
+
+
+def to_datetimes(dates):
+    return [to_datetime(d) for d in dates]
 
 
 def check_variance(x, variables_names, minimum, maximum, mean, count, sums, squares):
@@ -112,19 +125,13 @@ class TempStatistics:
         except FileNotFoundError:
             pass
 
+    def _hash_key(self, key):
+        return hashlib.sha256(str(key).encode("utf-8")).hexdigest()
+
     def write(self, key, data, dates):
         self.create(exist_ok=True)
-        key_str = (
-            str(key)
-            .replace("(", "")
-            .replace(")", "")
-            .replace(" ", "_")
-            .replace(",", "_")
-            .replace("None", "x")
-            .replace("__", "_")
-            .lower()
-        )
-        path = os.path.join(self.dirname, f"{key_str}.npz")
+        h = self._hash_key(dates)
+        path = os.path.join(self.dirname, f"{h}.npz")
 
         if not self.overwrite:
             assert not os.path.exists(path), f"{path} already exists"
@@ -134,34 +141,21 @@ class TempStatistics:
             pickle.dump((key, dates, data), f)
         shutil.move(tmp_path, path)
 
-        LOG.info(f"Written statistics data for {key} in {path} ({dates})")
+        LOG.info(f"Written statistics data for {len(dates)} dates in {path} ({dates})")
 
     def _gather_data(self):
         # use glob to read all pickles
         files = glob.glob(self.dirname + "/*.npz")
         LOG.info(f"Reading stats data, found {len(files)} in {self.dirname}")
         assert len(files) > 0, f"No files found in {self.dirname}"
-
-        key_strs = dict()
         for f in files:
             with open(f, "rb") as f:
-                key, dates, data = pickle.load(f)
-
-            key_str = str(key)
-            if key_str in key_strs:
-                raise Exception(f"Duplicate key {key}, found in {f} and {key_strs[key_str]}")
-            key_strs[key_str] = f
-
-            yield key, dates, data
-
-    @cached_property
-    def n_dates_computed(self):
-        return len(self.dates_computed)
+                yield pickle.load(f)
 
     @property
     def dates_computed(self):
         all_dates = []
-        for key, dates, data in self._gather_data():
+        for _, dates, data in self._gather_data():
             all_dates += dates
 
         # assert no duplicates
@@ -170,11 +164,11 @@ class TempStatistics:
             raise StatisticsValueError(f"Duplicate dates found in statistics: {duplicates}")
 
         all_dates = normalise_dates(all_dates)
+        all_dates = sorted(all_dates)
         return all_dates
 
     def get_aggregated(self, dates, variables_names):
-        aggregator = StatAggregator(variables_names, self)
-        aggregator.read(dates)
+        aggregator = StatAggregator(dates, variables_names, self)
         return aggregator.aggregate()
 
     def __str__(self):
@@ -194,12 +188,15 @@ def normalise_dates(dates):
 class StatAggregator:
     NAMES = ["minimum", "maximum", "sums", "squares", "count"]
 
-    def __init__(self, variables_names, owner):
+    def __init__(self, dates, variables_names, owner):
+        dates = sorted(dates)
+        dates = to_datetimes(dates)
         self.owner = owner
-        self.computed_dates = owner.dates_computed
-        self.shape = (len(self.computed_dates), len(variables_names))
+        self.dates = dates
         self.variables_names = variables_names
-        print("Aggregating on ", self.shape, variables_names)
+
+        self.shape = (len(self.dates), len(self.variables_names))
+        print("Aggregating statistics on ", self.shape, self.variables_names)
 
         self.minimum = np.full(self.shape, np.nan, dtype=np.float64)
         self.maximum = np.full(self.shape, np.nan, dtype=np.float64)
@@ -208,33 +205,52 @@ class StatAggregator:
         self.count = np.full(self.shape, -1, dtype=np.int64)
         self.flags = np.full(self.shape, False, dtype=np.bool_)
 
-    def read(self, dates):
-        assert type(dates[0]) == type(self.computed_dates[0]), (
-            dates[0],
-            self.computed_dates[0],
-        )
+        self._read()
 
-        dates_bitmap = np.isin(self.computed_dates, dates)
+    def _date_to_index(self, date):
+        date = to_datetime(date)
+        assert type(date) is type(self.dates[0]), (type(date), type(self.dates[0]))
+        assert date in self.dates, f"Statistics for date {date} is not needed."
+        return np.where(self.dates == date)[0][0]
 
-        for key, dates, data in self.owner._gather_data():
-            assert isinstance(data, dict), data
-            assert not np.any(self.flags[key]), f"Overlapping values for {key} {self.flags} ({dates})"
-            self.flags[key] = True
+    def _read(self):
+        available_dates = []
+        for _, dates, stats in self.owner._gather_data():
+            assert isinstance(stats, dict), stats
+            for n in self.NAMES:
+                assert n in stats, (n, list(stats.keys()))
+            dates = to_datetimes(dates)
+
+            indexes = []
+            stats_indexes = []
+            for i, d in enumerate(dates):
+                if d not in self.dates:
+                    continue
+                stats_indexes.append(i)
+                indexes.append(self._date_to_index(d))
+                available_dates.append(d)
+
+            if not indexes:
+                continue
+
+            self.flags[indexes] = True
             for name in self.NAMES:
                 array = getattr(self, name)
-                array[key] = data[name]
+                data = stats[name]
+                data = data[stats_indexes]
+                array[indexes] = data
 
-        if not np.all(self.flags[dates_bitmap]):
-            not_found = np.where(self.flags == False)  # noqa: E712
-            raise Exception(f"Missing statistics data for {not_found}", not_found)
-
-        print(f"Selection statistics data from {self.minimum.shape[0]} to {self.minimum[dates_bitmap].shape[0]} dates.")
-        for name in self.NAMES:
-            array = getattr(self, name)
-            array = array[dates_bitmap]
-            setattr(self, name, array)
+        assert type(available_dates[0]) is type(self.dates[0]), (available_dates[0], self.dates[0])
+        assert len(available_dates) == len(set(available_dates)), "Duplicate dates found in statistics"
+        for d in self.dates:
+            assert d in available_dates, f"Statistics for date {d} not precomputed."
+        assert len(available_dates) == len(self.dates)
 
     def aggregate(self):
+        if not np.all(self.flags):
+            not_found = np.where(self.flags == False)  # noqa: E712
+            raise Exception(f"Statistics not precomputed for {not_found}", not_found)
+
         print(f"Aggregating statistics on {self.minimum.shape}")
         for name in self.NAMES:
             if name == "count":

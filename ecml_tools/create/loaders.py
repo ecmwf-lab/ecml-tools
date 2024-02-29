@@ -98,6 +98,14 @@ class Loader:
                 self.dates[0],
             )
 
+    def date_to_index(self, date):
+        if isinstance(date, str):
+            date = np.datetime64(date)
+        if isinstance(date, datetime.datetime):
+            date = np.datetime64(date)
+        assert type(date) is type(self.dates[0]), (type(date), type(self.dates[0]))
+        return np.where(self.dates == date)[0][0]
+
     @cached_property
     def registry(self):
         return ZarrBuiltRegistry(self.path)
@@ -377,7 +385,7 @@ class StatisticsLoader(Loader):
         dates = [d for d in self.dates if d not in self.missing_dates]
 
         if self.missing_dates:
-            assert type(self.missing_dates[0]) == type(dates[0]), (type(self.missing_dates[0]), type(dates[0]))
+            assert type(self.missing_dates[0]) is type(dates[0]), (type(self.missing_dates[0]), type(dates[0]))
 
         dates_computed = self.statistics_registry.dates_computed
         for d in dates:
@@ -392,7 +400,7 @@ class StatisticsLoader(Loader):
         start = np.datetime64(start)
         end = np.datetime64(end)
         dates = [d for d in dates if d >= start and d <= end]
-        assert type(start) == type(dates[0]), (type(start), type(dates[0]))
+        assert type(start) is type(dates[0]), (type(start), type(dates[0]))
 
         stats = self.statistics_registry.get_aggregated(dates, self.variables_names)
 

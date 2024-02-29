@@ -128,14 +128,6 @@ class ZarrBuiltRegistry:
         history.append(new)
         z.attrs["history"] = history
 
-    def get_slice_for(self, i):
-        lengths = self.get_lengths()
-        assert i >= 0 and i < len(lengths)
-
-        start = sum(lengths[:i])
-        stop = sum(lengths[: (i + 1)])
-        return slice(start, stop)
-
     def get_lengths(self):
         z = self._open_read()
         return list(z["_build"][self.name_lengths][:])
