@@ -15,7 +15,7 @@ dates:
   end: 2021-01-03 12:00:00
   frequency: 12h
   group_by: monthly
-  missing: ['2021-01-03 00:00:00']
+  missing: ['2020-12-30 12:00:00', '2021-01-03 00:00:00']
 
 include:
   - mars:
@@ -30,6 +30,7 @@ input:
     template: ${include.0.mars}
     param:
       - cos_latitude
+      #- sin_latitude
 
 output:
   chunking: { dates: 1, ensembles: 1 }
@@ -39,4 +40,4 @@ output:
   remapping:
     param_level: "{param}_{levelist}"
   statistics: param_level
-  statistics_end: 2020
+  statistics_end: 2021-01-02

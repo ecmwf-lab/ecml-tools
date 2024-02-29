@@ -35,9 +35,7 @@ class Creator:
         from .loaders import InitialiseLoader
 
         if self._path_readable() and not self.overwrite:
-            raise Exception(
-                f"{self.path} already exists. Use overwrite=True to overwrite."
-            )
+            raise Exception(f"{self.path} already exists. Use overwrite=True to overwrite.")
 
         with self._cache_context():
             obj = InitialiseLoader.from_config(
@@ -57,11 +55,7 @@ class Creator:
             )
             loader.load(parts=parts)
 
-    def statistics(
-        self,
-        force=False,
-        output=None,
-    ):
+    def statistics(self, force=False, output=None, start=None, end=None):
         from .loaders import StatisticsLoader
 
         loader = StatisticsLoader.from_dataset(
@@ -71,25 +65,8 @@ class Creator:
             statistics_tmp=self.statistics_tmp,
             statistics_output=output,
             recompute=False,
-        )
-        loader.run()
-
-    def recompute_statistics(
-        self,
-        start=None,
-        end=None,
-        force=False,
-    ):
-        from .loaders import StatisticsLoader
-
-        loader = StatisticsLoader.from_dataset(
-            path=self.path,
-            print=self.print,
-            force=force,
-            statistics_tmp=self.statistics_tmp,
             statistics_start=start,
             statistics_end=end,
-            recompute=True,
         )
         loader.run()
 
