@@ -54,6 +54,7 @@ def create_zarr(
     k=0,
     ensemble=None,
     grids=None,
+    missing=False,
 ):
     root = zarr.group()
 
@@ -103,6 +104,18 @@ def create_zarr(
     root.attrs["name_to_index"] = {k: i for i, k in enumerate(vars)}
 
     root.attrs["data_request"] = {"grid": 1, "area": "g", "param_level": {}}
+
+    if missing:
+        missing_dates = []
+        i = 2
+        p, q = 5, 7
+        while i < len(dates):
+            missing_dates.append(dates[i])
+            i = p * q + 1
+            p, q = q, i
+        root.attrs["missing_dates"] = [
+            d.astype(object).isoformat() for d in missing_dates
+        ]
 
     root.create_dataset(
         "mean",
@@ -157,6 +170,7 @@ def zarr_from_str(name, mode):
         k=int(args["k"]),
         ensemble=int(args["ensemble"]) if args["ensemble"] is not None else None,
         grids=int(args["grids"]) if args["grids"] is not None else None,
+        missing=args["test"] == "missing",
     )
 
 
@@ -199,9 +213,24 @@ def make_row(*args, ensemble=False, grid=False):
     return np.array(args)
 
 
+def missing(x):
+    if isinstance(x, tuple):
+        return (missing(a) for a in x)
+    if isinstance(x, list):
+        return [missing(a) for a in x]
+    if isinstance(x, dict):
+        return {k: missing(v) for k, v in x.items()}
+    if isinstance(x, str) and x.startswith("test-"):
+        return x.replace("test-", "missing-")
+    return x
+
+
 class DatasetTester:
     def __init__(self, *args, **kwargs):
         self.ds = open_dataset(*args, **kwargs)
+
+        args, kwargs = missing((args, kwargs))
+        self.ds_missing = open_dataset(*args, **kwargs)
 
     def run(
         self,
@@ -255,6 +284,11 @@ class DatasetTester:
         self.indexing(self.ds)
         self.metadata(self.ds)
         assert self.ds.valid_ranges(2) == [(0, len(self.ds))]
+
+        self.missing(self.ds_missing)
+
+    def missing(self, ds):
+        assert ds.missing, ds
 
     def metadata(self, ds):
         metadata = ds.metadata()
