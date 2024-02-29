@@ -13,9 +13,8 @@ import os
 import pickle
 import shutil
 import socket
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from functools import cached_property
-
 
 import numpy as np
 
@@ -149,7 +148,9 @@ class TempStatistics:
 
             key_str = str(key)
             if key_str in key_strs:
-                raise Exception(f"Duplicate key {key}, found in {f} and {key_strs[key_str]}")
+                raise Exception(
+                    f"Duplicate key {key}, found in {f} and {key_strs[key_str]}"
+                )
             key_strs[key_str] = f
 
             yield key, dates, data
@@ -167,7 +168,9 @@ class TempStatistics:
         # assert no duplicates
         duplicates = [item for item, count in Counter(all_dates).items() if count > 1]
         if duplicates:
-            raise StatisticsValueError(f"Duplicate dates found in statistics: {duplicates}")
+            raise StatisticsValueError(
+                f"Duplicate dates found in statistics: {duplicates}"
+            )
 
         all_dates = normalise_dates(all_dates)
         return all_dates
@@ -209,7 +212,7 @@ class StatAggregator:
         self.flags = np.full(self.shape, False, dtype=np.bool_)
 
     def read(self, dates):
-        assert type(dates[0]) == type(self.computed_dates[0]), (
+        assert type(dates[0]) is type(self.computed_dates[0]), (
             dates[0],
             self.computed_dates[0],
         )
@@ -218,7 +221,9 @@ class StatAggregator:
 
         for key, dates, data in self.owner._gather_data():
             assert isinstance(data, dict), data
-            assert not np.any(self.flags[key]), f"Overlapping values for {key} {self.flags} ({dates})"
+            assert not np.any(
+                self.flags[key]
+            ), f"Overlapping values for {key} {self.flags} ({dates})"
             self.flags[key] = True
             for name in self.NAMES:
                 array = getattr(self, name)
@@ -228,7 +233,9 @@ class StatAggregator:
             not_found = np.where(self.flags == False)  # noqa: E712
             raise Exception(f"Missing statistics data for {not_found}", not_found)
 
-        print(f"Selection statistics data from {self.minimum.shape[0]} to {self.minimum[dates_bitmap].shape[0]} dates.")
+        print(
+            f"Selection statistics data from {self.minimum.shape[0]} to {self.minimum[dates_bitmap].shape[0]} dates."
+        )
         for name in self.NAMES:
             array = getattr(self, name)
             array = array[dates_bitmap]
@@ -254,7 +261,9 @@ class StatAggregator:
         x = squares / count - mean * mean
         # remove negative variance due to numerical errors
         # x[- 1e-15 < (x / (np.sqrt(squares / count) + np.abs(mean))) < 0] = 0
-        check_variance(x, self.variables_names, minimum, maximum, mean, count, sums, squares)
+        check_variance(
+            x, self.variables_names, minimum, maximum, mean, count, sums, squares
+        )
         stdev = np.sqrt(x)
 
         stats = Statistics(

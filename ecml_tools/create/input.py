@@ -138,7 +138,9 @@ def _data_request(data):
     params_steps = sort(params_steps)
     params_levels = sort(params_levels)
 
-    return dict(param_level=params_levels, param_step=params_steps, area=area, grid=grid)
+    return dict(
+        param_level=params_levels, param_step=params_steps, area=area, grid=grid
+    )
 
 
 class Coords:
@@ -160,7 +162,14 @@ class Coords:
         ensembles_key = list(from_config.keys())[2]
 
         if isinstance(from_config[variables_key], (list, tuple)):
-            assert all([v == w for v, w in zip(from_data[variables_key], from_config[variables_key])]), (
+            assert all(
+                [
+                    v == w
+                    for v, w in zip(
+                        from_data[variables_key], from_config[variables_key]
+                    )
+                ]
+            ), (
                 from_data[variables_key],
                 from_config[variables_key],
             )
@@ -404,7 +413,9 @@ class FunctionResult(Result):
         assert isinstance(action, Action), type(action)
         self.action = action
 
-        self.args, self.kwargs = substitute(context, (self.action.args, self.action.kwargs))
+        self.args, self.kwargs = substitute(
+            context, (self.action.args, self.action.kwargs)
+        )
 
     def _trace_datasource(self, *args, **kwargs):
         return f"{self.action.name}({shorten(self.dates)})"
@@ -417,7 +428,9 @@ class FunctionResult(Result):
         args, kwargs = resolve(self.context, (self.args, self.kwargs))
 
         try:
-            return self.action.function(FunctionContext(self), self.dates, *args, **kwargs)
+            return self.action.function(
+                FunctionContext(self), self.dates, *args, **kwargs
+            )
         except Exception:
             LOG.error(f"Error in {self.action.function.__name__}", exc_info=True)
             raise
@@ -512,7 +525,9 @@ class UnShiftResult(Result):
                     new_value = new_dt.isoformat()
                     return new_value
                 if key in ["date", "time", "step", "hdate"]:
-                    raise NotImplementedError(f"metadata {key} not implemented when shifting dates")
+                    raise NotImplementedError(
+                        f"metadata {key} not implemented when shifting dates"
+                    )
                 return value
 
             def __getattr__(self, name):
@@ -540,7 +555,9 @@ class FunctionAction(Action):
     def __repr__(self):
         content = ""
         content += ",".join([self._short_str(a) for a in self.args])
-        content += " ".join([self._short_str(f"{k}={v}") for k, v in self.kwargs.items()])
+        content += " ".join(
+            [self._short_str(f"{k}={v}") for k, v in self.kwargs.items()]
+        )
         content = self._short_str(content)
         return super().__repr__(_inline_=content, _indent_=" ")
 
@@ -551,7 +568,10 @@ class FunctionAction(Action):
 class ActionWithList(Action):
     def __init__(self, context, action_path, *configs):
         super().__init__(context, action_path, *configs)
-        self.actions = [action_factory(c, context, action_path + [str(i)]) for i, c in enumerate(configs)]
+        self.actions = [
+            action_factory(c, context, action_path + [str(i)])
+            for i, c in enumerate(configs)
+        ]
 
     def __repr__(self):
         content = "\n".join([str(i) for i in self.actions])
@@ -564,7 +584,9 @@ class PipeAction(Action):
         assert len(configs) > 1, configs
         current = action_factory(configs[0], context, action_path + ["0"])
         for i, c in enumerate(configs[1:]):
-            current = step_factory(c, context, action_path + [str(i + 1)], previous_step=current)
+            current = step_factory(
+                c, context, action_path + [str(i + 1)], previous_step=current
+            )
         self.last_step = current
 
     @trace_select
@@ -767,7 +789,9 @@ def action_factory(config, context, action_path):
     if not isinstance(config, dict):
         raise ValueError(f"Invalid input config {config}")
     if len(config) != 1:
-        raise ValueError(f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}")
+        raise ValueError(
+            f"Invalid input config. Expecting dict with only one key, got {list(config.keys())}"
+        )
 
     config = deepcopy(config)
     key = list(config.keys())[0]

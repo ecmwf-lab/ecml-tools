@@ -103,7 +103,9 @@ class StartEndDates(Dates):
         start = _(start)
         end = _(end)
 
-        if isinstance(start, datetime.date) and not isinstance(start, datetime.datetime):
+        if isinstance(start, datetime.date) and not isinstance(
+            start, datetime.datetime
+        ):
             start = datetime.datetime(start.year, start.month, start.day)
 
         if isinstance(end, datetime.date) and not isinstance(end, datetime.datetime):

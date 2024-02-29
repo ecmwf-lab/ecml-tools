@@ -44,7 +44,11 @@ class CubesFilter:
                     )
 
                 chunk_size = total / n_chunks
-                parts = [x for x in range(total) if x >= (i_chunk - 1) * chunk_size and x < i_chunk * chunk_size]
+                parts = [
+                    x
+                    for x in range(total)
+                    if x >= (i_chunk - 1) * chunk_size and x < i_chunk * chunk_size
+                ]
 
         parts = [int(_) for _ in parts]
         LOG.info(f"Running parts: {parts}")
@@ -136,12 +140,18 @@ class OffsetView(ArrayLike):
 
             # Create a new key for indexing the large array.
             new_key = tuple(
-                (slice(self.offset, self.offset + values_shape[i]) if i == self.axis else slice(None))
+                (
+                    slice(self.offset, self.offset + values_shape[i])
+                    if i == self.axis
+                    else slice(None)
+                )
                 for i in range(len(self.shape))
             )
         else:
             # For non-slice keys, adjust the key based on the offset and axis.
-            new_key = tuple(k + self.offset if i == self.axis else k for i, k in enumerate(key))
+            new_key = tuple(
+                k + self.offset if i == self.axis else k for i, k in enumerate(key)
+            )
         return new_key
 
     def __setitem__(self, key, values):
@@ -192,10 +202,14 @@ class DataWriter:
             f"Building dataset '{self.path}' i={icube} total={self.n_cubes} "
             f"(total shape ={shape}) at {slice}, {self.full_array.chunks=}"
         )
-        self.print(f"Building dataset (total shape ={shape}) at {slice}, {self.full_array.chunks=}")
+        self.print(
+            f"Building dataset (total shape ={shape}) at {slice}, {self.full_array.chunks=}"
+        )
 
         offset = slice.start
-        array = OffsetView(self.full_array, offset=offset, axis=self.append_axis, shape=shape)
+        array = OffsetView(
+            self.full_array, offset=offset, axis=self.append_axis, shape=shape
+        )
         array = FastWriteArray(array, shape=shape)
         self.load_datacube(cube, array)
 
@@ -245,8 +259,12 @@ class DataWriter:
         LOG.info("Written.")
 
         self.print(
-            f"Elapsed: {seconds(time.time() - start)}," f" load time: {seconds(load)}," f" write time: {seconds(save)}."
+            f"Elapsed: {seconds(time.time() - start)},"
+            f" load time: {seconds(load)},"
+            f" write time: {seconds(save)}."
         )
         LOG.info(
-            f"Elapsed: {seconds(time.time() - start)}," f" load time: {seconds(load)}," f" write time: {seconds(save)}."
+            f"Elapsed: {seconds(time.time() - start)},"
+            f" load time: {seconds(load)},"
+            f" write time: {seconds(save)}."
         )

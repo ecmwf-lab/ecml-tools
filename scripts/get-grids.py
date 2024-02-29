@@ -3,8 +3,8 @@
 import os
 import sys
 
-import numpy as np
 import climetlab as cml
+import numpy as np
 
 grid = sys.argv[1]
 

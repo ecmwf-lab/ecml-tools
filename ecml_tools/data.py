@@ -66,9 +66,7 @@ def debug_zarr_loading(on_off):
 
 
 def _make_slice_or_index_from_list_or_tuple(indices):
-    """
-    Convert a list or tuple of indices to a slice or an index, if possible.
-    """
+    """Convert a list or tuple of indices to a slice or an index, if possible."""
 
     if len(indices) < 2:
         return indices
@@ -81,6 +79,14 @@ def _make_slice_or_index_from_list_or_tuple(indices):
         return slice(indices[0], indices[-1] + step, step)
 
     return indices
+
+
+class MissingDate(Exception):
+    pass
+
+
+class InvalidSlice(Exception):
+    pass
 
 
 class Dataset:
@@ -123,6 +129,12 @@ class Dataset:
         if "statistics" in kwargs:
             statistics = kwargs.pop("statistics")
             return Statistics(self, statistics)._subset(**kwargs)
+
+        if "with_valid_ranges" in kwargs:
+            if not self.missing:
+                return self
+            width = kwargs.pop("with_valid_ranges")
+            return ValidRanges(self, width)._subset(**kwargs)
 
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 
@@ -231,11 +243,30 @@ class Dataset:
             f"Tuple not supported: {n} (class {self.__class__.__name__})"
         )
 
+    def valid_ranges(self, width):
+        # TODO: optimize, by implementing in subclasses
+        result = []
+        n = 0
+        missing = self.missing
+        while n < len(self):
+            if n in missing:
+                n += 1
+                continue
+
+            m = n
+            while m < len(self) and m not in missing:
+                m += 1
+
+            if m - n >= width:
+                result.append((n, m))
+
+            n = m
+
+        return result
+
 
 class Source:
-    """
-    Class used to follow the provenance of a data point.
-    """
+    """Class used to follow the provenance of a data point."""
 
     def __init__(self, dataset, index, source=None, info=None):
         self.dataset = dataset
@@ -281,10 +312,8 @@ class ReadOnlyStore(zarr.storage.BaseStore):
 
 
 class HTTPStore(ReadOnlyStore):
-    """
-    We write our own HTTPStore because the one used by zarr (fsspec)
-    does not play well with fork() and multiprocessing.
-    """
+    """We write our own HTTPStore because the one used by zarr (fsspec) does not play
+    well with fork() and multiprocessing."""
 
     def __init__(self, url):
         self.url = url
@@ -302,10 +331,8 @@ class HTTPStore(ReadOnlyStore):
 
 
 class S3Store(ReadOnlyStore):
-    """
-    We write our own S3Store because the one used by zarr (fsspec)
-    does not play well with fork() and multiprocessing.
-    """
+    """We write our own S3Store because the one used by zarr (fsspec) does not play well
+    with fork() and multiprocessing."""
 
     def __init__(self, url):
         import boto3
@@ -370,14 +397,17 @@ def open_zarr(path):
 class Zarr(Dataset):
     def __init__(self, path):
         if isinstance(path, zarr.hierarchy.Group):
+            self.was_zarr = True
             self.path = str(id(path))
             self.z = path
         else:
+            self.was_zarr = False
             self.path = str(path)
             self.z = open_zarr(self.path)
 
         # This seems to speed up the reading of the data a lot
         self.data = self.z.data
+        self.missing = set()
 
     def __len__(self):
         return self.data.shape[0]
@@ -496,6 +526,65 @@ class Zarr(Dataset):
     def source(self, index):
         return Source(self, index, info=self.path)
 
+    def mutate(self):
+        if len(self.z.attrs.get("missing_dates", [])):
+            LOG.warn(f"Dataset {self} has missing dates")
+            return ZarrWithMissingDates(self.z if self.was_zarr else self.path)
+        return self
+
+
+class ZarrWithMissingDates(Zarr):
+    def __init__(self, path):
+        super().__init__(path)
+
+        missing_dates = self.z.attrs.get("missing_dates", [])
+        missing_dates = [np.datetime64(x) for x in missing_dates]
+        self.missing_to_dates = {
+            i: d for i, d in enumerate(self.dates) if d in missing_dates
+        }
+        self.missing = set(self.missing_to_dates)
+
+    def mutate(self):
+        return self
+
+    @debug_indexing
+    @expand_list_indexing
+    def __getitem__(self, n):
+        if isinstance(n, int):
+            if n in self.missing:
+                self._report_missing(n)
+            return self.data[n]
+
+        if isinstance(n, slice):
+            common = set(range(*n.indices(len(self)))) & self.missing
+            if common:
+                self._report_missing(list(common)[0])
+            return self.data[n]
+
+        if isinstance(n, tuple):
+            first = n[0]
+            if isinstance(first, int):
+                if first in self.missing:
+                    self._report_missing(first)
+                return self.data[n]
+
+            if isinstance(first, slice):
+                common = set(range(*first.indices(len(self)))) & self.missing
+                if common:
+                    self._report_missing(list(common)[0])
+                return self.data[n]
+
+            if isinstance(first, (list, tuple)):
+                common = set(first) & self.missing
+                if common:
+                    self._report_missing(list(common)[0])
+                return self.data[n]
+
+        raise TypeError(f"Unsupported index {n} {type(n)}")
+
+    def _report_missing(self, n):
+        raise MissingDate(f"Date {self.missing_to_dates[n]} is missing (index={n})")
+
 
 class Forwards(Dataset):
     def __init__(self, forward):
@@ -546,6 +635,10 @@ class Forwards(Dataset):
     @property
     def dtype(self):
         return self.forward.dtype
+
+    @property
+    def missing(self):
+        return self.forward.missing
 
     def metadata_specific(self, **kwargs):
         return super().metadata_specific(
@@ -652,6 +745,15 @@ class Combined(Forwards):
             **kwargs,
         )
 
+    @cached_property
+    def missing(self):
+        offset = 0
+        result = set()
+        for d in self.datasets:
+            result.update(offset + m for m in d.missing)
+            offset += len(d)
+        return result
+
 
 class Concat(Combined):
     def __len__(self):
@@ -721,7 +823,7 @@ class Concat(Combined):
 
 
 class GivenAxis(Combined):
-    """Given a given axis, combine the datasets along that axis"""
+    """Given a given axis, combine the datasets along that axis."""
 
     def __init__(self, datasets, axis):
         self.axis = axis
@@ -870,9 +972,7 @@ class CutoutGrids(Grids):
 
 
 class Join(Combined):
-    """
-    Join the datasets along the variables axis.
-    """
+    """Join the datasets along the variables axis."""
 
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)
@@ -974,11 +1074,16 @@ class Join(Combined):
             i -= dataset.shape[1]
         assert False
 
+    @cached_property
+    def missing(self):
+        result = set()
+        for d in self.datasets:
+            result = result | d.missing
+        return result
+
 
 class Subset(Forwards):
-    """
-    Select a subset of the dates.
-    """
+    """Select a subset of the dates."""
 
     def __init__(self, dataset, indices):
         while isinstance(dataset, Subset):
@@ -999,6 +1104,7 @@ class Subset(Forwards):
         if isinstance(n, slice):
             return self._get_slice(n)
 
+        assert n >= 0, n
         n = self.indices[n]
         return self.dataset[n]
 
@@ -1008,6 +1114,9 @@ class Subset(Forwards):
         # the time checking maybe be longer than the time saved
         # using a slice
         indices = [self.indices[i] for i in range(*s.indices(self._len))]
+        indices = _make_slice_or_index_from_list_or_tuple(indices)
+        if isinstance(indices, slice):
+            return self.dataset[indices]
         return np.stack([self.dataset[i] for i in indices])
 
     @debug_indexing
@@ -1046,11 +1155,78 @@ class Subset(Forwards):
     def __repr__(self):
         return f"Subset({self.dates[0]}, {self.dates[-1]}, {self.frequency})"
 
+    @cached_property
+    def missing(self):
+        return {self.indices[i] for i in self.dataset.missing if i in self.indices}
+
+
+class ValidRanges(Subset):
+    def __init__(self, dataset, width):
+        self.width = width
+        self.ranges = dataset.valid_ranges(width)
+
+        super().__init__(dataset, [i for r in self.ranges for i in range(*r)])
+
+        assert not self.missing, self.missing
+
+    @debug_indexing
+    def _get_slice(self, s):
+        self._check_slice(s)
+        return super()._get_slice(s)
+
+    @debug_indexing
+    @expand_list_indexing
+    def _get_tuple(self, n):
+        if isinstance(n[0], int):
+            return super()._get_tuple(n)
+
+        if isinstance(n[0], slice):
+            self._check_slice(n[0])
+            return super()._get_tuple(n)
+
+        if isinstance(n[0], (list, tuple)):
+            self._check_list(n[0])
+            return super()._get_tuple(n)
+
+        raise TypeError(f"Unsupported index {n} {type(n)}")
+
+    def _check_slice(self, s):
+        """Check that once mapped in the new index, the slice is regular."""
+
+        indices = [self.indices[i] for i in range(*s.indices(self._len))]
+        self._check_indices(s, indices)
+
+    def _check_list(self, s):
+        indices = [self.indices[i] for i in s]
+        self._check_indices(s, indices)
+
+    def _check_indices(self, s, indices):
+        indices = _make_slice_or_index_from_list_or_tuple(indices)
+        if isinstance(indices, slice):
+            # The slice is regular in the new index, so we do not have
+            # missing dates
+            return
+
+        dates = self.dataset.dates[indices]
+        delta = [dates[i] - dates[0] for i in range(1, len(dates))]
+        delta = [int(x.astype(object).total_seconds() / 3600) for x in delta]
+        delta = ",".join(["T"] + [f"T{x:+d}" for x in delta])
+
+        if isinstance(s, slice):
+            idx = [str(x) if x is not None else "" for x in (s.start, s.stop, s.step)]
+            idx = ":".join(idx)
+            if s.step is None:
+                idx = idx[:-1]
+        else:
+            idx = f"({','.join(str(x) for x in s)})"
+
+        raise InvalidSlice(
+            f"Index [{idx}] does not cover a regular range: [{delta}] (width={self.width})"
+        )
+
 
 class Select(Forwards):
-    """
-    Select a subset of the variables.
-    """
+    """Select a subset of the variables."""
 
     def __init__(self, dataset, indices):
         while isinstance(dataset, Select):
@@ -1299,13 +1475,13 @@ def _open(a, zarr_root):
         return a
 
     if isinstance(a, zarr.hierarchy.Group):
-        return Zarr(a)
+        return Zarr(a).mutate()
 
     if isinstance(a, str):
-        return Zarr(_name_to_path(a, zarr_root))
+        return Zarr(_name_to_path(a, zarr_root)).mutate()
 
     if isinstance(a, PurePath):
-        return Zarr(str(a))
+        return Zarr(str(a)).mutate()
 
     if isinstance(a, dict):
         return _open_dataset(zarr_root=zarr_root, **a)
@@ -1317,8 +1493,8 @@ def _open(a, zarr_root):
 
 
 def _auto_adjust(datasets, kwargs):
-    """Adjust the datasets for concatenation or joining based
-    on parameters set to 'matching'"""
+    """Adjust the datasets for concatenation or joining based on parameters set to
+    'matching'."""
 
     if kwargs.get("adjust") == "matching":
         kwargs.pop("adjust")

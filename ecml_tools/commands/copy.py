@@ -48,7 +48,9 @@ class Create(Command):
         command_parser.add_argument("--block-size", type=int, default=100)
         command_parser.add_argument("--overwrite", action="store_true")
         command_parser.add_argument("--progress", action="store_true")
-        command_parser.add_argument("--nested", action="store_true", help="Use ZARR's nested directpry backend.")
+        command_parser.add_argument(
+            "--nested", action="store_true", help="Use ZARR's nested directpry backend."
+        )
         command_parser.add_argument(
             "--rechunk",
             nargs="+",
@@ -79,7 +81,9 @@ class Create(Command):
             target[i] = source[i]
         return slice(n, m)
 
-    def copy_data(self, source, target, transfers, block_size, _copy, progress, rechunking):
+    def copy_data(
+        self, source, target, transfers, block_size, _copy, progress, rechunking
+    ):
         LOG.info("Copying data")
         source_data = source["data"]
 
@@ -129,7 +133,9 @@ class Create(Command):
 
         LOG.info("Copied data")
 
-    def copy_array(self, name, source, target, transfers, block_size, _copy, progress, rechunking):
+    def copy_array(
+        self, name, source, target, transfers, block_size, _copy, progress, rechunking
+    ):
         for k, v in source.attrs.items():
             target.attrs[k] = v
 
@@ -137,14 +143,18 @@ class Create(Command):
             return
 
         if name == "data":
-            self.copy_data(source, target, transfers, block_size, _copy, progress, rechunking)
+            self.copy_data(
+                source, target, transfers, block_size, _copy, progress, rechunking
+            )
             return
 
         LOG.info(f"Copying {name}")
         target[name] = source[name]
         LOG.info(f"Copied {name}")
 
-    def copy_group(self, source, target, transfers, block_size, _copy, progress, rechunking):
+    def copy_group(
+        self, source, target, transfers, block_size, _copy, progress, rechunking
+    ):
         import zarr
 
         for k, v in source.attrs.items():
@@ -185,7 +195,9 @@ class Create(Command):
         _copy = target["_copy"]
         _copy_np = _copy[:]
 
-        self.copy_group(source, target, transfers, block_size, _copy_np, progress, rechunking)
+        self.copy_group(
+            source, target, transfers, block_size, _copy_np, progress, rechunking
+        )
         del target["_copy"]
 
     def run(self, args):
@@ -235,7 +247,9 @@ class Create(Command):
                 target = zarr.open(self._store(args.target, args.nested), mode="w+")
             except ValueError:
                 target = zarr.open(self._store(args.target, args.nested), mode="w")
-        self.copy(source, target, args.transfers, args.block_size, args.progress, rechunking)
+        self.copy(
+            source, target, args.transfers, args.block_size, args.progress, rechunking
+        )
 
 
 command = Create

@@ -20,12 +20,7 @@ from .check import DatasetName
 from .config import build_output, loader_config
 from .input import build_input
 from .statistics import TempStatistics
-from .utils import (
-    bytes,
-    compute_directory_sizes,
-    normalize_and_check_dates,
-    progress_bar,
-)
+from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
 from .writer import CubesFilter, DataWriter
 from .zarr import ZarrBuiltRegistry, add_zarr_dataset
 
@@ -93,7 +88,7 @@ class Loader:
         self.missing_dates = z.attrs.get("missing_dates")
         if self.missing_dates:
             self.missing_dates = [np.datetime64(d) for d in self.missing_dates]
-            assert type(self.missing_dates[0]) == type(self.dates[0]), (
+            assert type(self.missing_dates[0]) is type(self.dates[0]), (
                 self.missing_dates[0],
                 self.dates[0],
             )
@@ -175,14 +170,18 @@ class InitialiseLoader(Loader):
         )
         print(f"Missing dates: {len(dates.missing)}")
         lengths = [len(g) for g in self.groups]
-        self.print(f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}.")
+        self.print(
+            f"Found {len(dates)} datetimes {'+'.join([str(_) for _ in lengths])}."
+        )
         print("-------------------------")
 
         variables = self.minimal_input.variables
         self.print(f"Found {len(variables)} variables : {','.join(variables)}.")
 
         ensembles = self.minimal_input.ensembles
-        self.print(f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}.")
+        self.print(
+            f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}."
+        )
 
         grid_points = self.minimal_input.grid_points
         print(f"gridpoints size: {[len(i) for i in grid_points]}")
@@ -203,7 +202,9 @@ class InitialiseLoader(Loader):
         print(f"{chunks=}")
         dtype = self.output.dtype
 
-        self.print(f"Creating Dataset '{self.path}', with {total_shape=}, {chunks=} and {dtype=}")
+        self.print(
+            f"Creating Dataset '{self.path}', with {total_shape=}, {chunks=} and {dtype=}"
+        )
 
         metadata = {}
         metadata["uuid"] = str(uuid.uuid4())
@@ -274,7 +275,9 @@ class InitialiseLoader(Loader):
 
         self.registry.create(lengths=lengths)
         self.statistics_registry.create(exist_ok=False)
-        self.registry.add_to_history("statistics_registry_initialised", version=self.statistics_registry.version)
+        self.registry.add_to_history(
+            "statistics_registry_initialised", version=self.statistics_registry.version
+        )
 
         statistics_start, statistics_end = self._build_statistics_dates(
             self.main_config.output.get("statistics_start"),
@@ -314,13 +317,17 @@ class ContentLoader(Loader):
         self.registry.add_to_history("loading_data_start", parts=parts)
 
         z = zarr.open(self.path, mode="r+")
-        data_writer = DataWriter(parts, parent=self, full_array=z["data"], print=self.print)
+        data_writer = DataWriter(
+            parts, parent=self, full_array=z["data"], print=self.print
+        )
 
         total = len(self.registry.get_flags())
         filter = CubesFilter(parts=parts, total=total)
         for igroup, group in enumerate(self.groups):
             if self.registry.get_flag(igroup):
-                LOG.info(f" -> Skipping {igroup} total={len(self.groups)} (already done)")
+                LOG.info(
+                    f" -> Skipping {igroup} total={len(self.groups)} (already done)"
+                )
                 continue
             if not filter(igroup):
                 continue
@@ -333,7 +340,9 @@ class ContentLoader(Loader):
 
         self.registry.add_to_history("loading_data_end", parts=parts)
         self.registry.add_provenance(name="provenance_load")
-        self.statistics_registry.add_provenance(name="provenance_load", config=self.main_config)
+        self.statistics_registry.add_provenance(
+            name="provenance_load", config=self.main_config
+        )
 
         self.print_info()
 
@@ -377,12 +386,15 @@ class StatisticsLoader(Loader):
         dates = [d for d in self.dates if d not in self.missing_dates]
 
         if self.missing_dates:
-            assert type(self.missing_dates[0]) == type(dates[0]), (type(self.missing_dates[0]), type(dates[0]))
+            assert type(self.missing_dates[0]) <= type(dates[0]), (
+                type(self.missing_dates[0]),
+                type(dates[0]),
+            )
 
         dates_computed = self.statistics_registry.dates_computed
         for d in dates:
             if d in self.missing_dates:
-                assert d not in dates_computed, (d, date_computed)
+                assert d not in dates_computed, (d, dates_computed)
             else:
                 assert d in dates_computed, (d, dates_computed)
 
@@ -392,7 +404,7 @@ class StatisticsLoader(Loader):
         start = np.datetime64(start)
         end = np.datetime64(end)
         dates = [d for d in dates if d >= start and d <= end]
-        assert type(start) == type(dates[0]), (type(start), type(dates[0]))
+        assert type(start) is type(dates[0]), (type(start), type(dates[0]))
 
         stats = self.statistics_registry.get_aggregated(dates, self.variables_names)
 
@@ -406,9 +418,13 @@ class StatisticsLoader(Loader):
         if self._complete:
             return
         if not force:
-            raise Exception(f"❗Zarr {self.path} is not fully built. Use 'force' option.")
+            raise Exception(
+                f"❗Zarr {self.path} is not fully built. Use 'force' option."
+            )
         if self._write_to_dataset:
-            print(f"❗Zarr {self.path} is not fully built, not writting statistics into dataset.")
+            print(
+                f"❗Zarr {self.path} is not fully built, not writting statistics into dataset."
+            )
             self._write_to_dataset = False
 
     @property
@@ -417,36 +433,36 @@ class StatisticsLoader(Loader):
 
     def recompute_temporary_statistics(self):
         raise NotImplementedError("Untested code")
-        self.statistics_registry.create(exist_ok=True)
+        # self.statistics_registry.create(exist_ok=True)
 
-        self.print(
-            f"Building temporary statistics from data {self.path}. " f"From {self.date_start} to {self.date_end}"
-        )
+        # self.print(
+        #     f"Building temporary statistics from data {self.path}. " f"From {self.date_start} to {self.date_end}"
+        # )
 
-        shape = (self.i_end + 1 - self.i_start, len(self.variables_names))
-        detailed_stats = dict(
-            minimum=np.full(shape, np.nan, dtype=np.float64),
-            maximum=np.full(shape, np.nan, dtype=np.float64),
-            sums=np.full(shape, np.nan, dtype=np.float64),
-            squares=np.full(shape, np.nan, dtype=np.float64),
-            count=np.full(shape, -1, dtype=np.int64),
-        )
+        # shape = (self.i_end + 1 - self.i_start, len(self.variables_names))
+        # detailed_stats = dict(
+        #     minimum=np.full(shape, np.nan, dtype=np.float64),
+        #     maximum=np.full(shape, np.nan, dtype=np.float64),
+        #     sums=np.full(shape, np.nan, dtype=np.float64),
+        #     squares=np.full(shape, np.nan, dtype=np.float64),
+        #     count=np.full(shape, -1, dtype=np.int64),
+        # )
 
-        ds = open_dataset(self.path)
-        key = (slice(self.i_start, self.i_end + 1), slice(None, None))
-        for i in progress_bar(
-            desc="Computing Statistics",
-            iterable=range(self.i_start, self.i_end + 1),
-        ):
-            i_ = i - self.i_start
-            data = ds[slice(i, i + 1), :]
-            one = compute_statistics(data, self.variables_names)
-            for k, v in one.items():
-                detailed_stats[k][i_] = v
+        # ds = open_dataset(self.path)
+        # key = (slice(self.i_start, self.i_end + 1), slice(None, None))
+        # for i in progress_bar(
+        #     desc="Computing Statistics",
+        #     iterable=range(self.i_start, self.i_end + 1),
+        # ):
+        #     i_ = i - self.i_start
+        #     data = ds[slice(i, i + 1), :]
+        #     one = compute_statistics(data, self.variables_names)
+        #     for k, v in one.items():
+        #         detailed_stats[k][i_] = v
 
-        print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
-        self.statistics_registry[key] = detailed_stats
-        self.statistics_registry.add_provenance(name="provenance_recompute_statistics", config=self.main_config)
+        # print(f"✅ Saving statistics for {key} shape={detailed_stats['count'].shape}")
+        # self.statistics_registry[key] = detailed_stats
+        # self.statistics_registry.add_provenance(name="provenance_recompute_statistics", config=self.main_config)
 
     def write_stats_to_file(self, stats):
         stats.save(self.statistics_output, provenance=dict(config=self.main_config))
