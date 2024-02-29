@@ -49,9 +49,7 @@ def add_zarr_dataset(
     if "fill_value" not in kwargs:
         if str(dtype).startswith("float") or str(dtype).startswith("numpy.float"):
             kwargs["fill_value"] = np.nan
-        elif str(dtype).startswith("datetime64") or str(dtype).startswith(
-            "numpy.datetime64"
-        ):
+        elif str(dtype).startswith("datetime64") or str(dtype).startswith("numpy.datetime64"):
             kwargs["fill_value"] = np.datetime64("NaT")
         # elif str(dtype).startswith("timedelta64") or str(dtype).startswith(
         #    "numpy.timedelta64"
@@ -147,9 +145,7 @@ class ZarrBuiltRegistry:
 
     def create(self, lengths, overwrite=False):
         self.new_dataset(name=self.name_lengths, array=np.array(lengths, dtype="i4"))
-        self.new_dataset(
-            name=self.name_flags, array=np.array([False] * len(lengths), dtype=bool)
-        )
+        self.new_dataset(name=self.name_flags, array=np.array([False] * len(lengths), dtype=bool))
         self.add_to_history("initialised")
 
     def reset(self, lengths):
