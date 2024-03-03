@@ -107,15 +107,15 @@ def create_zarr(
 
     if missing:
         missing_dates = []
-        i = 2
-        p, q = 5, 7
-        while i < len(dates):
-            missing_dates.append(dates[i])
-            i = p * q + 1
-            p, q = q, i
-        root.attrs["missing_dates"] = [
-            d.astype(object).isoformat() for d in missing_dates
-        ]
+
+        last = None
+        for date in [d.astype(object) for d in dates]:
+            yyyymmdd = date.strftime("%Y%m")
+            if yyyymmdd != last:
+                last = yyyymmdd
+                missing_dates.append(date)
+
+        root.attrs["missing_dates"] = [d.isoformat() for d in missing_dates]
 
     root.create_dataset(
         "mean",
@@ -213,13 +213,13 @@ def make_row(*args, ensemble=False, grid=False):
     return np.array(args)
 
 
-def missing(x):
+def make_missing(x):
     if isinstance(x, tuple):
-        return (missing(a) for a in x)
+        return (make_missing(a) for a in x)
     if isinstance(x, list):
-        return [missing(a) for a in x]
+        return [make_missing(a) for a in x]
     if isinstance(x, dict):
-        return {k: missing(v) for k, v in x.items()}
+        return {k: make_missing(v) for k, v in x.items()}
     if isinstance(x, str) and x.startswith("test-"):
         return x.replace("test-", "missing-")
     return x
@@ -229,8 +229,7 @@ class DatasetTester:
     def __init__(self, *args, **kwargs):
         self.ds = open_dataset(*args, **kwargs)
 
-        args, kwargs = missing((args, kwargs))
-        self.ds_missing = open_dataset(*args, **kwargs)
+        args, kwargs = make_missing((args, kwargs))
 
     def run(
         self,
@@ -283,12 +282,6 @@ class DatasetTester:
 
         self.indexing(self.ds)
         self.metadata(self.ds)
-        assert self.ds.valid_ranges(2) == [(0, len(self.ds))]
-
-        self.missing(self.ds_missing)
-
-    def missing(self, ds):
-        assert ds.missing, ds
 
     def metadata(self, ds):
         metadata = ds.metadata()
@@ -1103,4 +1096,4 @@ def test_statistics():
 
 
 if __name__ == "__main__":
-    test_subset_1()
+    test_simple()

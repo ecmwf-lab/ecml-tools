@@ -55,7 +55,6 @@ class Scan(Command):
         paths = []
         for path in args.paths:
             if os.path.isfile(path):
-
                 paths.append(path)
             else:
                 for root, _, files in os.walk(path):
