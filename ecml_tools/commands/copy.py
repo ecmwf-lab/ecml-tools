@@ -49,6 +49,7 @@ def class_builder(_cls):
             command_parser.add_argument("--block-size", type=int, default=100)
             command_parser.add_argument("--overwrite", action="store_true")
             command_parser.add_argument("--progress", action="store_true")
+            command_parser.add_argument("--nested", action="store_true")
             command_parser.add_argument(
                 "--rechunk",
                 nargs="+",
