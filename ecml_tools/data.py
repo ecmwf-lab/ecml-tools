@@ -10,6 +10,7 @@ import datetime
 import logging
 import os
 import re
+import textwrap
 import warnings
 from functools import cached_property, wraps
 from pathlib import PurePath
@@ -83,6 +84,32 @@ class MissingDate(Exception):
     pass
 
 
+class Node:
+    def __init__(self, dataset, kids, **kwargs):
+        self.dataset = dataset
+        self.kids = kids
+        self.kwargs = kwargs
+
+    def _put(self, indent, result):
+
+        def _spaces(indent):
+            return " " * indent if indent else ""
+
+        result.append(f"{_spaces(indent)}{self.dataset.__class__.__name__}")
+        for k, v in self.kwargs.items():
+            if isinstance(v, (list, tuple)):
+                v = ", ".join(str(i) for i in v)
+                v = textwrap.shorten(v, width=40, placeholder="...")
+            result.append(f"{_spaces(indent+2)}{k}: {v}")
+        for kid in self.kids:
+            kid._put(indent + 2, result)
+
+    def __repr__(self):
+        result = []
+        self._put(0, result)
+        return "\n".join(result)
+
+
 class Dataset:
     arguments = {}
 
@@ -106,15 +133,15 @@ class Dataset:
 
         if "select" in kwargs:
             select = kwargs.pop("select")
-            return Select(self, self._select_to_columns(select))._subset(**kwargs)
+            return Select(self, self._select_to_columns(select), {"select": select})._subset(**kwargs)
 
         if "drop" in kwargs:
             drop = kwargs.pop("drop")
-            return Select(self, self._drop_to_columns(drop))._subset(**kwargs)
+            return Select(self, self._drop_to_columns(drop), {"drop": drop})._subset(**kwargs)
 
         if "reorder" in kwargs:
             reorder = kwargs.pop("reorder")
-            return Select(self, self._reorder_to_columns(reorder))._subset(**kwargs)
+            return Select(self, self._reorder_to_columns(reorder), {"reoder": reorder})._subset(**kwargs)
 
         if "rename" in kwargs:
             rename = kwargs.pop("rename")
@@ -499,6 +526,9 @@ class Zarr(Dataset):
             return ZarrWithMissingDates(self.z if self.was_zarr else self.path)
         return self
 
+    def tree(self):
+        return Node(self, [], path=self.path)
+
 
 class ZarrWithMissingDates(Zarr):
     def __init__(self, path):
@@ -549,6 +579,9 @@ class ZarrWithMissingDates(Zarr):
 
     def _report_missing(self, n):
         raise MissingDate(f"Date {self.missing_to_dates[n]} is missing (index={n})")
+
+    def tree(self):
+        return Node(self, [], path=self.path, missing=sorted(self.missing))
 
 
 class Forwards(Dataset):
@@ -768,6 +801,9 @@ class Concat(Combined):
     def shape(self):
         return (len(self),) + self.datasets[0].shape[1:]
 
+    def tree(self):
+        return Node(self, [d.tree() for d in self.datasets])
+
 
 class GivenAxis(Combined):
     """Given a given axis, combine the datasets along that axis."""
@@ -820,7 +856,9 @@ class GivenAxis(Combined):
 
 
 class Ensemble(GivenAxis):
-    pass
+
+    def tree(self):
+        return Node(self, [d.tree() for d in self.datasets])
 
 
 class Grids(GivenAxis):
@@ -850,6 +888,9 @@ class ConcatGrids(Grids):
         for d in self.datasets:
             result.extend(d.grids)
         return tuple(result)
+
+    def tree(self):
+        return Node(self, [d.tree() for d in self.datasets], mode="concat")
 
 
 class CutoutGrids(Grids):
@@ -926,6 +967,9 @@ class CutoutGrids(Grids):
         shape = self.lam.shape
         return (shape[-1], self.shape[-1] - shape[-1])
 
+    def tree(self):
+        return Node(self, [d.tree() for d in self.datasets], mode="cutout")
+
 
 class Join(Combined):
     """Join the datasets along the variables axis."""
@@ -996,7 +1040,7 @@ class Join(Combined):
             if not ok:
                 LOG.warning("Dataset %r completely overridden.", d)
 
-        return Select(self, indices)
+        return Select(self, indices, {"overlay": True})
 
     @cached_property
     def variables(self):
@@ -1035,6 +1079,9 @@ class Join(Combined):
         for d in self.datasets:
             result = result | d.missing
         return result
+
+    def tree(self):
+        return Node(self, [d.tree() for d in self.datasets])
 
 
 class Subset(Forwards):
@@ -1108,17 +1155,20 @@ class Subset(Forwards):
         return Source(self, index, self.forward.source(index))
 
     def __repr__(self):
-        return f"Subset({self.dates[0]}, {self.dates[-1]}, {self.frequency})"
+        return f"Subset({self.dataset},{self.dates[0]}...{self.dates[-1]}/{self.frequency})"
 
     @cached_property
     def missing(self):
         return {self.indices[i] for i in self.dataset.missing if i in self.indices}
 
+    def tree(self):
+        return Node(self, [self.dataset.tree()])
+
 
 class Select(Forwards):
     """Select a subset of the variables."""
 
-    def __init__(self, dataset, indices):
+    def __init__(self, dataset, indices, title):
         while isinstance(dataset, Select):
             indices = [dataset.indices[i] for i in indices]
             dataset = dataset.dataset
@@ -1126,6 +1176,7 @@ class Select(Forwards):
         self.dataset = dataset
         self.indices = list(indices)
         assert len(self.indices) > 0
+        self.title = title or {"indices": self.indices}
 
         # Forward other properties to the main dataset
         super().__init__(dataset)
@@ -1174,6 +1225,9 @@ class Select(Forwards):
     def source(self, index):
         return Source(self, index, self.dataset.source(self.indices[index]))
 
+    def tree(self):
+        return Node(self, [self.dataset.tree()], **self.title)
+
 
 class Rename(Forwards):
     def __init__(self, dataset, rename):
@@ -1194,6 +1248,9 @@ class Rename(Forwards):
     def metadata_specific(self, **kwargs):
         return super().metadata_specific(rename=self.rename, **kwargs)
 
+    def tree(self):
+        return Node(self, [self.forward.tree()], rename=self.rename)
+
 
 class Statistics(Forwards):
     def __init__(self, dataset, statistic):
@@ -1209,6 +1266,9 @@ class Statistics(Forwards):
             statistics=open_dataset(self._statistic).metadata_specific(),
             **kwargs,
         )
+
+    def tree(self):
+        return Node(self, [self.forward.tree()])
 
 
 def _name_to_path(name, zarr_root):
