@@ -7,8 +7,8 @@
 import datetime
 import logging
 import os
-import uuid
 import time
+import uuid
 from functools import cached_property
 
 import numpy as np
@@ -17,14 +17,17 @@ import zarr
 from ecml_tools.data import open_dataset
 from ecml_tools.utils.dates.groups import Groups
 
-from .check import DatasetName
+from .check import DatasetName, check_data_values
 from .config import build_output, loader_config
 from .input import build_input
-from .statistics import TempStatistics
-from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
-from .check import check_data_values
-from .statistics import compute_statistics
-from .utils import progress_bar, seconds
+from .statistics import TempStatistics, compute_statistics
+from .utils import (
+    bytes,
+    compute_directory_sizes,
+    normalize_and_check_dates,
+    progress_bar,
+    seconds,
+)
 from .writer import CubesFilter, ViewCacheArray
 from .zarr import ZarrBuiltRegistry, add_zarr_dataset
 

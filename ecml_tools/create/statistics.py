@@ -95,8 +95,6 @@ def compute_statistics(array, check_variables_names=None, allow_nan=False):
         squares[i] = np.nansum(values * values, axis=1)
         count[i] = np.sum(~np.isnan(values), axis=1)
 
-
-
     return {"minimum": minimum, "maximum": maximum, "sums": sums, "squares": squares, "count": count}
 
 
@@ -259,9 +257,16 @@ class StatAggregator:
         check_variance(x, self.variables_names, minimum, maximum, mean, count, sums, squares)
         stdev = np.sqrt(x)
 
-
         for j, name in enumerate(self.variables_names):
-            check_data_values(np.array([mean[j],]), name=name, allow_nan=False)
+            check_data_values(
+                np.array(
+                    [
+                        mean[j],
+                    ]
+                ),
+                name=name,
+                allow_nan=False,
+            )
 
         return Statistics(
             minimum=minimum,
