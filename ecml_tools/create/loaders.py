@@ -8,6 +8,7 @@ import datetime
 import logging
 import os
 import uuid
+import time
 from functools import cached_property
 
 import numpy as np
@@ -21,7 +22,10 @@ from .config import build_output, loader_config
 from .input import build_input
 from .statistics import TempStatistics
 from .utils import bytes, compute_directory_sizes, normalize_and_check_dates
-from .writer import CubesFilter, DataWriter
+from .check import check_data_values
+from .statistics import compute_statistics
+from .utils import progress_bar, seconds
+from .writer import CubesFilter, ViewCacheArray
 from .zarr import ZarrBuiltRegistry, add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
@@ -96,6 +100,9 @@ class Loader:
         z = zarr.open(self.path, "r")
         self.missing_dates = z.attrs.get("missing_dates", [])
         self.missing_dates = [np.datetime64(d) for d in self.missing_dates]
+
+    def allow_nan(self, name):
+        return name in self.main_config.get("has_nans", [])
 
     @cached_property
     def registry(self):
@@ -308,10 +315,11 @@ class ContentLoader(Loader):
         total = len(self.registry.get_flags())
         self.cube_filter = CubesFilter(parts=self.parts, total=total)
 
+        self.data_array = zarr.open(self.path, mode="r+")["data"]
+        self.n_groups = len(self.groups)
+
     def load(self):
         self.registry.add_to_history("loading_data_start", parts=self.parts)
-
-        data_writer = DataWriter(owner=self)
 
         for igroup, group in enumerate(self.groups):
             if not self.cube_filter(igroup):
@@ -324,13 +332,93 @@ class ContentLoader(Loader):
             assert isinstance(group[0], datetime.datetime), group
 
             result = self.input.select(dates=group)
-            data_writer.write(result, igroup, group)
+            assert result.dates == group, (len(result.dates), len(group))
+
+            msg = f"Building data for group {igroup}/{self.n_groups}"
+            LOG.info(msg)
+            self.print(msg)
+
+            # There are several groups.
+            # There is one result to load for each group.
+            self.load_result(result)
+            self.registry.set_flag(igroup)
 
         self.registry.add_to_history("loading_data_end", parts=self.parts)
         self.registry.add_provenance(name="provenance_load")
         self.statistics_registry.add_provenance(name="provenance_load", config=self.main_config)
 
         self.print_info()
+
+    def load_result(self, result):
+        # There is one cube to load for each result.
+        dates = result.dates
+
+        cube = result.get_cube()
+        assert cube.extended_user_shape[0] == len(dates), (cube.extended_user_shape[0], len(dates))
+
+        shape = cube.extended_user_shape
+        dates_in_data = cube.user_coords["valid_datetime"]
+
+        LOG.info(f"Loading {shape=} in {self.data_array.shape=}")
+
+        def check_dates_in_data(lst, lst2):
+            lst2 = list(lst2)
+            lst = [datetime.datetime.fromisoformat(_) for _ in lst]
+            assert lst == lst2, ("Dates in data are not the requested ones:", lst, lst2)
+
+        check_dates_in_data(dates_in_data, dates)
+
+        def dates_to_indexes(dates, all_dates):
+            x = np.array(dates, dtype=np.datetime64)
+            y = np.array(all_dates, dtype=np.datetime64)
+            bitmap = np.isin(x, y)
+            return np.where(bitmap)[0]
+
+        indexes = dates_to_indexes(self.dates, dates_in_data)
+
+        array = ViewCacheArray(self.data_array, shape=shape, indexes=indexes)
+        self.load_cube(cube, array)
+
+        stats = compute_statistics(array.cache, self.variables_names, allow_nan=self.allow_nan)
+        self.statistics_registry.write(indexes, stats, dates=dates_in_data)
+
+        array.flush()
+
+    def load_cube(self, cube, array):
+        # There are several cubelets for each cube
+        start = time.time()
+        load = 0
+        save = 0
+
+        reading_chunks = None
+        total = cube.count(reading_chunks)
+        self.print(f"Loading datacube: {cube}")
+        bar = progress_bar(
+            iterable=cube.iterate_cubelets(reading_chunks),
+            total=total,
+            desc=f"Loading datacube {cube}",
+        )
+        for i, cubelet in enumerate(bar):
+            bar.set_description(f"Loading {i}/{total}")
+
+            now = time.time()
+            data = cubelet.to_numpy()
+            local_indexes = cubelet.coords
+            load += time.time() - now
+
+            name = self.variables_names[local_indexes[1]]
+            check_data_values(data[:], name=name, log=[i, data.shape, local_indexes], allow_nan=self.allow_nan)
+
+            now = time.time()
+            array[local_indexes] = data
+            save += time.time() - now
+
+        now = time.time()
+        save += time.time() - now
+        LOG.info("Written.")
+        msg = f"Elapsed: {seconds(time.time() - start)}, load time: {seconds(load)}, write time: {seconds(save)}."
+        self.print(msg)
+        LOG.info(msg)
 
 
 class StatisticsLoader(Loader):
@@ -388,7 +476,7 @@ class StatisticsLoader(Loader):
 
     def run(self):
         dates = self._get_statistics_dates()
-        stats = self.statistics_registry.get_aggregated(dates, self.variables_names)
+        stats = self.statistics_registry.get_aggregated(dates, self.variables_names, self.allow_nan)
         self.output_writer(stats)
 
     def write_stats_to_file(self, stats):

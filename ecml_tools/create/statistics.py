@@ -65,7 +65,7 @@ def check_variance(x, variables_names, minimum, maximum, mean, count, sums, squa
     raise ValueError("Negative variance")
 
 
-def compute_statistics(array, check_variables_names=None):
+def compute_statistics(array, check_variables_names=None, allow_nan=False):
     nvars = array.shape[1]
 
     print("Stats", nvars, array.shape, check_variables_names)
@@ -81,22 +81,23 @@ def compute_statistics(array, check_variables_names=None):
 
     for i, chunk in enumerate(array):
         values = chunk.reshape((nvars, -1))
-        minimum[i] = np.min(values, axis=1)
-        maximum[i] = np.max(values, axis=1)
-        sums[i] = np.sum(values, axis=1)
-        squares[i] = np.sum(values * values, axis=1)
-        count[i] = values.shape[1]
 
         for j, name in enumerate(check_variables_names):
-            check_data_values(values[j, :], name=name)
+            check_data_values(values[j, :], name=name, allow_nan=allow_nan)
+            if np.isnan(values[j, :]).all():
+                # LOG.warning(f"All NaN values for {name} ({j}) for date {i}")
+                raise ValueError(f"All NaN values for {name} ({j}) for date {i}")
 
-    return {
-        "minimum": minimum,
-        "maximum": maximum,
-        "sums": sums,
-        "squares": squares,
-        "count": count,
-    }
+        # Ignore NaN values
+        minimum[i] = np.nanmin(values, axis=1)
+        maximum[i] = np.nanmax(values, axis=1)
+        sums[i] = np.nansum(values, axis=1)
+        squares[i] = np.nansum(values * values, axis=1)
+        count[i] = np.sum(~np.isnan(values), axis=1)
+
+
+
+    return {"minimum": minimum, "maximum": maximum, "sums": sums, "squares": squares, "count": count}
 
 
 class TempStatistics:
@@ -148,8 +149,8 @@ class TempStatistics:
             with open(f, "rb") as f:
                 yield pickle.load(f)
 
-    def get_aggregated(self, dates, variables_names):
-        aggregator = StatAggregator(dates, variables_names, self)
+    def get_aggregated(self, *args, **kwargs):
+        aggregator = StatAggregator(self, *args, **kwargs)
         return aggregator.aggregate()
 
     def __str__(self):
@@ -169,12 +170,13 @@ def normalise_dates(dates):
 class StatAggregator:
     NAMES = ["minimum", "maximum", "sums", "squares", "count"]
 
-    def __init__(self, dates, variables_names, owner):
+    def __init__(self, owner, dates, variables_names, allow_nan):
         dates = sorted(dates)
         dates = to_datetimes(dates)
         self.owner = owner
         self.dates = dates
         self.variables_names = variables_names
+        self.allow_nan = allow_nan
 
         self.shape = (len(self.dates), len(self.variables_names))
         print("Aggregating statistics on ", self.shape, self.variables_names)
@@ -186,12 +188,6 @@ class StatAggregator:
         self.count = np.full(self.shape, -1, dtype=np.int64)
 
         self._read()
-
-    def _date_to_index(self, date):
-        date = to_datetime(date)
-        assert type(date) is type(self.dates[0]), (type(date), type(self.dates[0]))
-        assert date in self.dates, f"Statistics for date {date} is not needed."
-        return np.where(self.dates == date)[0][0]
 
     def _read(self):
         def check_type(a, b):
@@ -247,26 +243,25 @@ class StatAggregator:
         print(f"Statistics for {len(found)} dates found.")
 
     def aggregate(self):
-        for name in self.NAMES:
-            if name == "count":
-                continue
-            array = getattr(self, name)
-            assert not np.isnan(array).any(), (name, array)
 
-        minimum = np.amin(self.minimum, axis=0)
-        maximum = np.amax(self.maximum, axis=0)
-        count = np.sum(self.count, axis=0)
-        sums = np.sum(self.sums, axis=0)
-        squares = np.sum(self.squares, axis=0)
+        minimum = np.nanmin(self.minimum, axis=0)
+        maximum = np.nanmax(self.maximum, axis=0)
+        sums = np.nansum(self.sums, axis=0)
+        squares = np.nansum(self.squares, axis=0)
+        count = np.nansum(self.count, axis=0)
         mean = sums / count
 
-        assert all(count[0] == c for c in count), count
+        assert sums.shape == count.shape == squares.shape == mean.shape == minimum.shape == maximum.shape
 
         x = squares / count - mean * mean
         # remove negative variance due to numerical errors
         # x[- 1e-15 < (x / (np.sqrt(squares / count) + np.abs(mean))) < 0] = 0
         check_variance(x, self.variables_names, minimum, maximum, mean, count, sums, squares)
         stdev = np.sqrt(x)
+
+
+        for j, name in enumerate(self.variables_names):
+            check_data_values(np.array([mean[j],]), name=name, allow_nan=False)
 
         return Statistics(
             minimum=minimum,
