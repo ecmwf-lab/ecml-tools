@@ -51,9 +51,9 @@ class Creator:
 
         with self._cache_context():
             loader = ContentLoader.from_dataset_config(
-                path=self.path, statistics_tmp=self.statistics_tmp, print=self.print
+                path=self.path, statistics_tmp=self.statistics_tmp, print=self.print, parts=parts
             )
-            loader.load(parts=parts)
+            loader.load()
 
     def statistics(self, force=False, output=None, start=None, end=None):
         from .loaders import StatisticsLoader

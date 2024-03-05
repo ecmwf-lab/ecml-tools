@@ -13,6 +13,7 @@ import time
 import warnings
 
 import numpy as np
+import zarr
 
 from .check import check_data_values
 from .statistics import compute_statistics
@@ -106,9 +107,8 @@ class ReindexFirst:
 
 
 class DataWriter:
-    def __init__(self, parts, full_array, owner):
-        self.full_array = full_array
-
+    def __init__(self, owner):
+        self.full_array = zarr.open(owner.path, mode="r+")["data"]
         self.path = owner.path
         self.statistics_registry = owner.statistics_registry
         self.registry = owner.registry

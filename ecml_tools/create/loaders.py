@@ -180,6 +180,10 @@ class InitialiseLoader(Loader):
         variables = self.minimal_input.variables
         self.print(f"Found {len(variables)} variables : {','.join(variables)}.")
 
+        variables_with_nans = self.minimal_input.variables_with_nans
+        if variables_with_nans:
+            print(f"  Found nans for {' '.join(variables_with_nans)}")
+
         ensembles = self.minimal_input.ensembles
         self.print(f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}.")
 
@@ -291,7 +295,7 @@ class InitialiseLoader(Loader):
 
 
 class ContentLoader(Loader):
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, parts, **kwargs):
         super().__init__(**kwargs)
         self.main_config = loader_config(config)
 
@@ -300,19 +304,20 @@ class ContentLoader(Loader):
         self.input = self.build_input()
         self.read_dataset_metadata()
 
-    def load(self, parts):
-        self.registry.add_to_history("loading_data_start", parts=parts)
-
-        z = zarr.open(self.path, mode="r+")
-        data_writer = DataWriter(parts, full_array=z["data"], owner=self)
-
+        self.parts = parts
         total = len(self.registry.get_flags())
-        filter = CubesFilter(parts=parts, total=total)
+        self.cube_filter = CubesFilter(parts=self.parts, total=total)
+
+    def load(self):
+        self.registry.add_to_history("loading_data_start", parts=self.parts)
+
+        data_writer = DataWriter(owner=self)
+
         for igroup, group in enumerate(self.groups):
+            if not self.cube_filter(igroup):
+                continue
             if self.registry.get_flag(igroup):
                 LOG.info(f" -> Skipping {igroup} total={len(self.groups)} (already done)")
-                continue
-            if not filter(igroup):
                 continue
             self.print(f" -> Processing {igroup} total={len(self.groups)}")
             print("========", group)
@@ -321,7 +326,7 @@ class ContentLoader(Loader):
             result = self.input.select(dates=group)
             data_writer.write(result, igroup, group)
 
-        self.registry.add_to_history("loading_data_end", parts=parts)
+        self.registry.add_to_history("loading_data_end", parts=self.parts)
         self.registry.add_provenance(name="provenance_load")
         self.statistics_registry.add_provenance(name="provenance_load", config=self.main_config)
 
