@@ -23,9 +23,7 @@ def compute_directory_size(path):
         return None
     size = 0
     n = 0
-    for dirpath, _, filenames in tqdm.tqdm(
-        os.walk(path), desc="Computing size", leave=False
-    ):
+    for dirpath, _, filenames in tqdm.tqdm(os.walk(path), desc="Computing size", leave=False):
         for filename in filenames:
             file_path = os.path.join(dirpath, filename)
             size += os.path.getsize(file_path)
@@ -57,10 +55,7 @@ class DatasetName:
         self.check_end_date(end_date)
 
         if self.messages:
-            self.messages.append(
-                f"{self} is parsed as :"
-                + "/".join(f"{k}={v}" for k, v in self.parsed.items())
-            )
+            self.messages.append(f"{self} is parsed as :" + "/".join(f"{k}={v}" for k, v in self.parsed.items()))
 
     @property
     def error_message(self):
@@ -76,9 +71,7 @@ class DatasetName:
             raise ValueError(self.error_message)
 
     def _parse(self, name):
-        pattern = (
-            r"^(\w+)-([\w-]+)-(\w+)-(\w+)-(\d\d\d\d)-(\d\d\d\d)-(\d+h)-v(\d+)-?(.*)$"
-        )
+        pattern = r"^(\w+)-([\w-]+)-(\w+)-(\w+)-(\d\d\d\d)-(\d\d\d\d)-(\d+h)-v(\d+)-?(.*)$"
         match = re.match(pattern, name)
 
         assert match, (name, pattern)
@@ -112,10 +105,7 @@ class DatasetName:
             )
 
     def check_resolution(self, resolution):
-        if (
-            self.parsed.get("resolution")
-            and self.parsed["resolution"][0] not in "0123456789on"
-        ):
+        if self.parsed.get("resolution") and self.parsed["resolution"][0] not in "0123456789on":
             self.messages.append(
                 f"the resolution {self.parsed['resolution'] } should start "
                 f"with a number or 'o' or 'n' in the dataset name {self}."
@@ -150,22 +140,23 @@ class DatasetName:
 
     def _check_missing(self, key, value):
         if value not in self.name:
-            self.messages.append(
-                f"the {key} is {value}, but is missing in {self.name}."
-            )
+            self.messages.append(f"the {key} is {value}, but is missing in {self.name}.")
 
     def _check_mismatch(self, key, value):
         if self.parsed.get(key) and self.parsed[key] != value:
-            self.messages.append(
-                f"the {key} is {value}, but is {self.parsed[key]} in {self.name}."
-            )
+            self.messages.append(f"the {key} is {value}, but is {self.parsed[key]} in {self.name}.")
 
 
 class StatisticsValueError(ValueError):
     pass
 
 
-def check_data_values(arr, *, name: str, log=[]):
+def check_data_values(arr, *, name: str, log=[], allow_nan=False):
+    if allow_nan is False:
+        allow_nan = lambda x: False
+    if allow_nan(name):
+        arr = arr[~np.isnan(arr)]
+
     min, max = arr.min(), arr.max()
     assert not (np.isnan(arr).any()), (name, min, max, *log)
 
@@ -175,10 +166,19 @@ def check_data_values(arr, *, name: str, log=[]):
         warnings.warn(f"Max value 9999 for {name}")
 
     in_0_1 = dict(minimum=0, maximum=1)
+    is_temperature = dict(minimum=173.15, maximum=373.15)  # -100 celsius to +200 celsius
+    # is_wind = dict(minimum=-500., maximum=500.)
     limits = {
         "lsm": in_0_1,
+        "cos_latitude": in_0_1,
+        "sin_latitude": in_0_1,
+        "cos_longitude": in_0_1,
+        "sin_longitude": in_0_1,
         "insolation": in_0_1,
-        "2t": dict(minimum=173.15, maximum=373.15),
+        "2t": is_temperature,
+        "sst": is_temperature,
+        # "10u": is_wind,
+        # "10v": is_wind,
     }
 
     if name in limits:

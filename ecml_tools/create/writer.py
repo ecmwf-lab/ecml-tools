@@ -13,9 +13,9 @@ import time
 import warnings
 
 import numpy as np
+import zarr
 
 from .check import check_data_values
-from .statistics import compute_statistics
 from .utils import progress_bar, seconds
 
 LOG = logging.getLogger(__name__)
@@ -84,106 +84,3 @@ class ViewCacheArray:
         for i in range(self.cache.shape[0]):
             global_i = self.indexes[i]
             self.array[global_i] = self.cache[i]
-
-
-class ReindexFirst:
-    def __init__(self, indexes):
-        self.indexes = indexes
-
-    def __call__(self, first, *others):
-        if isinstance(first, int):
-            return (self.indexes[first], *others)
-
-        if isinstance(first, slice):
-            start, stop, step = first.start, first.stop, first.step
-            start = self.indexes[start]
-            stop = self.indexes[stop]
-            return (slice(start, stop, step), *others)
-        if isinstance(first, tuple):
-            return ([self.indexes[_] for _ in first], *others)
-
-        raise NotImplementedError(type(first))
-
-
-class DataWriter:
-    def __init__(self, parts, full_array, owner):
-        self.full_array = full_array
-
-        self.path = owner.path
-        self.statistics_registry = owner.statistics_registry
-        self.registry = owner.registry
-        self.print = owner.print
-        self.dates = owner.dates
-        self.variables_names = owner.variables_names
-
-        self.append_axis = owner.output.append_axis
-        self.n_groups = len(owner.groups)
-
-    def date_to_index(self, date):
-        if isinstance(date, str):
-            date = np.datetime64(date)
-        if isinstance(date, datetime.datetime):
-            date = np.datetime64(date)
-        assert type(date) is type(self.dates[0]), (type(date), type(self.dates[0]))
-        return np.where(self.dates == date)[0][0]
-
-    def write(self, result, igroup, dates):
-        cube = result.get_cube()
-        assert cube.extended_user_shape[0] == len(dates), (cube.extended_user_shape[0], len(dates))
-        dates_in_data = cube.user_coords["valid_datetime"]
-        dates_in_data = [datetime.datetime.fromisoformat(_) for _ in dates_in_data]
-        assert dates_in_data == list(dates), (dates_in_data, list(dates))
-
-        assert isinstance(igroup, int), igroup
-
-        shape = cube.extended_user_shape
-
-        msg = f"Building data for group {igroup}/{self.n_groups} ({shape=} in {self.full_array.shape=})"
-        LOG.info(msg)
-        self.print(msg)
-
-        indexes = [self.date_to_index(d) for d in dates_in_data]
-        array = ViewCacheArray(self.full_array, shape=shape, indexes=indexes)
-        self.load_datacube(cube, array)
-
-        stats = compute_statistics(array.cache, self.variables_names)
-        dates = cube.user_coords["valid_datetime"]
-        self.statistics_registry.write(indexes, stats, dates=dates)
-
-        array.flush()
-        self.registry.set_flag(igroup)
-
-    def load_datacube(self, cube, array):
-        start = time.time()
-        load = 0
-        save = 0
-
-        reading_chunks = None
-        total = cube.count(reading_chunks)
-        self.print(f"Loading datacube: {cube}")
-        bar = progress_bar(
-            iterable=cube.iterate_cubelets(reading_chunks),
-            total=total,
-            desc=f"Loading datacube {cube}",
-        )
-        for i, cubelet in enumerate(bar):
-            now = time.time()
-            data = cubelet.to_numpy()
-            local_indexes = cubelet.coords
-            load += time.time() - now
-
-            name = self.variables_names[local_indexes[1]]
-            check_data_values(data[:], name=name, log=[i, data.shape, local_indexes])
-
-            bar.set_description(f"Loading {i}/{total} {name} {str(cubelet)} ({data.shape})")
-
-            now = time.time()
-            array[local_indexes] = data
-            save += time.time() - now
-
-        now = time.time()
-        save += time.time() - now
-        LOG.info("Written.")
-        msg = f"Elapsed: {seconds(time.time() - start)}, load time: {seconds(load)}, write time: {seconds(save)}."
-        self.print(msg)
-        LOG.info(msg)

@@ -54,6 +54,7 @@ create_requires = [
     "climetlab",  # "earthkit-data"
     "earthkit-meteo",
     "pyproj",
+    "semantic-version",
 ]
 
 
