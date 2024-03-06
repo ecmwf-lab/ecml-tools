@@ -94,10 +94,6 @@ class OutputSpecs:
         return tuple(chunks)
 
     @property
-    def append_axis(self):
-        return self.config.append_axis
-
-    @property
     def order_by(self):
         return self.config.order_by
 
@@ -162,10 +158,6 @@ class LoadersConfig(Config):
         self.reading_chunks = self.get("reading_chunks")
         assert "flatten_values" not in self.output
         assert "flatten_grid" in self.output, self.output
-
-        # The axis along which we append new data
-        # TODO: assume grid points can be 2d as well
-        self.output.append_axis = 0
 
         assert "statistics" in self.output
         statistics_axis_name = self.output.statistics
