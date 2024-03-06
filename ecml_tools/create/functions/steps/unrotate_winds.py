@@ -47,9 +47,7 @@ def rotate_winds(
     new_x = np.zeros_like(x_wind)
     new_y = np.zeros_like(y_wind)
 
-    for i, (vx, vy, lat, lon, raw_lat, raw_lon) in enumerate(
-        zip(x_wind, y_wind, lats, lons, raw_lats, raw_lons)
-    ):
+    for i, (vx, vy, lat, lon, raw_lat, raw_lon) in enumerate(zip(x_wind, y_wind, lats, lons, raw_lats, raw_lons)):
         lonRotated = south_pole_longitude - lon
         lon_rotated = normalise_longitude(lonRotated, -180)
         lon_unrotated = raw_lon
@@ -79,13 +77,13 @@ class NewDataField:
         return getattr(self.field, name)
 
 
-def execute(context, input, x_wind, y_wind):
+def execute(context, input, u, v):
     """
     Unrotate the wind components of a GRIB file.
     """
     result = FieldArray()
 
-    wind_params = (x_wind, y_wind)
+    wind_params = (u, v)
     wind_pairs = defaultdict(dict)
 
     for f in input:
@@ -107,15 +105,15 @@ def execute(context, input, x_wind, y_wind):
         if len(pairs) != 2:
             raise ValueError("Missing wind component")
 
-        x = pairs[x_wind]
-        y = pairs[y_wind]
+        x = pairs[u]
+        y = pairs[v]
 
         lats, lons = x.grid_points()
         raw_lats, raw_longs = x.grid_points_raw()
 
         assert x.rotation == y.rotation
 
-        x_new, y_new = rotate_winds(
+        u_new, v_new = rotate_winds(
             lats,
             lons,
             raw_lats,
@@ -125,8 +123,8 @@ def execute(context, input, x_wind, y_wind):
             *x.rotation,
         )
 
-        result.append(NewDataField(x, x_new))
-        result.append(NewDataField(y, y_new))
+        result.append(NewDataField(x, u_new))
+        result.append(NewDataField(y, v_new))
 
     return result
 

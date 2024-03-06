@@ -55,7 +55,14 @@ def _expand_mars_request(request, date):
                 "step": s,
             }
         )
+
+        for pproc in ("grid", "rotation", "frame", "area", "bitmap", "resol"):
+            if pproc in r:
+                if isinstance(r[pproc], (list, tuple)):
+                    r[pproc] = "/".join(str(x) for x in r[pproc])
+
         requests.append(r)
+
     return requests
 
 
@@ -68,7 +75,11 @@ def factorise_requests(dates, *requests):
             updates += _expand_mars_request(req, date=d)
 
     compressed = Availability(updates)
-    return compressed.iterate()
+    for r in compressed.iterate():
+        for k, v in r.items():
+            if isinstance(v, (list, tuple)) and len(v) == 1:
+                r[k] = v[0]
+        yield r
 
 
 def mars(context, dates, *requests, **kwargs):
@@ -109,9 +120,7 @@ if __name__ == "__main__":
 
     """
     )
-    dates = yaml.safe_load(
-        "[2022-12-30 18:00, 2022-12-31 00:00, 2022-12-31 06:00, 2022-12-31 12:00]"
-    )
+    dates = yaml.safe_load("[2022-12-30 18:00, 2022-12-31 00:00, 2022-12-31 06:00, 2022-12-31 12:00]")
     dates = to_datetime_list(dates)
 
     DEBUG = True

@@ -40,9 +40,7 @@ def _(date, var, k=0, e=0, values=VALUES):
     assert 0 <= k <= 9
     assert 0 <= e <= 9
 
-    return np.array(
-        [d * 100 + v + k / 10.0 + w / 100.0 + e / 1000.0 for w in range(values)]
-    )
+    return np.array([d * 100 + v + k / 10.0 + w / 100.0 + e / 1000.0 for w in range(values)])
 
 
 def create_zarr(
@@ -249,9 +247,7 @@ class DatasetTester:
             expected_variables = [v for v in expected_variables]
 
         if isinstance(expected_name_to_index, str):
-            expected_name_to_index = {
-                v: i for i, v in enumerate(expected_name_to_index)
-            }
+            expected_name_to_index = {v: i for i, v in enumerate(expected_name_to_index)}
 
         assert isinstance(self.ds, expected_class)
         assert len(self.ds) == expected_length
@@ -283,6 +279,8 @@ class DatasetTester:
         self.indexing(self.ds)
         self.metadata(self.ds)
 
+        self.ds.tree()
+
     def metadata(self, ds):
         metadata = ds.metadata()
         assert isinstance(metadata, dict)
@@ -297,15 +295,9 @@ class DatasetTester:
             idx1 = ds1.name_to_index[v1]
             idx2 = ds2.name_to_index[v2]
             assert (ds1.statistics["mean"][idx1] == ds2.statistics["mean"][idx2]).all()
-            assert (
-                ds1.statistics["stdev"][idx1] == ds2.statistics["stdev"][idx2]
-            ).all()
-            assert (
-                ds1.statistics["maximum"][idx1] == ds2.statistics["maximum"][idx2]
-            ).all()
-            assert (
-                ds1.statistics["minimum"][idx1] == ds2.statistics["minimum"][idx2]
-            ).all()
+            assert (ds1.statistics["stdev"][idx1] == ds2.statistics["stdev"][idx2]).all()
+            assert (ds1.statistics["maximum"][idx1] == ds2.statistics["maximum"][idx2]).all()
+            assert (ds1.statistics["minimum"][idx1] == ds2.statistics["minimum"][idx2]).all()
 
     def indexing(self, ds):
         t = IndexTester(ds)
@@ -481,9 +473,7 @@ def test_subset_2():
 
 
 def test_subset_3():
-    test = DatasetTester(
-        "test-2021-2023-1h-o96-abcd", start=2022, end=2022, frequency=12
-    )
+    test = DatasetTester("test-2021-2023-1h-o96-abcd", start=2022, end=2022, frequency=12)
     test.run(
         expected_class=Subset,
         expected_length=365 * 2,
@@ -531,9 +521,7 @@ def test_subset_5():
 
 
 def test_subset_6():
-    test = DatasetTester(
-        "test-2021-2023-1h-o96-abcd", start="2022-06-01", end="2022-08-31"
-    )
+    test = DatasetTester("test-2021-2023-1h-o96-abcd", start="2022-06-01", end="2022-08-31")
     test.run(
         expected_class=Subset,
         expected_length=(30 + 31 + 31) * 24,
@@ -811,9 +799,7 @@ def test_constructor_5():
     )
 
     test.same_stats(test.ds, open_dataset("test-2021-2021-6h-o96-abcd-1"), "xyd", "acd")
-    test.same_stats(
-        test.ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd"
-    )
+    test.same_stats(test.ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
 
 
 def test_dates():
@@ -855,9 +841,7 @@ def test_slice_1():
 
 
 def test_slice_2():
-    test = DatasetTester(
-        [f"test-{year}-{year}-12h-o96-abcd" for year in range(1940, 2023)]
-    )
+    test = DatasetTester([f"test-{year}-{year}-12h-o96-abcd" for year in range(1940, 2023)])
     test.run(
         expected_class=Concat,
         expected_length=60632,
@@ -874,10 +858,7 @@ def test_slice_2():
 
 def test_slice_3():
     test = DatasetTester(
-        [
-            f"test-2020-2020-6h-o96-{vars}"
-            for vars in ("abcd", "efgh", "ijkl", "mnop", "qrst", "uvwx", "yz")
-        ]
+        [f"test-2020-2020-6h-o96-{vars}" for vars in ("abcd", "efgh", "ijkl", "mnop", "qrst", "uvwx", "yz")]
     )
     test.run(
         expected_class=Join,
@@ -894,9 +875,7 @@ def test_slice_3():
 
 
 def test_slice_4():
-    test = DatasetTester(
-        [f"test-2020-2020-1h-o96-{vars}" for vars in ("abcd", "cd", "a", "c")]
-    )
+    test = DatasetTester([f"test-2020-2020-1h-o96-{vars}" for vars in ("abcd", "cd", "a", "c")])
     test.run(
         expected_class=Select,
         expected_length=8784,
@@ -972,18 +951,10 @@ def test_ensemble_2():
         expected_variables="abcd",
         expected_name_to_index="abcd",
         date_to_row=lambda date: make_row(
-            [_(date, "a", 1, i) for i in range(10)]
-            + [_(date, "a", 2, 0)]
-            + [_(date, "a", 3, i) for i in range(5)],
-            [_(date, "b", 1, i) for i in range(10)]
-            + [_(date, "b", 2, 0)]
-            + [_(date, "b", 3, i) for i in range(5)],
-            [_(date, "c", 1, i) for i in range(10)]
-            + [_(date, "c", 2, 0)]
-            + [_(date, "c", 3, i) for i in range(5)],
-            [_(date, "d", 1, i) for i in range(10)]
-            + [_(date, "d", 2, 0)]
-            + [_(date, "d", 3, i) for i in range(5)],
+            [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)] + [_(date, "a", 3, i) for i in range(5)],
+            [_(date, "b", 1, i) for i in range(10)] + [_(date, "b", 2, 0)] + [_(date, "b", 3, i) for i in range(5)],
+            [_(date, "c", 1, i) for i in range(10)] + [_(date, "c", 2, 0)] + [_(date, "c", 3, i) for i in range(5)],
+            [_(date, "d", 1, i) for i in range(10)] + [_(date, "d", 2, 0)] + [_(date, "d", 3, i) for i in range(5)],
             ensemble=True,
         ),
         start_date=datetime.datetime(2021, 1, 1),
@@ -1008,18 +979,10 @@ def test_ensemble_3():
         expected_variables="abcd",
         expected_name_to_index="abcd",
         date_to_row=lambda date: make_row(
-            [_(date, "a", 1, i) for i in range(10)]
-            + [_(date, "a", 2, 0)]
-            + [_(date, "a", 3, i) for i in range(5)],
-            [_(date, "b", 1, i) for i in range(10)]
-            + [_(date, "b", 2, 0)]
-            + [_(date, "b", 3, i) for i in range(5)],
-            [_(date, "c", 1, i) for i in range(10)]
-            + [_(date, "c", 2, 0)]
-            + [_(date, "c", 3, i) for i in range(5)],
-            [_(date, "d", 1, i) for i in range(10)]
-            + [_(date, "d", 2, 0)]
-            + [_(date, "d", 3, i) for i in range(5)],
+            [_(date, "a", 1, i) for i in range(10)] + [_(date, "a", 2, 0)] + [_(date, "a", 3, i) for i in range(5)],
+            [_(date, "b", 1, i) for i in range(10)] + [_(date, "b", 2, 0)] + [_(date, "b", 3, i) for i in range(5)],
+            [_(date, "c", 1, i) for i in range(10)] + [_(date, "c", 2, 0)] + [_(date, "c", 3, i) for i in range(5)],
+            [_(date, "d", 1, i) for i in range(10)] + [_(date, "d", 2, 0)] + [_(date, "d", 3, i) for i in range(5)],
             ensemble=True,
         ),
         start_date=datetime.datetime(2021, 1, 1),
@@ -1070,9 +1033,7 @@ def test_grids():
     ds1 = open_dataset("test-2021-2021-6h-o96-abcd-1-1")
     ds2 = open_dataset("test-2021-2021-6h-o96-abcd-2-1-25")
 
-    assert (
-        test.ds.longitudes == np.concatenate([ds1.longitudes, ds2.longitudes])
-    ).all()
+    assert (test.ds.longitudes == np.concatenate([ds1.longitudes, ds2.longitudes])).all()
     assert (test.ds.latitudes == np.concatenate([ds1.latitudes, ds2.latitudes])).all()
 
 
