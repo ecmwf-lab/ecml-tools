@@ -944,7 +944,9 @@ class CutoutGrids(Grids):
     @debug_indexing
     @expand_list_indexing
     def _get_tuple(self, index):
-        assert index[self.axis] == slice(None), "No support for selecting a subset of the 1D values"
+        assert self.axis >= len(index) or index[self.axis] == slice(
+            None
+        ), f"No support for selecting a subset of the 1D values {index}"
         index, changes = index_to_slices(index, self.shape)
 
         # In case index_to_slices has changed the last slice
