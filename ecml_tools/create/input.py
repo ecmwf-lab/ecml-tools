@@ -67,10 +67,11 @@ def time_delta_to_string(delta):
 
 
 def import_function(name, kind):
-    return importlib.import_module(
+    module = importlib.import_module(
         f"..functions.{kind}.{name}",
         package=__name__,
-    ).execute
+    )
+    return module.execute
 
 
 def is_function(name, kind):
@@ -78,7 +79,8 @@ def is_function(name, kind):
     try:
         import_function(name, kind)
         return True
-    except ImportError:
+    except ImportError as e:
+        print(e)
         return False
 
 

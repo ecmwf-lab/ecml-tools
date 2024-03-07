@@ -201,9 +201,6 @@ class LoadersConfig(Config):
     def get_serialisable_dict(self):
         return _prepare_serialisation(self)
 
-    def get_variables_names(self):
-        return self.output.order_by[self.output.statistics]
-
 
 def _prepare_serialisation(o):
     if isinstance(o, dict):
