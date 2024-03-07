@@ -15,7 +15,8 @@ from climetlab.core.temporary import temp_file
 from climetlab.readers.grib.output import new_grib_output
 
 from ecml_tools.create.check import check_data_values
-from ecml_tools.create.functions import assert_is_fieldset, wrapped_mars_source
+from ecml_tools.create.functions import assert_is_fieldset
+from ecml_tools.create.functions.actions.mars import mars
 
 
 def to_list(x):
@@ -48,35 +49,39 @@ def normalise_request(request):
     return request
 
 
-def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
-    from climetlab import load_source
+def load_if_needed(context, dates, dict_or_dataset):
+    if isinstance(dict_or_dataset, dict):
+        dict_or_dataset = normalise_request(dict_or_dataset)
+        dict_or_dataset = mars(context, dates, dict_or_dataset)
+    return dict_or_dataset
 
-    ensembles = normalise_request(ensembles)
-    center = normalise_request(center)
-    mean = normalise_request(mean)
 
-    number_list = ensembles["number"]
-    n_numbers = len(number_list)
+def ensemble_perturbations(context, dates, ensembles, center, mean, remapping={}, patches={}):
+    ensembles = load_if_needed(context, dates, ensembles)
+    center = load_if_needed(context, dates, center)
+    mean = load_if_needed(context, dates, mean)
 
     keys = ["param", "level", "valid_datetime", "date", "time", "step", "number"]
 
     print(f"Retrieving ensemble data with {ensembles}")
-    ensembles = wrapped_mars_source(**ensembles).order_by(*keys)
     print(f"Retrieving center data with {center}")
-    center = wrapped_mars_source(**center).order_by(*keys)
     print(f"Retrieving mean data with {mean}")
-    mean = wrapped_mars_source(**mean).order_by(*keys)
 
-    assert len(mean) * n_numbers == len(ensembles), (
-        len(mean),
-        n_numbers,
-        len(ensembles),
-    )
-    assert len(center) * n_numbers == len(ensembles), (
-        len(center),
-        n_numbers,
-        len(ensembles),
-    )
+    ensembles = ensembles.order_by(*keys)
+    center = center.order_by(*keys)
+    mean = mean.order_by(*keys)
+
+    number_list = ensembles.unique_values("number")["number"]
+    n_numbers = len(number_list)
+
+    assert len(mean) == len(center), (len(mean), len(center))
+    if len(center) * n_numbers != len(ensembles):
+        print(len(center), n_numbers, len(ensembles))
+        for f in ensembles:
+            print("Ensembles: ", f)
+        for f in center:
+            print("Center: ", f)
+        raise ValueError(f"Inconsistent number of fields: {len(center)} * {n_numbers} != {len(ensembles)}")
 
     # prepare output tmp file so we can read it back
     tmp = temp_file()
@@ -134,6 +139,8 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
 
     out.close()
 
+    from climetlab import load_source
+
     ds = load_source("file", path)
     assert_is_fieldset(ds)
     # save a reference to the tmp file so it is deleted
@@ -145,7 +152,7 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
     return ds
 
 
-execute = ensembles_perturbations
+execute = ensemble_perturbations
 
 if __name__ == "__main__":
     import yaml
@@ -192,5 +199,5 @@ if __name__ == "__main__":
     for k, v in config.items():
         print(k, v)
 
-    for f in ensembles_perturbations(**config):
+    for f in ensemble_perturbations(**config):
         print(f, f.to_numpy().mean())

@@ -6,55 +6,77 @@ config_format_version: 2
 
 common:
   mars_request: &common
-    name: mars
     class: ea
-    date: $datetime_format($dates,%Y%m%d)
-    time: $datetime_format($dates,%H%M)
-    expver: '0001'
+    expver: "0001"
     grid: 20.0/20.0
     levtype: sfc
-    param: [2t, tp]
-  dates: &dates_anchor
-    start: 2020-12-30 00:00:00
-    end: 2021-01-03 12:00:00
-    frequency: 12h
+    param: [2t]
+  mars_request_acc: &common_acc
+    class: ea
+    expver: "0001"
+    grid: 20.0/20.0
+    levtype: sfc
+    param: [tp]
+
+  ensembles: &ensembles
+    stream: enda
+    type: an
+    number: [0, 2, 4]
+    # number: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  center: &center
+    stream: oper
+    type: an
+  mean: &mean
+    stream: enda
+    type: em
 
 dates:
-  <<: *dates_anchor
+  start: 2020-12-30 00:00:00
+  end: 2021-01-03 12:00:00
+  frequency: 12h
   group_by: monthly
 
+include: # This "include" will be renamed
+  - join:
+      - mars:
+          <<: *ensembles
+          <<: *common
+      - accumulations:
+          <<: *ensembles
+          <<: *common_acc
+  - join:
+      - mars:
+          <<: *mean
+          <<: *common
+      - accumulations:
+          <<: *mean
+          <<: *common_acc
+  - join:
+      - mars:
+          <<: *center
+          <<: *common
+      - accumulations:
+          <<: *center
+          <<: *common_acc
+
 input:
-  dates:
-    <<: *dates_anchor
-    function:
-      name: ensemble_perturbations
-      ensembles: # the ensemble data has one additional dimension
-        <<: *common
-        stream: enda
-        type: an
-        number: 0/to/4/by/2
-        # number: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-      center: # the new center of the data
-        <<: *common
-        stream: oper
-        type: an
-
-      mean: # the previous center of the data
-        <<: *common
-        stream: enda
-        type: em
-
+  ensemble_perturbations:
+    # the ensemble data which has one additional dimension
+    ensembles: ${include.0.join}
+    # the previous center of the data
+    mean: ${include.1.join}
+    # the new center of the data
+    center: ${include.2.join}
 
 output:
-  chunking: {dates: 1}
+  chunking: { dates: 1 }
   dtype: float32
   flatten_grid: True
   order_by:
-  - valid_datetime
-  - param_level
-  - number
+    - valid_datetime
+    - param_level
+    - number
   statistics: param_level
   statistics_end: 2021
   remapping:
-    param_level: '{param}_{levelist}'
+    param_level: "{param}_{levelist}"
