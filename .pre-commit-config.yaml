@@ -39,6 +39,8 @@ repos:
     - --fix
     - --exit-non-zero-on-fix
     - --preview 
+    - --exclude
+    - 'dev/*.py'
 #- repo: https://github.com/pre-commit/mirrors-mypy
 #  rev: v0.720
 #  hooks:
