@@ -18,9 +18,7 @@ def check(what, ds, paths, **kwargs):
             count *= len(v)
 
     if len(ds) != count:
-        raise ValueError(
-            f"Expected {count} fields, got {len(ds)} (kwargs={kwargs}, {what}s={paths})"
-        )
+        raise ValueError(f"Expected {count} fields, got {len(ds)} (kwargs={kwargs}, {what}s={paths})")
 
 
 def load_netcdfs(emoji, what, context, dates, path, *args, **kwargs):
@@ -30,9 +28,7 @@ def load_netcdfs(emoji, what, context, dates, path, *args, **kwargs):
     ds = load_source("empty")
 
     for path in given_paths:
-        paths = Pattern(path, ignore_missing_keys=True).substitute(
-            *args, date=dates, **kwargs
-        )
+        paths = Pattern(path, ignore_missing_keys=True).substitute(*args, date=dates, **kwargs)
 
         levels = kwargs.get("level", kwargs.get("levelist"))
 

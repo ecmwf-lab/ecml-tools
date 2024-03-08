@@ -69,9 +69,7 @@ def load_json_or_yaml(path):
             return json.load(f)
         if path.endswith(".yaml") or path.endswith(".yml"):
             return yaml.safe_load(f)
-        raise ValueError(
-            f"Cannot read file {path}. Need json or yaml with appropriate extension."
-        )
+        raise ValueError(f"Cannot read file {path}. Need json or yaml with appropriate extension.")
 
 
 def compute_directory_sizes(path):

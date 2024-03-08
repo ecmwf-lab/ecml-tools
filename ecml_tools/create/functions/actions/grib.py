@@ -19,9 +19,7 @@ def check(ds, paths, **kwargs):
             count *= len(v)
 
     if len(ds) != count:
-        raise ValueError(
-            f"Expected {count} fields, got {len(ds)} (kwargs={kwargs}, paths={paths})"
-        )
+        raise ValueError(f"Expected {count} fields, got {len(ds)} (kwargs={kwargs}, paths={paths})")
 
 
 def execute(context, dates, path, *args, **kwargs):
@@ -31,9 +29,7 @@ def execute(context, dates, path, *args, **kwargs):
     dates = [d.isoformat() for d in dates]
 
     for path in given_paths:
-        paths = Pattern(path, ignore_missing_keys=True).substitute(
-            *args, date=dates, **kwargs
-        )
+        paths = Pattern(path, ignore_missing_keys=True).substitute(*args, date=dates, **kwargs)
 
         for name in ("grid", "area", "rotation", "frame", "resol", "bitmap"):
             if name in kwargs:

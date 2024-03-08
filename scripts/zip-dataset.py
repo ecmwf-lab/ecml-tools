@@ -67,14 +67,10 @@ def main():
             relpath = os.path.relpath(path, args.source)
             files.append(relpath)
     end = time.time()
-    print(
-        f"Found {len(files)} files in {args.source} (took {to_human_readable(end-start)})"
-    )
+    print(f"Found {len(files)} files in {args.source} (took {to_human_readable(end-start)})")
 
     def open_zip(path, mode):
-        return zipfile.ZipFile(
-            path, mode=mode, compression=zipfile.ZIP_STORED, allowZip64=True
-        )
+        return zipfile.ZipFile(path, mode=mode, compression=zipfile.ZIP_STORED, allowZip64=True)
 
     def read_metadata(path):
         zf = open_zip(path, mode="r")

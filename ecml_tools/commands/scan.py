@@ -16,9 +16,7 @@ class Scan(Command):
     timestamp = True
 
     def add_arguments(self, command_parser):
-        command_parser.add_argument(
-            "--extension", default=".grib", help="Extension of the files to scan"
-        )
+        command_parser.add_argument("--extension", default=".grib", help="Extension of the files to scan")
         command_parser.add_argument(
             "--magic",
             help="File 'magic' to use to identify the file type. Overrides --extension",

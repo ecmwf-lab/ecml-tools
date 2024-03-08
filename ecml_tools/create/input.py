@@ -12,7 +12,8 @@ import logging
 import time
 from collections import defaultdict
 from copy import deepcopy
-from functools import cached_property, wraps
+from functools import cached_property
+from functools import wraps
 
 import numpy as np
 from climetlab.core.order import build_remapping
@@ -20,15 +21,13 @@ from climetlab.indexing.fieldset import FieldSet
 
 from ecml_tools.utils.dates import Dates
 
-from .template import (
-    Context,
-    notify_result,
-    resolve,
-    substitute,
-    trace,
-    trace_datasource,
-    trace_select,
-)
+from .template import Context
+from .template import notify_result
+from .template import resolve
+from .template import substitute
+from .template import trace
+from .template import trace_datasource
+from .template import trace_select
 from .utils import seconds
 
 LOG = logging.getLogger(__name__)
@@ -75,7 +74,7 @@ def import_function(name, kind):
 
 
 def is_function(name, kind):
-    name, delta = parse_function_name(name)
+    name, delta = parse_function_name(name)  # noqa
     try:
         import_function(name, kind)
         return True
@@ -541,7 +540,7 @@ class FunctionAction(Action):
 
     @property
     def function(self):
-        name, delta = parse_function_name(self.name)
+        # name, delta = parse_function_name(self.name)
         return import_function(self.name, "actions")
 
     def __repr__(self):
@@ -785,7 +784,7 @@ def action_factory(config, context, action_path):
         args, kwargs = [], config[key]
 
     cls = dict(
-        date_shift=DateShiftAction,
+        # date_shift=DateShiftAction,
         # date_filter=DateFilterAction,
         include=IncludeAction,
         concat=ConcatAction,

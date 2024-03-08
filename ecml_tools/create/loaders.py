@@ -17,19 +17,22 @@ import zarr
 from ecml_tools.data import open_dataset
 from ecml_tools.utils.dates.groups import Groups
 
-from .check import DatasetName, check_data_values
-from .config import build_output, loader_config
+from .check import DatasetName
+from .check import check_data_values
+from .config import build_output
+from .config import loader_config
 from .input import build_input
-from .statistics import TempStatistics, compute_statistics
-from .utils import (
-    bytes,
-    compute_directory_sizes,
-    normalize_and_check_dates,
-    progress_bar,
-    seconds,
-)
-from .writer import CubesFilter, ViewCacheArray
-from .zarr import ZarrBuiltRegistry, add_zarr_dataset
+from .statistics import TempStatistics
+from .statistics import compute_statistics
+from .utils import bytes
+from .utils import compute_directory_sizes
+from .utils import normalize_and_check_dates
+from .utils import progress_bar
+from .utils import seconds
+from .writer import CubesFilter
+from .writer import ViewCacheArray
+from .zarr import ZarrBuiltRegistry
+from .zarr import add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
@@ -246,7 +249,7 @@ class InitialiseLoader(Loader):
         metadata["missing_dates"] = [_.isoformat() for _ in dates.missing]
 
         if check_name:
-            basename, ext = os.path.splitext(os.path.basename(self.path))
+            basename, ext = os.path.splitext(os.path.basename(self.path))  # noqa: F841
             ds_name = DatasetName(
                 basename,
                 resolution,

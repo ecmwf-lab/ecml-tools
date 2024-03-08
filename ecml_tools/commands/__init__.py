@@ -25,13 +25,7 @@ def register(here, package, select, fail=None):
         full = os.path.join(here, p)
         if p.startswith("_"):
             continue
-        if not (
-            p.endswith(".py")
-            or (
-                os.path.isdir(full)
-                and os.path.exists(os.path.join(full, "__init__.py"))
-            )
-        ):
+        if not (p.endswith(".py") or (os.path.isdir(full) and os.path.exists(os.path.join(full, "__init__.py")))):
             continue
 
         name, _ = os.path.splitext(p)
