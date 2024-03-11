@@ -14,8 +14,10 @@ dates:
   start: 2020-12-30 00:00:00
   end: 2021-01-03 12:00:00
   frequency: 12h
-  group_by: monthly
   missing: ['2020-12-30 12:00:00', '2021-01-03 00:00:00']
+
+options:
+  group_by: monthly
 
 include:
   - mars:
@@ -35,7 +37,6 @@ input:
 output:
   chunking: { dates: 1, ensembles: 1 }
   dtype: float32
-  flatten_grid: True
   order_by: [valid_datetime, param_level, number]
   remapping:
     param_level: "{param}_{levelist}"
