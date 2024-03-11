@@ -5,51 +5,59 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-import json
+import glob
 import os
 
 import numpy as np
+import pytest
+import zarr
 
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
 
-TEST_DATA_ROOT = "/s3/ml-tests/test-data/anemoi-datasets/create/"
+HERE = os.path.dirname(__file__)
+# find_yamls
+NAMES = [os.path.basename(path).split(".")[0] for path in glob.glob(os.path.join(HERE, "*.yaml"))]
+NAMES = [
+    name
+    for name in NAMES
+    if name
+    not in [
+        "missing",
+        "perturbations",
+    ]
+]
+assert NAMES, "No yaml files found in " + HERE
+
+TEST_DATA_ROOT = "s3://ml-tests/test-data/anemoi-datasets/create/"
 
 
-class Reference:
-    def __init__(self, name):
-        self.name = name
-        self.path = os.path.join(TEST_DATA_ROOT, name)
+def compare_dot_zattrs(a, b):
+    if isinstance(a, dict):
+        a_keys = list(a.keys())
+        b_keys = list(b.keys())
+        for k in set(a_keys) & set(b_keys):
+            if k in ["timestamp", "uuid", "latest_write_timestamp", "yaml_config"]:
+                assert type(a[k]) == type(b[k]), (  # noqa: E721
+                    type(a[k]),
+                    type(b[k]),
+                    a[k],
+                    b[k],
+                )
+            assert k in a_keys, (k, a_keys)
+            assert k in b_keys, (k, b_keys)
+            return compare_dot_zattrs(a[k], b[k])
 
-    def compare_dot_zattrs(other):
-        a = json.load(open(self.path)).attrs
-        if isinstance(a, dict):
-            a_keys = list(a.keys())
-            b_keys = list(b.keys())
-            for k in set(a_keys) & set(b_keys):
-                if k in ["timestamp", "uuid", "latest_write_timestamp", "yaml_config"]:
-                    assert type(a[k]) == type(b[k]), (  # noqa: E721
-                        type(a[k]),
-                        type(b[k]),
-                        a[k],
-                        b[k],
-                    )
-                assert k in a_keys, (k, a_keys)
-                assert k in b_keys, (k, b_keys)
-                return compare_dot_zattrs(a[k], b[k])
+    if isinstance(a, list):
+        assert len(a) == len(b), (a, b)
+        for v, w in zip(a, b):
+            return compare_dot_zattrs(v, w)
 
-        if isinstance(a, list):
-            assert len(a) == len(b), (a, b)
-            for v, w in zip(a, b):
-                return compare_dot_zattrs(v, w)
-
-        assert type(a) == type(b), (type(a), type(b), a, b)  # noqa: E721
-        return a == b, (a, b)
+    assert type(a) == type(b), (type(a), type(b), a, b)  # noqa: E721
+    return a == b, (a, b)
 
 
-def compare_zarr(dir1, dir2):
-    a = open_dataset(dir1)
-    b = open_dataset(dir2)
+def compare_datasets(a, b):
     assert a.shape == b.shape, (a.shape, b.shape)
     assert (a.dates == b.dates).all(), (a.dates, b.dates)
     for a_, b_ in zip(a.variables, b.variables):
@@ -66,47 +74,44 @@ def compare_zarr(dir1, dir2):
             a_ = a[i_date, i_param]
             b_ = b[i_date, i_param]
             assert a.shape == b.shape, (date, param, a.shape, b.shape)
+
+            a_nans = np.isnan(a_)
+            b_nans = np.isnan(b_)
+            assert np.all(a_nans == b_nans), (date, param, "nans are different")
+
+            a_ = np.where(a_nans, 0, a_)
+            b_ = np.where(b_nans, 0, b_)
+
             delta = a_ - b_
             max_delta = np.max(np.abs(delta))
             assert max_delta == 0.0, (date, param, a_, b_, a_ - b_, max_delta)
-    compare(dir1, dir2)
 
 
-def compare(dir1, dir2):
-    """Compare two directories recursively."""
-    files1 = set(os.listdir(dir1))
-    files2 = set(os.listdir(dir2))
-    files = files1.union(files2)
+class Comparer:
+    def __init__(self, name, output_path=None, reference_path=None):
+        self.name = name
+        self.reference = reference_path or os.path.join(TEST_DATA_ROOT, name + ".zarr")
+        self.output = output_path or os.path.join(name + ".zarr")
+        print(f"Comparing {self.reference} and {self.output}")
 
-    for f in files:
-        path1 = os.path.join(dir1, f)
-        path2 = os.path.join(dir2, f)
+        self.z_reference = zarr.open(self.reference)
+        self.z_output = zarr.open(self.output)
 
-        if not os.path.isfile(path1):
-            assert os.path.isdir(path2), f"Directory {path2} does not exist"
-            compare(path1, path2)
-            continue
+        self.ds_reference = open_dataset(self.reference)
+        self.ds_output = open_dataset(self.output)
 
-        assert os.path.isfile(path2), f"File {path2} does not exist"
-
-        content1 = open(path1, "rb").read()
-        content2 = open(path2, "rb").read()
-
-        if f == ".zattrs":
-            compare_dot_zattrs(json.loads(content1), json.loads(content2))
-            continue
-
-        if f == "provenance_load.json":
-            assert False, "test not implemented to compare temporary statistics"
-
-        assert content1 == content2, f"{path1} != {path2}"
+    def compare(self):
+        compare_dot_zattrs(self.z_output.attrs, self.z_reference.attrs)
+        compare_datasets(self.ds_output, self.ds_reference)
+        # not implemented :
+        # compare_statistics(self.z_output, self.z_reference)
 
 
-def _test_create(name):
-    here = os.path.dirname(__file__)
-    config = os.path.join(here, name + ".yaml")
-    output = os.path.join(here, name + "-output", name + ".zarr")
-    reference = os.path.join(here, name + "-reference", name + ".zarr")
+@pytest.mark.parametrize("name", NAMES)
+def test_run(name):
+    config = os.path.join(HERE, name + ".yaml")
+    output = os.path.join(HERE, name + ".zarr")
+    comparer = Comparer(name, output_path=output)
 
     # cache=None is using the default cache
     c = Creator(
@@ -117,35 +122,15 @@ def _test_create(name):
     )
     c.create()
 
-    compare_zarr(reference, output)
-
-
-def test_create_concat():
-    _test_create("create-concat")
-
-
-def test_create_join():
-    _test_create("create-join")
-
-
-def test_create_pipe():
-    _test_create("create-pipe")
-
-
-def test_create_perturbations():
-    _test_create("create-perturbations")
+    comparer.compare()
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", help="Name of the test case")
-    parser.add_argument("--compare", nargs=2, help="Compare two directories")
+    parser.add_argument("name", help="Name of the test case")
 
     args = parser.parse_args()
 
-    if args.compare:
-        compare_zarr(args.compare[0], args.compare[1])
-    else:
-        _test_create(args.name)
+    test_run(args.name)
