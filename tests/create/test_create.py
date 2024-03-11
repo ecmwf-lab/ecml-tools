@@ -23,7 +23,6 @@ NAMES = [
     for name in NAMES
     if name
     not in [
-        "missing",
         "perturbations",
     ]
 ]
@@ -62,7 +61,11 @@ def compare_datasets(a, b):
     assert (a.dates == b.dates).all(), (a.dates, b.dates)
     for a_, b_ in zip(a.variables, b.variables):
         assert a_ == b_, (a, b)
+    assert a.missing == b.missing, "Missing are different"
+
     for i_date, date in zip(range(a.shape[0]), a.dates):
+        if i_date in a.missing:
+            continue
         for i_param in range(a.shape[1]):
             param = a.variables[i_param]
             assert param == b.variables[i_param], (
