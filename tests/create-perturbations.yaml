@@ -33,44 +33,48 @@ dates:
   start: 2020-12-30 00:00:00
   end: 2021-01-31 12:00:00
   frequency: 12h
+
+options:
   group_by: monthly
 
-include: # This "include" will be renamed
-  - join:
+data_sources:
+  ensembles:
+    join:
       - mars:
           <<: *ensembles
           <<: *common
       - accumulations:
           <<: *ensembles
           <<: *common_acc
-  - join:
+  mean:
+    join:
       - mars:
           <<: *mean
           <<: *common
       - accumulations:
           <<: *mean
           <<: *common_acc
-  - join:
+  center:
+    join:
       - mars:
           <<: *center
           <<: *common
       - accumulations:
           <<: *center
           <<: *common_acc
-
+          
 input:
   ensemble_perturbations:
     # the ensemble data which has one additional dimension
-    ensembles: ${include.0.join}
+    ensembles: ${data_sources.ensembles}
     # the previous center of the data
-    mean: ${include.1.join}
+    mean: ${data_sources.mean}
     # the new center of the data
-    center: ${include.2.join}
+    center: ${data_sources.center}
 
 output:
   chunking: { dates: 1 }
   dtype: float32
-  flatten_grid: True
   order_by:
     - valid_datetime
     - param_level

@@ -169,6 +169,8 @@ class LoadersConfig(Config):
         if "loop" in self:
             raise ValueError(f"Do not use 'loop'. Use dates instead. {list(self.keys())}")
 
+        self.options = self.get("options", {})
+
         if "licence" not in self:
             self.licence = "unknown"
             print(f"❗ Setting licence={self.licence} because it was not provided.")
@@ -197,6 +199,9 @@ class LoadersConfig(Config):
         assert "flatten_values" not in self.output
         assert "flatten_grid" in self.output, self.output
         assert "statistics" in self.output
+
+        if "group_by" in self.options:
+            self.dates["group_by"] = self.options.group_by
 
     def get_serialisable_dict(self):
         return _prepare_serialisation(self)
