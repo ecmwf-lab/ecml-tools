@@ -21,41 +21,7 @@ jobs:
         python-version: 3.x
     - uses: pre-commit/action@v3.0.1
 
-  notify-failure:
-    if: failure()
-    runs-on: ubuntu-latest
-    needs: quality
-    name: Notify failure
-    steps:
-      - uses: jdcargile/ms-teams-notification@v1.4
-        with:
-          github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI_F }}
-          # notification-summary: ${{ steps.qa.outputs.status }}
-          notification-summary: Build failed on ecml-tools. Please check the logs.
-          notification-color: dc3545
-          timezone: Europe/Paris
-          verbose-logging: true
-
-  notify-success:
-    if: success()
-    runs-on: ubuntu-latest
-    needs: quality
-    name: Notify success
-    steps:
-      - uses: jdcargile/ms-teams-notification@v1.4
-        with:
-          github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI_F }}
-          # notification-summary: ${{ steps.qa.outputs.status }}
-          notification-summary: New commit pushed on ecml-tools. Everything is fine.
-          notification-color: 17a2b8
-          timezone: Europe/Paris
-          verbose-logging: true
-
   checks:
-    if: ${{ github.event_name == 'release' }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -81,6 +47,38 @@ jobs:
 
     - name: Tests
       run: pytest
+
+  notify-failure:
+    if: failure()
+    runs-on: ubuntu-latest
+    needs: [quality, checks]
+    name: Notify failure
+    steps:
+      - uses: jdcargile/ms-teams-notification@v1.4
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI_F }}
+          # notification-summary: ${{ steps.qa.outputs.status }}
+          notification-summary: Build failed on ecml-tools. Please check the logs.
+          notification-color: dc3545
+          timezone: Europe/Paris
+          verbose-logging: true
+
+  notify-success:
+    if: success()
+    runs-on: ubuntu-latest
+    needs: [quality, checks]
+    name: Notify success
+    steps:
+      - uses: jdcargile/ms-teams-notification@v1.4
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI_F }}
+          # notification-summary: ${{ steps.qa.outputs.status }}
+          notification-summary: New commit pushed on ecml-tools. Everything is fine.
+          notification-color: 17a2b8
+          timezone: Europe/Paris
+          verbose-logging: true
 
   deploy:
 
