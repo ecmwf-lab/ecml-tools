@@ -633,7 +633,7 @@ class FilterStepResult(StepResult):
     @assert_fieldset
     @trace_datasource
     def datasource(self):
-        ds = self.content.datasource
+        ds = self.upstream_result.datasource
         ds = ds.sel(**self.action.kwargs)
         return ds
 

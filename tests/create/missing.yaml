@@ -19,7 +19,7 @@ dates:
 options:
   group_by: monthly
 
-include:
+data_sources:
   - mars:
       <<: *mars_request
       param: [2t]
@@ -29,7 +29,7 @@ include:
 
 input:
   constants:
-    template: ${include.0.mars}
+    template: ${data_sources.0.mars}
     param:
       - cos_latitude
       #- sin_latitude

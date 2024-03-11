@@ -1,7 +1,6 @@
 description: "develop version of the dataset for a few days and a few variables, once data on mars is cached it should take a few seconds to generate the dataset"
 dataset_status: testing
-purpose: aifs
-name: test-small
+name: test-concat
 config_format_version: 2
 
 dates:
@@ -46,5 +45,5 @@ output:
     - number
   statistics: param_level
   statistics_end: 2021
-  remapping: &remapping
+  remapping: 
     param_level: "{param}_{levelist}"

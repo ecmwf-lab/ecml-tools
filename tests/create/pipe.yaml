@@ -1,6 +1,5 @@
 description: "develop version of the dataset for a few days and a few variables, once data on mars is cached it should take a few seconds to generate the dataset"
 dataset_status: testing
-purpose: aifs
 name: test-small
 config_format_version: 2
 

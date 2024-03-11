@@ -1,6 +1,5 @@
 description: "testing for nans using sst"
 dataset_status: testing
-purpose: aifs
 name: test-nan
 config_format_version: 2
 
