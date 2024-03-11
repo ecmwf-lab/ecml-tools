@@ -28,7 +28,7 @@ NAMES = [
 ]
 assert NAMES, "No yaml files found in " + HERE
 
-TEST_DATA_ROOT = "s3://ml-tests/test-data/anemoi-datasets/create/"
+TEST_DATA_ROOT = "https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create/"
 
 
 def compare_dot_zattrs(a, b):
@@ -126,7 +126,6 @@ class Comparer:
 def test_run(name):
     config = os.path.join(HERE, name + ".yaml")
     output = os.path.join(HERE, name + ".zarr")
-    comparer = Comparer(name, output_path=output)
 
     # cache=None is using the default cache
     c = Creator(
@@ -137,6 +136,7 @@ def test_run(name):
     )
     c.create()
 
+    comparer = Comparer(name, output_path=output)
     comparer.compare()
 
 
