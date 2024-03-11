@@ -8,21 +8,20 @@ common:
   mars_request: &common
     class: ea
     expver: "0001"
-    grid: 20.0/20.0
+    grid: 2.0/2.0
     levtype: sfc
     param: [2t]
   mars_request_acc: &common_acc
     class: ea
     expver: "0001"
-    grid: 20.0/20.0
+    grid: 2.0/2.0
     levtype: sfc
     param: [tp]
 
   ensembles: &ensembles
     stream: enda
     type: an
-    number: [0, 2, 4]
-    # number: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    number: [1, 2, 3, 4, 5, 6, 7, 8,  9]
   center: &center
     stream: oper
     type: an
@@ -32,7 +31,7 @@ common:
 
 dates:
   start: 2020-12-30 00:00:00
-  end: 2021-01-03 12:00:00
+  end: 2021-01-31 12:00:00
   frequency: 12h
   group_by: monthly
 

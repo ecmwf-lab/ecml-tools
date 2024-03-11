@@ -59,7 +59,6 @@ def load_if_needed(context, dates, dict_or_dataset):
 def ensemble_perturbations(context, dates, ensembles, center, mean, remapping={}, patches={}):
     ensembles = load_if_needed(context, dates, ensembles)
     center = load_if_needed(context, dates, center)
-    mean = load_if_needed(context, dates, mean)
 
     keys = ["param", "level", "valid_datetime", "date", "time", "step", "number"]
 
@@ -69,10 +68,10 @@ def ensemble_perturbations(context, dates, ensembles, center, mean, remapping={}
 
     ensembles = ensembles.order_by(*keys)
     center = center.order_by(*keys)
-    mean = mean.order_by(*keys)
 
     number_list = ensembles.unique_values("number")["number"]
     n_numbers = len(number_list)
+    date_numbers = len(center)
 
     assert len(mean) == len(center), (len(mean), len(center))
     if len(center) * n_numbers != len(ensembles):
@@ -82,6 +81,25 @@ def ensemble_perturbations(context, dates, ensembles, center, mean, remapping={}
         for f in center:
             print("Center: ", f)
         raise ValueError(f"Inconsistent number of fields: {len(center)} * {n_numbers} != {len(ensembles)}")
+
+    mean = np.zeros((center.to_numpy().shape))
+
+    for date in range(date_numbers):
+
+        ens_list = ensembles[date*n_numbers:(date+1)*n_numbers]
+
+        for i in range(len(ens_list)):
+            for k in keys + ["grid", "shape"]:
+                if k == "number":
+                    continue
+                assert center[date].metadata(k) == ens_list[i].metadata(k), (
+                    k,
+                    center[date].metadata(k),
+                    ens_list[i].metadata(k),
+                )
+        
+        ensembles_np = ensembles[date*n_numbers:(date+1)*n_numbers].to_numpy()
+        mean[date] = ensembles_np.mean(axis = 0)
 
     # prepare output tmp file so we can read it back
     tmp = temp_file()
@@ -107,16 +125,11 @@ def ensemble_perturbations(context, dates, ensembles, center, mean, remapping={}
                 center_field.metadata(k),
                 field.metadata(k),
             )
-            assert mean_field.metadata(k) == field.metadata(k), (
-                k,
-                mean_field.metadata(k),
-                field.metadata(k),
-            )
 
         e = field.to_numpy()
-        m = mean_field.to_numpy()
         c = center_field.to_numpy()
-        assert m.shape == c.shape, (m.shape, c.shape)
+        
+        assert mean_field.shape == c.shape, (mean_field.shape, c.shape)
 
         FORCED_POSITIVE = [
             "q",
@@ -126,7 +139,7 @@ def ensemble_perturbations(context, dates, ensembles, center, mean, remapping={}
         ]  # add "swl4", "swl3", "swl2", "swl1", "swl0", and more ?
         #################################
         # Actual computation happens here
-        x = c - m + e
+        x = c - mean_field + e
         if param in FORCED_POSITIVE:
             warnings.warn(f"Clipping {param} to be positive")
             x = np.maximum(x, 0)
