@@ -141,6 +141,9 @@ class OutputSpecs:
 class LoadersConfig(Config):
 
     def __init__(self, config, *args, **kwargs):
+        if "build" not in config:
+            config["build"] = {}
+
         super().__init__(config, *args, **kwargs)
 
         # TODO: should use a json schema to validate the config
@@ -175,7 +178,6 @@ class LoadersConfig(Config):
         if "copyright" not in self:
             self.copyright = "unknown"
 
-        self.build = self.get("build", {})
         if "group_by" not in self.build:
             self.build.group_by = "monthly"
 
@@ -200,6 +202,8 @@ class LoadersConfig(Config):
 
         if "group_by" in self.build:
             self.dates["group_by"] = self.build.group_by
+
+        ###########
 
         self.reading_chunks = self.get("reading_chunks")
         assert "flatten_values" not in self.output

@@ -367,7 +367,6 @@ class DebugStore(ReadOnlyStore):
 
 
 def open_zarr(path):
-    print(path)
     try:
         store = path
 

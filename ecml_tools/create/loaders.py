@@ -39,6 +39,28 @@ LOG = logging.getLogger(__name__)
 VERSION = "0.20"
 
 
+def default_statistics_dates(dates):
+    first = dates[0]
+    last = dates[-1]
+    n_years = (last - first).days // 365
+
+    if n_years >= 20:
+        end = datetime.datetime(last.year - 2, last.month, last.day, last.hour, last.minute, last.second)
+        print(f"Number of years {n_years} >= 20, leaving out 2 years. {end=}")
+        return dates[0], end
+
+    if n_years >= 10:  # leave out 1 year
+        end = datetime.datetime(last.year - 1, last.month, last.day, last.hour, last.minute, last.second)
+        print(f"Number of years {n_years} >= 10, leaving out 1 years. {end=}")
+        return dates[0], end
+
+    # leave out 20% of the data
+    k = int(len(dates) * 0.8)
+    end = dates[k]
+    print(f"Number of years {n_years} < 10, leaving out 20%. {end=}")
+    return dates[0], end
+
+
 class Loader:
     def __init__(self, *, path, print=print, **kwargs):
         # Catch all floating point errors, including overflow, sqrt(<0), etc
@@ -89,12 +111,18 @@ class Loader:
 
     def build_statistics_dates(self, start, end):
         ds = open_dataset(self.path)
-        subset = ds.dates_interval_to_indices(start, end)
-        start, end = ds.dates[subset[0]], ds.dates[subset[-1]]
-        return (
-            start.astype(datetime.datetime).isoformat(),
-            end.astype(datetime.datetime).isoformat(),
-        )
+        dates = ds.dates
+
+        if end is None and start is None:
+            start, end = default_statistics_dates(dates)
+        else:
+            subset = ds.dates_interval_to_indices(start, end)
+            start = dates[subset[0]]
+            end = dates[subset[-1]]
+
+        start = start.astype(datetime.datetime)
+        end = end.astype(datetime.datetime)
+        return (start.isoformat(), end.isoformat())
 
     def read_dataset_metadata(self):
         ds = open_dataset(self.path)
