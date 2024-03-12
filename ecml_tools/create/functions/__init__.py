@@ -38,8 +38,16 @@ class Mockup:
             return None
         path = os.path.join(self.read_directory, self.get_filename([args, kwargs]))
         if os.path.exists(path):
-            print(f"Loading to {path} for {args}, {kwargs}")
+            print(f"Loading path {path} for {args}, {kwargs}")
             return load_source("file", path)
+        elif path.startswith("http"):
+            import requests
+
+            print(f"Loading url {path} for {args}, {kwargs}")
+            try:
+                return load_source("url", path)
+            except requests.exceptions.HTTPError:
+                pass
         return None
 
 

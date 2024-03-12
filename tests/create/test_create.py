@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from ecml_tools.create import Creator
+from ecml_tools.create.functions import enable_read_mars
 from ecml_tools.data import open_dataset
 from ecml_tools.data import open_zarr
 
@@ -29,6 +30,7 @@ NAMES = [
 assert NAMES, "No yaml files found in " + HERE
 
 TEST_DATA_ROOT = "https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create/"
+enable_read_mars("https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create")
 
 
 def compare_dot_zattrs(a, b):
