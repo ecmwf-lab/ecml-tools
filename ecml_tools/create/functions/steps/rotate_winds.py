@@ -25,9 +25,7 @@ def rotate_winds(lats, lons, x_wind, y_wind, source_projection, target_projectio
     source_projection = pyproj.Proj(source_projection)
     target_projection = pyproj.Proj(target_projection)
 
-    transformer = pyproj.transformer.Transformer.from_proj(
-        source_projection, target_projection
-    )
+    transformer = pyproj.transformer.Transformer.from_proj(source_projection, target_projection)
 
     # To compute the new vector components:
     # 1) perturb each position in the direction of the winds
@@ -127,11 +125,7 @@ def execute(
             lons,
             x.to_numpy(reshape=False),
             y.to_numpy(reshape=False),
-            (
-                source_projection
-                if source_projection is not None
-                else CRS.from_cf(x.grid_mapping)
-            ),
+            (source_projection if source_projection is not None else CRS.from_cf(x.grid_mapping)),
             target_projection,
         )
 

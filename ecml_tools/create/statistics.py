@@ -21,7 +21,9 @@ import numpy as np
 
 from ecml_tools.provenance import gather_provenance_info
 
-from .check import StatisticsValueError, check_data_values, check_stats
+from .check import StatisticsValueError
+from .check import check_data_values
+from .check import check_stats
 
 LOG = logging.getLogger(__name__)
 

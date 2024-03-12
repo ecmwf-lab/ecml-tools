@@ -14,7 +14,8 @@ import sysconfig
 
 
 def lookup_git_repo(path):
-    from git import InvalidGitRepositoryError, Repo
+    from git import InvalidGitRepositoryError
+    from git import Repo
 
     while path != "/":
         try:
@@ -106,10 +107,7 @@ def module_versions(full):
             roots[path] = name
 
     # Sort by length of path, so that we get the most specific first
-    roots = {
-        path: name
-        for path, name in sorted(roots.items(), key=lambda x: len(x[0]), reverse=True)
-    }
+    roots = {path: name for path, name in sorted(roots.items(), key=lambda x: len(x[0]), reverse=True)}
 
     paths = set()
 
@@ -179,7 +177,7 @@ def assets_info(paths):
 
     for path in paths:
         try:
-            (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat(path)
+            (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat(path)  # noqa: F841
             md5 = path_md5(path)
         except Exception as e:
             result[path] = str(e)

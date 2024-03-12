@@ -218,12 +218,7 @@ def table(rows, header, align, margin=0):
     result = []
     for i, row in enumerate(all_rows):
         result.append(
-            " │ ".join(
-                [
-                    x.ljust(i) if align[j] == "<" else x.rjust(i)
-                    for j, (x, i) in enumerate(zip(row, lens))
-                ]
-            )
+            " │ ".join([x.ljust(i) if align[j] == "<" else x.rjust(i) for j, (x, i) in enumerate(zip(row, lens))])
         )
         if i == 0:
             result.append("─┼─".join(["─" * i for i in lens]))

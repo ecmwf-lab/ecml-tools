@@ -6,50 +6,86 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-from collections import defaultdict
+import os
+
+from climetlab import load_source
+
+
+class Mockup:
+    write_directory = None
+    read_directory = None
+
+    def get_filename(self, r):
+        import hashlib
+
+        h = hashlib.md5(str(r).encode("utf8")).hexdigest()
+        return h + ".copy"
+
+    def write(self, ds, *args, **kwargs):
+        if self.write_directory is None:
+            return
+        if not hasattr(ds, "path"):
+            return
+
+        path = os.path.join(self.write_directory, self.get_filename([args, kwargs]))
+        print(f"Saving to {path} for {args}, {kwargs}")
+        import shutil
+
+        shutil.copy(ds.path, path)
+
+    def load_source(self, *args, **kwargs):
+        if self.read_directory is None:
+            return None
+        path = os.path.join(self.read_directory, self.get_filename([args, kwargs]))
+        if os.path.exists(path):
+            print(f"Loading path {path} for {args}, {kwargs}")
+            return load_source("file", path)
+        elif path.startswith("http"):
+            import requests
+
+            print(f"Loading url {path} for {args}, {kwargs}")
+            try:
+                return load_source("url", path)
+            except requests.exceptions.HTTPError:
+                pass
+        return None
+
+
+MOCKUP = Mockup()
+
+
+def enable_save_mars(d):
+    MOCKUP.write_directory = d
+
+
+def disable_save_mars():
+    MOCKUP.write_directory = None
+
+
+def enable_read_mars(d):
+    MOCKUP.read_directory = d
+
+
+def disable_read_mars():
+    MOCKUP.read_directory = None
+
+
+if os.environ.get("MOCKUP_MARS_SAVE_REQUESTS"):
+    enable_save_mars(os.environ.get("MOCKUP_MARS_SAVE_REQUESTS"))
+
+if os.environ.get("MOCKUP_MARS_READ_REQUESTS"):
+    enable_read_mars(os.environ.get("MOCKUP_MARS_READ_REQUESTS"))
+
+
+def _load_source(*args, **kwargs):
+    ds = MOCKUP.load_source(*args, **kwargs)
+    if ds is None:
+        ds = load_source(*args, **kwargs)
+    MOCKUP.write(ds, *args, **kwargs)
+    return ds
 
 
 def assert_is_fieldset(obj):
     from climetlab.readers.grib.index import FieldSet
 
     assert isinstance(obj, FieldSet), type(obj)
-
-
-def wrapped_mars_source(name, param, **kwargs):
-    from climetlab import load_source
-
-    assert name == "mars", name  # untested with other sources
-
-    for_accumlated = dict(
-        ea="era5-accumulations",
-        oper="oper-accumulations",
-        ei="oper-accumulations",
-    )[kwargs["class"]]
-
-    param_to_source = defaultdict(lambda: "mars")
-    param_to_source.update(
-        dict(
-            tp=for_accumlated,
-            cp=for_accumlated,
-            lsp=for_accumlated,
-        )
-    )
-
-    source_names = defaultdict(list)
-    for p in param:
-        source_names[param_to_source[p]].append(p)
-
-    sources = []
-    for n, params in source_names.items():
-        sources.append(load_source(n, param=params, **patch_time_to_hours(kwargs)))
-    return load_source("multi", sources)
-
-
-def patch_time_to_hours(dic):
-    # era5-accumulations requires time in hours
-    if "time" not in dic:
-        return dic
-    time = dic["time"]
-    assert isinstance(time, (tuple, list)), time
-    time = [f"{int(t[:2]):02d}" for t in time]
-    return {**dic, "time": time}

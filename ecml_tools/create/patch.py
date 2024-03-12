@@ -127,6 +127,4 @@ def apply_patch(path, verbose=True, dry_run=False):
     if before != after:
         print("CHANGED")
 
-    assert json.dumps(z.attrs.asdict(), sort_keys=True) == json.dumps(
-        fixed_attrs, sort_keys=True
-    )
+    assert json.dumps(z.attrs.asdict(), sort_keys=True) == json.dumps(fixed_attrs, sort_keys=True)

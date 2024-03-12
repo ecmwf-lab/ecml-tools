@@ -12,21 +12,19 @@ import numpy as np
 import zarr
 
 import ecml_tools.data
-from ecml_tools.data import (
-    Concat,
-    Ensemble,
-    Grids,
-    Join,
-    Rename,
-    Select,
-    Statistics,
-    Subset,
-    Zarr,
-    _as_first_date,
-    _as_last_date,
-    _frequency_to_hours,
-    open_dataset,
-)
+from ecml_tools.data import Concat
+from ecml_tools.data import Ensemble
+from ecml_tools.data import Grids
+from ecml_tools.data import Join
+from ecml_tools.data import Rename
+from ecml_tools.data import Select
+from ecml_tools.data import Statistics
+from ecml_tools.data import Subset
+from ecml_tools.data import Zarr
+from ecml_tools.data import _as_first_date
+from ecml_tools.data import _as_last_date
+from ecml_tools.data import _frequency_to_hours
+from ecml_tools.data import open_dataset
 
 VALUES = 10
 

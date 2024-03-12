@@ -31,11 +31,7 @@ class Inspect(Command, InspectZarr):
     def run(self, args):
         dic = vars(args)
         for path in dic.pop("path"):
-            if (
-                os.path.isdir(path)
-                or path.endswith(".zarr.zip")
-                or path.endswith(".zarr")
-            ):
+            if os.path.isdir(path) or path.endswith(".zarr.zip") or path.endswith(".zarr"):
                 self.inspect_zarr(path=path, **dic)
             else:
                 raise ValueError(f"Unknown file type: {path}")

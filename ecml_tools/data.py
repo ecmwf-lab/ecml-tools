@@ -12,7 +12,8 @@ import os
 import re
 import textwrap
 import warnings
-from functools import cached_property, wraps
+from functools import cached_property
+from functools import wraps
 from pathlib import PurePath
 
 import numpy as np
@@ -21,13 +22,11 @@ import zarr
 
 import ecml_tools
 
-from .indexing import (
-    apply_index_to_slices_changes,
-    expand_list_indexing,
-    index_to_slices,
-    length_to_slices,
-    update_tuple,
-)
+from .indexing import apply_index_to_slices_changes
+from .indexing import expand_list_indexing
+from .indexing import index_to_slices
+from .indexing import length_to_slices
+from .indexing import update_tuple
 
 LOG = logging.getLogger(__name__)
 

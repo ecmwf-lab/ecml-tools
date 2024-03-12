@@ -10,12 +10,12 @@ import warnings
 from copy import deepcopy
 
 import numpy as np
-import tqdm
 from climetlab.core.temporary import temp_file
 from climetlab.readers.grib.output import new_grib_output
 
 from ecml_tools.create.check import check_data_values
-from ecml_tools.create.functions import assert_is_fieldset, wrapped_mars_source
+from ecml_tools.create.functions import assert_is_fieldset
+from ecml_tools.create.functions.actions.mars import mars
 
 
 def to_list(x):
@@ -48,91 +48,93 @@ def normalise_request(request):
     return request
 
 
-def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
-    from climetlab import load_source
+def load_if_needed(context, dates, dict_or_dataset):
+    if isinstance(dict_or_dataset, dict):
+        dict_or_dataset = normalise_request(dict_or_dataset)
+        dict_or_dataset = mars(context, dates, dict_or_dataset)
+    return dict_or_dataset
 
-    ensembles = normalise_request(ensembles)
-    center = normalise_request(center)
-    mean = normalise_request(mean)
 
-    number_list = ensembles["number"]
-    n_numbers = len(number_list)
+def ensemble_perturbations(context, dates, ensembles, center, remapping={}, patches={}):
+    ensembles = load_if_needed(context, dates, ensembles)
+    center = load_if_needed(context, dates, center)
 
     keys = ["param", "level", "valid_datetime", "date", "time", "step", "number"]
 
-    print(f"Retrieving ensemble data with {ensembles}")
-    ensembles = wrapped_mars_source(**ensembles).order_by(*keys)
-    print(f"Retrieving center data with {center}")
-    center = wrapped_mars_source(**center).order_by(*keys)
-    print(f"Retrieving mean data with {mean}")
-    mean = wrapped_mars_source(**mean).order_by(*keys)
+    def check_compatible(f1, f2, ignore=["number"]):
+        for k in keys + ["grid", "shape"]:
+            if k in ignore:
+                continue
+            assert f1.metadata(k) == f2.metadata(k), (k, f1.metadata(k), f2.metadata(k))
 
-    assert len(mean) * n_numbers == len(ensembles), (
-        len(mean),
-        n_numbers,
-        len(ensembles),
-    )
-    assert len(center) * n_numbers == len(ensembles), (
-        len(center),
-        n_numbers,
-        len(ensembles),
-    )
+    print(f"Retrieving ensemble data with {ensembles}")
+    print(f"Retrieving center data with {center}")
+
+    ensembles = ensembles.order_by(*keys)
+    center = center.order_by(*keys)
+
+    number_list = ensembles.unique_values("number")["number"]
+    n_numbers = len(number_list)
+
+    if len(center) * n_numbers != len(ensembles):
+        print(len(center), n_numbers, len(ensembles))
+        for f in ensembles:
+            print("Ensembles: ", f)
+        for f in center:
+            print("Center: ", f)
+        raise ValueError(f"Inconsistent number of fields: {len(center)} * {n_numbers} != {len(ensembles)}")
 
     # prepare output tmp file so we can read it back
     tmp = temp_file()
     path = tmp.path
     out = new_grib_output(path)
 
-    for i, field in tqdm.tqdm(enumerate(ensembles)):
-        param = field.metadata("param")
-        number = field.metadata("number")
-        ii = i // n_numbers
+    for i, center_field in enumerate(center):
+        param = center_field.metadata("param")
 
-        i_number = number_list.index(number)
-        assert i == ii * n_numbers + i_number, (i, ii, n_numbers, i_number, number_list)
+        # load the center field
+        center_np = center_field.to_numpy()
 
-        center_field = center[ii]
-        mean_field = mean[ii]
+        # load the ensemble fields and compute the mean
+        ensembles_np = np.zeros((n_numbers, *center_np.shape))
 
-        for k in keys + ["grid", "shape"]:
-            if k == "number":
-                continue
-            assert center_field.metadata(k) == field.metadata(k), (
-                k,
-                center_field.metadata(k),
-                field.metadata(k),
-            )
-            assert mean_field.metadata(k) == field.metadata(k), (
-                k,
-                mean_field.metadata(k),
-                field.metadata(k),
-            )
+        for j in range(n_numbers):
+            ensemble_field = ensembles[i * n_numbers + j]
+            check_compatible(center_field, ensemble_field)
+            ensembles_np[j] = ensemble_field.to_numpy()
 
-        e = field.to_numpy()
-        m = mean_field.to_numpy()
-        c = center_field.to_numpy()
-        assert m.shape == c.shape, (m.shape, c.shape)
+        mean_np = ensembles_np.mean(axis=0)
 
-        FORCED_POSITIVE = [
-            "q",
-            "cp",
-            "lsp",
-            "tp",
-        ]  # add "swl4", "swl3", "swl2", "swl1", "swl0", and more ?
-        #################################
-        # Actual computation happens here
-        x = c - m + e
-        if param in FORCED_POSITIVE:
-            warnings.warn(f"Clipping {param} to be positive")
-            x = np.maximum(x, 0)
-        #################################
+        for j in range(n_numbers):
+            template = ensembles[i * n_numbers + j]
+            e = ensembles_np[j]
+            m = mean_np
+            c = center_np
 
-        assert x.shape == e.shape, (x.shape, e.shape)
+            assert e.shape == c.shape == m.shape, (e.shape, c.shape, m.shape)
 
-        check_data_values(x, name=param)
-        out.write(x, template=field)
+            FORCED_POSITIVE = [
+                "q",
+                "cp",
+                "lsp",
+                "tp",
+            ]  # add "swl4", "swl3", "swl2", "swl1", "swl0", and more ?
+
+            x = c - m + e
+
+            if param in FORCED_POSITIVE:
+                warnings.warn(f"Clipping {param} to be positive")
+                x = np.maximum(x, 0)
+
+            assert x.shape == e.shape, (x.shape, e.shape)
+
+            check_data_values(x, name=param)
+            out.write(x, template=template)
+            template = None
 
     out.close()
+
+    from climetlab import load_source
 
     ds = load_source("file", path)
     assert_is_fieldset(ds)
@@ -145,52 +147,4 @@ def ensembles_perturbations(ensembles, center, mean, remapping={}, patches={}):
     return ds
 
 
-execute = ensembles_perturbations
-
-if __name__ == "__main__":
-    import yaml
-
-    config = yaml.safe_load(
-        """
-
-    common: &common
-        name: mars
-        # marser is the MARS containing ERA5 reanalysis dataset, avoid hitting the FDB server for nothing
-        database: marser
-        class: ea
-        # date: $datetime_format($dates,%Y%m%d)
-        # time: $datetime_format($dates,%H%M)
-        date: 20221230/to/20230103
-        time: '0000/1200'
-        expver: '0001'
-        grid: 20.0/20.0
-        levtype: sfc
-        param: [2t]
-        # levtype: pl
-        # param: [10u, 10v, 2d, 2t, lsm, msl, sdor, skt, slor, sp, tcw, z]
-
-    config:
-        ensembles: # the ensemble data has one additional dimension
-          <<: *common
-          stream: enda
-          type: an
-          number: [0, 1]
-          # number: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-        center: # the new center of the data
-          <<: *common
-          stream: oper
-          type: an
-
-        mean: # the previous center of the data
-          <<: *common
-          stream: enda
-          type: em
-
-    """
-    )["config"]
-    for k, v in config.items():
-        print(k, v)
-
-    for f in ensembles_perturbations(**config):
-        print(f, f.to_numpy().mean())
+execute = ensemble_perturbations

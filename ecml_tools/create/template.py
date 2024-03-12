@@ -109,7 +109,8 @@ class Context:
         key = tuple(key)
         if key in self.results:
             return self.results[key]
-        raise ValueError(f"Cannot find result {key}")
+        all_keys = sorted(list(self.results.keys()))
+        raise ValueError(f"Cannot find result {key} in {all_keys}")
 
 
 class Substitution:

@@ -111,9 +111,7 @@ def main():
     ds = open_dataset(path)
 
     total = len(ds)
-    print(
-        f"Dataset has {total} items. Opening {args.count} items using {nworkers} workers."
-    )
+    print(f"Dataset has {total} items. Opening {args.count} items using {nworkers} workers.")
     indexes = list(range(len(open_dataset(path))))
 
     if args.shuffle:

@@ -15,18 +15,13 @@ jobs:
     name: Code QA
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - run: pip install black flake8 isort
-    - run: black --version
-    - run: isort --version
-    - run: flake8 --version
-    - run: isort --check .
-    - run: black --check .
-    - run: flake8 .
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: 3.x
+    - uses: pre-commit/action@v3.0.1
 
   checks:
-    if: ${{ github.event_name == 'release' }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -35,10 +30,9 @@ jobs:
 
     name: Python  ${{ matrix.python-version }} on ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
-    needs: quality
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - uses: actions/setup-python@v2
       with:
@@ -54,14 +48,46 @@ jobs:
     - name: Tests
       run: pytest
 
+  notify-failure:
+    if: failure()
+    runs-on: ubuntu-latest
+    needs: [quality, checks]
+    name: Notify failure
+    steps:
+      - uses: jdcargile/ms-teams-notification@v1.4
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI_F }}
+          # notification-summary: ${{ steps.qa.outputs.status }}
+          notification-summary: Build failed on ecml-tools. Please check the logs.
+          notification-color: dc3545
+          timezone: Europe/Paris
+          verbose-logging: true
+
+  notify-success:
+    if: success()
+    runs-on: ubuntu-latest
+    needs: [quality, checks]
+    name: Notify success
+    steps:
+      - uses: jdcargile/ms-teams-notification@v1.4
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI_F }}
+          # notification-summary: ${{ steps.qa.outputs.status }}
+          notification-summary: New commit pushed on ecml-tools. Everything is fine.
+          notification-color: 17a2b8
+          timezone: Europe/Paris
+          verbose-logging: true
+
   deploy:
 
     if: ${{ github.event_name == 'release' }}
     runs-on: ubuntu-latest
-    needs: checks
+    needs: [checks, quality]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v2

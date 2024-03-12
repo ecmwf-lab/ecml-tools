@@ -19,6 +19,34 @@ from .utils import load_json_or_yaml
 LOG = logging.getLogger(__name__)
 
 
+def _get_first_key_if_dict(x):
+    if isinstance(x, str):
+        return x
+    return list(x.keys())[0]
+
+
+def ensure_element_in_list(lst, elt, index):
+    if elt in lst:
+        assert lst[index] == elt
+        return lst
+
+    _lst = [_get_first_key_if_dict(d) for d in lst]
+    if elt in _lst:
+        assert _lst[index] == elt
+        return lst
+
+    return lst[:index] + [elt] + lst[index:]
+
+
+def check_dict_value_and_set(dic, key, value):
+    if key in dic:
+        if dic[key] == value:
+            return
+        raise ValueError(f"Cannot use {key}={dic[key]}. Must use {value}.")
+    print(f"Setting {key}={value} in config")
+    dic[key] = value
+
+
 class DictObj(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -111,24 +139,31 @@ class OutputSpecs:
 
 
 class LoadersConfig(Config):
-    purpose = "undefined"
 
     def __init__(self, config, *args, **kwargs):
+        if "build" not in config:
+            config["build"] = {}
+
         super().__init__(config, *args, **kwargs)
 
+        # TODO: should use a json schema to validate the config
+
+        if "dataset_status" not in self:
+            self.dataset_status = "experimental"
+
         if "description" not in self:
-            raise ValueError("Must provide a description in the config.")
+            self.description = "No description provided."
 
         if "config_format_version" not in self:
-            # Should be changed to 2
-            self.config_format_version = 1
-            print(f"Setting config_format_version={self.config_format_version} because it was not provided.")
+            self.config_format_version = 3
 
-        if self.config_format_version != 2:
-            raise ValueError("Config format has changed. Must provide config with format version >= 2.")
+        if self.config_format_version != 3:
+            raise ValueError("Config format has changed. Must provide config with format version == 3.")
 
         if "dates" in self.output:
             raise ValueError("Obsolete: Dates should not be provided in output config.")
+        if not isinstance(self.dates, dict):
+            raise ValueError(f"Dates must be a dict. Got {self.dates}")
 
         # deprecated/obsolete
         if "order" in self.output:
@@ -138,108 +173,45 @@ class LoadersConfig(Config):
         if "loop" in self:
             raise ValueError(f"Do not use 'loop'. Use dates instead. {list(self.keys())}")
 
-        self.normalise()
-
         if "licence" not in self:
-            raise ValueError("Must provide a licence in the config.")
+            self.licence = "unknown"
         if "copyright" not in self:
-            raise ValueError("Must provide a copyright in the config.")
+            self.copyright = "unknown"
 
-        if not isinstance(self.dates, dict):
-            raise ValueError(f"Dates must be a dict. Got {self.dates}")
+        if "group_by" not in self.build:
+            self.build.group_by = "monthly"
 
-    def normalise(self):
+        check_dict_value_and_set(self.output, "flatten_grid", True)
+        check_dict_value_and_set(self.output, "ensemble_dimension", 2)
+
+        assert isinstance(self.output.order_by, (list, tuple)), self.output.order_by
+        self.output.order_by = ensure_element_in_list(self.output.order_by, "number", self.output.ensemble_dimension)
+
+        order_by = self.output.order_by
+        assert len(order_by) == 3, order_by
+        assert _get_first_key_if_dict(order_by[0]) == "valid_datetime", order_by
+        assert _get_first_key_if_dict(order_by[2]) == "number", order_by
+
         if "order_by" in self.output:
             self.output.order_by = normalize_order_by(self.output.order_by)
 
-        self.output.chunking = self.output.get("chunking", {})
-        self.output.dtype = self.output.get("dtype", "float32")
+        if "chunking" not in self.output:
+            self.output.chunking = dict(dates=1, ensembles=1)
+        if "dtype" not in self.output:
+            self.output.dtype = "float32"
+
+        if "group_by" in self.build:
+            self.dates["group_by"] = self.build.group_by
+
+        ###########
 
         self.reading_chunks = self.get("reading_chunks")
         assert "flatten_values" not in self.output
         assert "flatten_grid" in self.output, self.output
-
         assert "statistics" in self.output
-        statistics_axis_name = self.output.statistics
-        statistics_axis = -1
-        for i, k in enumerate(self.output.order_by):
-            if k == statistics_axis_name:
-                statistics_axis = i
-
-        assert statistics_axis >= 0, f"{self.output.statistics} not in {list(self.output.order_by.keys())}"
-
-        self.statistics_names = self.output.order_by[statistics_axis_name]
-
-        # TODO: consider 2D grid points
-        self.statistics_axis = statistics_axis
-
-    @classmethod
-    def _get_first_key_if_dict(cls, x):
-        if isinstance(x, str):
-            return x
-        return list(x.keys())[0]
-
-    def check_dict_value_and_set(self, dic, key, value):
-        if key in dic:
-            if dic[key] == value:
-                return
-            raise ValueError(f"Cannot use {key}={dic[key]} with {self.purpose} purpose. Must use {value}.")
-        print(f"Setting {key}={value} because purpose={self.purpose}")
-        dic[key] = value
-
-    def ensure_element_in_list(self, lst, elt, index):
-        if elt in lst:
-            assert lst[index] == elt
-            return lst
-
-        _lst = [self._get_first_key_if_dict(d) for d in lst]
-        if elt in _lst:
-            assert _lst[index] == elt
-            return lst
-
-        return lst[:index] + [elt] + lst[index:]
 
     def get_serialisable_dict(self):
         return _prepare_serialisation(self)
-
-    def get_variables_names(self):
-        return self.output.order_by[self.output.statistics]
-
-
-class UnknownPurposeConfig(LoadersConfig):
-    purpose = "unknown"
-
-    def normalise(self):
-        self.output.flatten_grid = self.output.get("flatten_grid", False)
-        self.output.ensemble_dimension = self.output.get("ensemble_dimension", False)
-        super().normalise()  # must be called last
-
-
-class AifsPurposeConfig(LoadersConfig):
-    purpose = "aifs"
-
-    def normalise(self):
-        if "licence" not in self:
-            self.licence = "CC-BY-4.0"
-            print(f"❗ Setting licence={self.licence} because it was not provided.")
-        if "copyright" not in self:
-            self.copyright = "ecmwf"
-            print(f"❗ Setting copyright={self.copyright} because it was not provided.")
-
-        self.check_dict_value_and_set(self.output, "flatten_grid", True)
-        self.check_dict_value_and_set(self.output, "ensemble_dimension", 2)
-
-        assert isinstance(self.output.order_by, (list, tuple)), self.output.order_by
-        self.output.order_by = self.ensure_element_in_list(
-            self.output.order_by, "number", self.output.ensemble_dimension
-        )
-
-        order_by = self.output.order_by
-        assert len(order_by) == 3, order_by
-        assert self._get_first_key_if_dict(order_by[0]) == "valid_datetime", order_by
-        assert self._get_first_key_if_dict(order_by[2]) == "number", order_by
-
-        super().normalise()  # must be called last
 
 
 def _prepare_serialisation(o):
@@ -272,21 +244,15 @@ def _prepare_serialisation(o):
     return str(o)
 
 
-CONFIGS = {
-    None: UnknownPurposeConfig,
-    "aifs": AifsPurposeConfig,
-}
-
-
 def loader_config(config):
     config = Config(config)
-    obj = CONFIGS[config.get("purpose")](config)
+    obj = LoadersConfig(config)
 
     # yaml round trip to check that serialisation works as expected
     copy = obj.get_serialisable_dict()
     copy = yaml.load(yaml.dump(copy), Loader=yaml.SafeLoader)
     copy = Config(copy)
-    copy = CONFIGS[config.get("purpose")](config)
+    copy = LoadersConfig(config)
     assert yaml.dump(obj) == yaml.dump(copy), (obj, copy)
 
     return copy

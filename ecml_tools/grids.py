@@ -155,9 +155,7 @@ def cutout_mask(
 
     zero = np.array([0.0, 0.0, 0.0])
     ok = []
-    for i, (global_point, distance, index) in enumerate(
-        zip(global_points, distances, indices)
-    ):
+    for i, (global_point, distance, index) in enumerate(zip(global_points, distances, indices)):
         t = Triangle3D(points[index[0]], points[index[1]], points[index[2]])
         distance = np.min(distance)
         # The point is inside the triangle if the intersection with the ray

@@ -8,10 +8,10 @@
 #
 from copy import deepcopy
 
-from climetlab import load_source
-
 from ecml_tools.create.functions.actions.mars import factorise_requests
 from ecml_tools.create.utils import to_datetime_list
+
+from .. import _load_source as load_source
 
 DEBUG = True
 
@@ -36,6 +36,22 @@ def normalise_time_to_hours(r):
     return r
 
 
+def normalise_number(r):
+    if "number" not in r:
+        return r
+    number = r["number"]
+    number = to_list(number)
+
+    if len(number) > 4 and (number[1] == "to" and number[3] == "by"):
+        return list(range(int(number[0]), int(number[2]) + 1, int(number[4])))
+
+    if len(number) > 2 and number[1] == "to":
+        return list(range(int(number[0]), int(number[2]) + 1))
+
+    r["number"] = number
+    return r
+
+
 def accumulations(context, dates, **request):
     to_list(request["param"])
     class_ = request["class"]
@@ -52,6 +68,7 @@ def accumulations(context, dates, **request):
     for r in requests:
         r = {k: v for k, v in r.items() if v != ("-",)}
         r = normalise_time_to_hours(r)
+        r = normalise_number(r)
 
         if DEBUG:
             print(f"load_source({source_name},  {r}")
@@ -76,9 +93,7 @@ if __name__ == "__main__":
 #      accumulation_period: 6h
     """
     )
-    dates = yaml.safe_load(
-        "[2022-12-30 18:00, 2022-12-31 00:00, 2022-12-31 06:00, 2022-12-31 12:00]"
-    )
+    dates = yaml.safe_load("[2022-12-30 18:00, 2022-12-31 00:00, 2022-12-31 06:00, 2022-12-31 12:00]")
     dates = to_datetime_list(dates)
 
     DEBUG = True

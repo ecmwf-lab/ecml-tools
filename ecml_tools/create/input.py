@@ -12,7 +12,8 @@ import logging
 import time
 from collections import defaultdict
 from copy import deepcopy
-from functools import cached_property, wraps
+from functools import cached_property
+from functools import wraps
 
 import numpy as np
 from climetlab.core.order import build_remapping
@@ -20,15 +21,13 @@ from climetlab.indexing.fieldset import FieldSet
 
 from ecml_tools.utils.dates import Dates
 
-from .template import (
-    Context,
-    notify_result,
-    resolve,
-    substitute,
-    trace,
-    trace_datasource,
-    trace_select,
-)
+from .template import Context
+from .template import notify_result
+from .template import resolve
+from .template import substitute
+from .template import trace
+from .template import trace_datasource
+from .template import trace_select
 from .utils import seconds
 
 LOG = logging.getLogger(__name__)
@@ -67,18 +66,20 @@ def time_delta_to_string(delta):
 
 
 def import_function(name, kind):
-    return importlib.import_module(
+    module = importlib.import_module(
         f"..functions.{kind}.{name}",
         package=__name__,
-    ).execute
+    )
+    return module.execute
 
 
 def is_function(name, kind):
-    name, delta = parse_function_name(name)
+    name, delta = parse_function_name(name)  # noqa
     try:
         import_function(name, kind)
         return True
-    except ImportError:
+    except ImportError as e:
+        print(e)
         return False
 
 
@@ -539,7 +540,7 @@ class FunctionAction(Action):
 
     @property
     def function(self):
-        name, delta = parse_function_name(self.name)
+        # name, delta = parse_function_name(self.name)
         return import_function(self.name, "actions")
 
     def __repr__(self):
@@ -551,16 +552,6 @@ class FunctionAction(Action):
 
     def _trace_select(self, dates):
         return f"{self.name}({shorten(dates)})"
-
-
-class ActionWithList(Action):
-    def __init__(self, context, action_path, *configs):
-        super().__init__(context, action_path, *configs)
-        self.actions = [action_factory(c, context, action_path + [str(i)]) for i, c in enumerate(configs)]
-
-    def __repr__(self):
-        content = "\n".join([str(i) for i in self.actions])
-        return super().__repr__(content)
 
 
 class PipeAction(Action):
@@ -642,7 +633,7 @@ class FilterStepResult(StepResult):
     @assert_fieldset
     @trace_datasource
     def datasource(self):
-        ds = self.content.datasource
+        ds = self.upstream_result.datasource
         ds = ds.sel(**self.action.kwargs)
         return ds
 
@@ -693,39 +684,51 @@ class ConcatResult(Result):
         return super().__repr__(content)
 
 
-class IncludeResult(Result):
-    def __init__(self, context, action_path, dates, result, results):
+class DataSourcesResult(Result):
+    def __init__(self, context, action_path, dates, input_result, sources_results):
         super().__init__(context, action_path, dates)
-        # result is the content of the include
-        self.result = result
-        # results is the list of the included results
-        self.results = results
+        # result is the main input result
+        self.input_result = input_result
+        # sources_results is the list of the sources_results
+        self.sources_results = sources_results
 
     @cached_property
     def datasource(self):
-        for i in self.results:
-            # for each include trigger the datasource to be computed
-            # and saved in context but drop it
-            i.datasource
-        # then return the content of the result
+        for i in self.sources_results:
+            # for each result trigger the datasource to be computed
+            # and saved in context
+            self.context.notify_result(i.action_path[:-1], i.datasource)
+        # then return the input result
         # which can use the datasources of the included results
-        return self.result.datasource
+        return self.input_result.datasource
 
 
-class IncludeAction(ActionWithList):
-    def __init__(self, context, action_path, includes, content):
-        super().__init__(context, ["include"], *includes)
-        self.content = action_factory(content, context, ["input"])
+class DataSourcesAction(Action):
+    def __init__(self, context, action_path, sources, input):
+        super().__init__(context, ["data_sources"], *sources)
+        if isinstance(sources, dict):
+            configs = [(str(k), c) for k, c in sources.items()]
+        elif isinstance(sources, list):
+            configs = [(str(i), c) for i, c in enumerate(sources)]
+        else:
+            raise ValueError(f"Invalid data_sources, expecting list or dict, got {type(sources)}: {sources}")
+
+        self.sources = [action_factory(config, context, ["data_sources"] + [a_path]) for a_path, config in configs]
+        self.input = action_factory(input, context, ["input"])
 
     def select(self, dates):
-        results = [a.select(dates) for a in self.actions]
-        return IncludeResult(
+        sources_results = [a.select(dates) for a in self.sources]
+        return DataSourcesResult(
             self.context,
             self.action_path,
             dates,
-            self.content.select(dates),
-            results,
+            self.input.select(dates),
+            sources_results,
         )
+
+    def __repr__(self):
+        content = "\n".join([str(i) for i in self.sources])
+        return super().__repr__(content)
 
 
 class ConcatAction(Action):
@@ -760,7 +763,15 @@ class ConcatAction(Action):
         return ConcatResult(self.context, self.action_path, dates, results)
 
 
-class JoinAction(ActionWithList):
+class JoinAction(Action):
+    def __init__(self, context, action_path, *configs):
+        super().__init__(context, action_path, *configs)
+        self.actions = [action_factory(c, context, action_path + [str(i)]) for i, c in enumerate(configs)]
+
+    def __repr__(self):
+        content = "\n".join([str(i) for i in self.actions])
+        return super().__repr__(content)
+
     @trace_select
     def select(self, dates):
         results = [a.select(dates) for a in self.actions]
@@ -782,15 +793,15 @@ def action_factory(config, context, action_path):
     if isinstance(config[key], dict):
         args, kwargs = [], config[key]
 
-    cls = dict(
-        date_shift=DateShiftAction,
-        # date_filter=DateFilterAction,
-        include=IncludeAction,
-        concat=ConcatAction,
-        join=JoinAction,
-        pipe=PipeAction,
-        function=FunctionAction,
-    ).get(key)
+    cls = {
+        # "date_shift": DateShiftAction,
+        # "date_filter": DateFilterAction,
+        "data_sources": DataSourcesAction,
+        "concat": ConcatAction,
+        "join": JoinAction,
+        "pipe": PipeAction,
+        "function": FunctionAction,
+    }.get(key)
 
     if cls is None:
         if not is_function(key, "actions"):
@@ -851,15 +862,15 @@ class ActionContext(Context):
 
 
 class InputBuilder:
-    def __init__(self, config, include, **kwargs):
+    def __init__(self, config, data_sources, **kwargs):
         self.kwargs = kwargs
 
         config = deepcopy(config)
-        if include:
+        if data_sources:
             config = dict(
-                include=dict(
-                    includes=include,
-                    content=config,
+                data_sources=dict(
+                    sources=data_sources,
+                    input=config,
                 )
             )
         self.config = config

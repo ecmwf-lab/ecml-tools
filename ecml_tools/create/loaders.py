@@ -17,23 +17,52 @@ import zarr
 from ecml_tools.data import open_dataset
 from ecml_tools.utils.dates.groups import Groups
 
-from .check import DatasetName, check_data_values
-from .config import build_output, loader_config
+from .check import DatasetName
+from .check import check_data_values
+from .config import build_output
+from .config import loader_config
 from .input import build_input
-from .statistics import TempStatistics, compute_statistics
-from .utils import (
-    bytes,
-    compute_directory_sizes,
-    normalize_and_check_dates,
-    progress_bar,
-    seconds,
-)
-from .writer import CubesFilter, ViewCacheArray
-from .zarr import ZarrBuiltRegistry, add_zarr_dataset
+from .statistics import TempStatistics
+from .statistics import compute_statistics
+from .utils import bytes
+from .utils import compute_directory_sizes
+from .utils import normalize_and_check_dates
+from .utils import progress_bar
+from .utils import seconds
+from .writer import CubesFilter
+from .writer import ViewCacheArray
+from .zarr import ZarrBuiltRegistry
+from .zarr import add_zarr_dataset
 
 LOG = logging.getLogger(__name__)
 
 VERSION = "0.20"
+
+
+def default_statistics_dates(dates):
+    first = dates[0]
+    last = dates[-1]
+    first = first.tolist()
+    last = last.tolist()
+    assert isinstance(first, datetime.datetime), first
+    assert isinstance(last, datetime.datetime), last
+
+    n_years = (last - first).days // 365
+
+    if n_years >= 20:
+        end = datetime.datetime(last.year - 2, last.month, last.day, last.hour, last.minute, last.second)
+        print(f"Number of years {n_years} >= 20, leaving out 2 years. {end=}")
+
+    elif n_years >= 10:  # leave out 1 year
+        end = datetime.datetime(last.year - 1, last.month, last.day, last.hour, last.minute, last.second)
+        print(f"Number of years {n_years} >= 10, leaving out 1 years. {end=}")
+    else:
+        # leave out 20% of the data
+        k = int(len(dates) * 0.8)
+        end = dates[k]
+        print(f"Number of years {n_years} < 10, leaving out 20%. {end=}")
+
+    return dates[0], np.datetime64(end)
 
 
 class Loader:
@@ -75,7 +104,7 @@ class Loader:
 
         builder = build_input(
             self.main_config.input,
-            include=self.main_config.get("include", {}),
+            data_sources=self.main_config.get("data_sources", {}),
             order_by=self.output.order_by,
             flatten_grid=self.output.flatten_grid,
             remapping=build_remapping(self.output.remapping),
@@ -86,12 +115,18 @@ class Loader:
 
     def build_statistics_dates(self, start, end):
         ds = open_dataset(self.path)
-        subset = ds.dates_interval_to_indices(start, end)
-        start, end = ds.dates[subset[0]], ds.dates[subset[-1]]
-        return (
-            start.astype(datetime.datetime).isoformat(),
-            end.astype(datetime.datetime).isoformat(),
-        )
+        dates = ds.dates
+
+        if end is None and start is None:
+            start, end = default_statistics_dates(dates)
+        else:
+            subset = ds.dates_interval_to_indices(start, end)
+            start = dates[subset[0]]
+            end = dates[subset[-1]]
+
+        start = start.astype(datetime.datetime)
+        end = end.astype(datetime.datetime)
+        return (start.isoformat(), end.isoformat())
 
     def read_dataset_metadata(self):
         ds = open_dataset(self.path)
@@ -246,7 +281,7 @@ class InitialiseLoader(Loader):
         metadata["missing_dates"] = [_.isoformat() for _ in dates.missing]
 
         if check_name:
-            basename, ext = os.path.splitext(os.path.basename(self.path))
+            basename, ext = os.path.splitext(os.path.basename(self.path))  # noqa: F841
             ds_name = DatasetName(
                 basename,
                 resolution,
