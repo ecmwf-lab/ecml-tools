@@ -10,10 +10,10 @@ import os
 
 import numpy as np
 import pytest
-import zarr
 
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
+from ecml_tools.data import open_zarr
 
 HERE = os.path.dirname(__file__)
 # find_yamls
@@ -110,8 +110,8 @@ class Comparer:
         self.output = output_path or os.path.join(name + ".zarr")
         print(f"Comparing {self.reference} and {self.output}")
 
-        self.z_reference = zarr.open(self.reference)
-        self.z_output = zarr.open(self.output)
+        self.z_reference = open_zarr(self.reference)
+        self.z_output = open_zarr(self.output)
 
         self.ds_reference = open_dataset(self.reference)
         self.ds_output = open_dataset(self.output)
