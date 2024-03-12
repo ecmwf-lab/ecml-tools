@@ -21,14 +21,11 @@ common:
   ensembles: &ensembles
     stream: enda
     type: an
-    number: [0, 2, 4]
-    # number: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    number: [1, 2, 4]
+    # number: [1, 2, 3, 4, 5, 6, 7, 8, 9]
   center: &center
     stream: oper
     type: an
-  mean: &mean
-    stream: enda
-    type: em
 
 dates:
   start: 2020-12-30 00:00:00
@@ -47,14 +44,6 @@ data_sources:
       - accumulations:
           <<: *ensembles
           <<: *common_acc
-  mean:
-    join:
-      - mars:
-          <<: *mean
-          <<: *common
-      - accumulations:
-          <<: *mean
-          <<: *common_acc
   center:
     join:
       - mars:
@@ -68,8 +57,6 @@ input:
   ensemble_perturbations:
     # the ensemble data which has one additional dimension
     ensembles: ${data_sources.ensembles}
-    # the previous center of the data
-    mean: ${data_sources.mean}
     # the new center of the data
     center: ${data_sources.center}
 
