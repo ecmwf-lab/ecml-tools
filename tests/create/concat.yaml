@@ -1,15 +1,7 @@
-description: "develop version of the dataset for a few days and a few variables, once data on mars is cached it should take a few seconds to generate the dataset"
-dataset_status: testing
-name: test-concat
-config_format_version: 2
-
 dates:
   start: 2020-12-30 00:00:00
   end: 2021-01-03 12:00:00
   frequency: 12h
-
-options:
-  group_by: monthly
 
 common:
   mars_request: &mars_request
@@ -37,13 +29,7 @@ input:
         <<: *mars_request
 
 output:
-  chunking: { dates: 1, ensembles: 1 }
-  dtype: float32
-  order_by:
-    - valid_datetime
-    - param_level
-    - number
-  statistics: param_level
-  statistics_end: 2021
+  order_by: [valid_datetime, param_level, number]
   remapping: 
     param_level: "{param}_{levelist}"
+  statistics: param_level

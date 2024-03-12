@@ -1,8 +1,3 @@
-description: "develop version of the dataset for a few days and a few variables, once data on mars is cached it should take a few seconds to generate the dataset"
-dataset_status: testing
-name: test-data-sources
-config_format_version: 2
-
 common:
   mars_request: &mars_request
     expver: "0001"
@@ -31,8 +26,6 @@ input:
       - cos_latitude
 
 output:
-  chunking: { dates: 1, ensembles: 1 }
-  dtype: float32
   order_by: [valid_datetime, param_level, number]
   remapping:
     param_level: "{param}_{levelist}"

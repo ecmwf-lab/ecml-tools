@@ -42,23 +42,27 @@ VERSION = "0.20"
 def default_statistics_dates(dates):
     first = dates[0]
     last = dates[-1]
+    first = first.tolist()
+    last = last.tolist()
+    assert isinstance(first, datetime.datetime), first
+    assert isinstance(last, datetime.datetime), last
+
     n_years = (last - first).days // 365
 
     if n_years >= 20:
         end = datetime.datetime(last.year - 2, last.month, last.day, last.hour, last.minute, last.second)
         print(f"Number of years {n_years} >= 20, leaving out 2 years. {end=}")
-        return dates[0], end
 
-    if n_years >= 10:  # leave out 1 year
+    elif n_years >= 10:  # leave out 1 year
         end = datetime.datetime(last.year - 1, last.month, last.day, last.hour, last.minute, last.second)
         print(f"Number of years {n_years} >= 10, leaving out 1 years. {end=}")
-        return dates[0], end
+    else:
+        # leave out 20% of the data
+        k = int(len(dates) * 0.8)
+        end = dates[k]
+        print(f"Number of years {n_years} < 10, leaving out 20%. {end=}")
 
-    # leave out 20% of the data
-    k = int(len(dates) * 0.8)
-    end = dates[k]
-    print(f"Number of years {n_years} < 10, leaving out 20%. {end=}")
-    return dates[0], end
+    return dates[0], np.datetime64(end)
 
 
 class Loader:

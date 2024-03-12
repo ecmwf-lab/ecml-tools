@@ -1,15 +1,7 @@
-description: "testing for nans using sst"
-dataset_status: testing
-name: test-nan
-config_format_version: 2
-
 dates:
   start: 2020-12-30 00:00:00
   end: 2021-01-03 12:00:00
   frequency: 12h
-
-options:
-  group_by: monthly
 
 input:
   mars:
@@ -25,10 +17,7 @@ input:
 has_nans: [sst]
 
 output:
-  chunking: { dates: 1, ensembles: 1 }
-  dtype: float32
   order_by: [valid_datetime, param_level, number]
   remapping:
     param_level: "{param}_{levelist}"
   statistics: param_level
-  statistics_end: 2020
