@@ -1,3 +1,4 @@
+import fnmatch
 import os
 import sys
 from collections import defaultdict
@@ -17,40 +18,20 @@ class Scan(Command):
 
     def add_arguments(self, command_parser):
         command_parser.add_argument(
-            "--extension", default=".grib", help="Extension of the files to scan"
+            "--match",
+            help="Give a glob pattern to match files (default: *.grib)",
+            default="*.grib",
         )
         command_parser.add_argument(
-            "--magic",
-            help="File 'magic' to use to identify the file type. Overrides --extension",
+            "--what",
+            default="grib",
         )
         command_parser.add_argument("paths", nargs="+", help="Paths to scan")
 
     def run(self, args):
-        EXTENSIONS = {
-            ".grib": "grib",
-            ".grib1": "grib",
-            ".grib2": "grib",
-            ".grb": "grib",
-            ".nc": "netcdf",
-            ".nc4": "netcdf",
-        }
-
-        MAGICS = {
-            "GRIB": "grib",
-        }
-
-        if args.magic:
-            what = MAGICS[args.magic]
-            args.magic = args.magic.encode()
-        else:
-            what = EXTENSIONS[args.extension]
 
         def match(path):
-            if args.magic:
-                with open(path, "rb") as f:
-                    return args.magic == f.read(len(args.magic))
-            else:
-                return path.endswith(args.extension)
+            return fnmatch.fnmatch(path, args.match)
 
         paths = []
         for path in args.paths:
@@ -65,6 +46,7 @@ class Scan(Command):
         dates = set()
         gribs = defaultdict(set)
         unique = defaultdict(lambda: defaultdict(set))
+        what = args.what
 
         for path in tqdm.tqdm(paths, leave=False):
             if not match(path):

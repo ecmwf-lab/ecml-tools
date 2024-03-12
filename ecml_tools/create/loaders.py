@@ -190,7 +190,7 @@ class InitialiseLoader(Loader):
         variables = self.minimal_input.variables
         self.print(f"Found {len(variables)} variables : {','.join(variables)}.")
 
-        variables_with_nans = self.config.get("has_nans", [])
+        variables_with_nans = self.main_config.get("has_nans", [])
 
         ensembles = self.minimal_input.ensembles
         self.print(f"Found {len(ensembles)} ensembles : {','.join([str(_) for _ in ensembles])}.")

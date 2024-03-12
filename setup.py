@@ -55,6 +55,7 @@ create_requires = [
     "earthkit-meteo",
     "pyproj",
     "semantic-version",
+    "ecmwflibs>=0.6.3",
 ]
 
 

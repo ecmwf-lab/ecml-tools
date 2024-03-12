@@ -38,6 +38,9 @@ DEBUG_ZARR_INDEXING = int(os.environ.get("DEBUG_ZARR_INDEXING", "0"))
 
 DEPTH = 0
 
+# TODO: make numpy arrays read-only
+# a.flags.writeable = False
+
 
 def _debug_indexing(method):
     @wraps(method)
@@ -111,6 +114,7 @@ class Node:
 
 
 class Dataset:
+
     arguments = {}
 
     @cached_property
@@ -150,6 +154,11 @@ class Dataset:
         if "statistics" in kwargs:
             statistics = kwargs.pop("statistics")
             return Statistics(self, statistics)._subset(**kwargs)
+
+        if "thinning" in kwargs:
+            thinning = kwargs.pop("thinning")
+            method = kwargs.pop("method", None)
+            return Thinning(self, thinning, method)._subset(**kwargs)
 
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 
@@ -853,6 +862,48 @@ class GivenAxis(Combined):
             return self._get_slice(n)
 
         return np.concatenate([d[n] for d in self.datasets], axis=self.axis - 1)
+
+
+class Masked(Forwards):
+
+    def __init__(self, forward, mask):
+        super().__init__(forward)
+        assert len(forward.shape) == 4, "Grids must be 1D for now"
+        self.mask = mask
+
+    @cached_property
+    def shape(self):
+        return self.forward.shape[:-1] + (np.count_nonzero(self.mask),)
+
+    @cached_property
+    def latitudes(self):
+        return self.forward.latitudes[self.mask]
+
+    @cached_property
+    def longitudes(self):
+        return self.forward.longitudes[self.mask]
+
+
+class Thinning(Masked):
+
+    def __init__(self, forward, thinning, method):
+        self.thinning = thinning
+        self.method = method
+
+        assert method is None, f"Thinning method not supported: {method}"
+        latitudes = sorted(set(forward.latitudes))
+        longitudes = sorted(set(forward.longitudes))
+
+        latitudes = set(latitudes[::thinning])
+        longitudes = set(longitudes[::thinning])
+
+        mask = [lat in latitudes and lon in longitudes for lat, lon in zip(forward.latitudes, forward.longitudes)]
+        mask = np.array(mask, dtype=bool)
+
+        super().__init__(forward, mask)
+
+    def tree(self):
+        return Node(self, [self.forward.tree()], thinning=self.thinning, method=self.method)
 
 
 class Ensemble(GivenAxis):
