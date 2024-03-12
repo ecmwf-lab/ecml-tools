@@ -145,16 +145,17 @@ class LoadersConfig(Config):
 
         # TODO: should use a json schema to validate the config
 
+        if "dataset_status" not in self:
+            self.dataset_status = "experimental"
+
         if "description" not in self:
-            raise ValueError("Must provide a description in the config.")
+            self.description = "No description provided."
 
         if "config_format_version" not in self:
-            # Should be changed to 2
-            self.config_format_version = 1
-            print(f"Setting config_format_version={self.config_format_version} because it was not provided.")
+            self.config_format_version = 3
 
-        if self.config_format_version != 2:
-            raise ValueError("Config format has changed. Must provide config with format version >= 2.")
+        if self.config_format_version != 3:
+            raise ValueError("Config format has changed. Must provide config with format version == 3.")
 
         if "dates" in self.output:
             raise ValueError("Obsolete: Dates should not be provided in output config.")
@@ -169,14 +170,14 @@ class LoadersConfig(Config):
         if "loop" in self:
             raise ValueError(f"Do not use 'loop'. Use dates instead. {list(self.keys())}")
 
-        self.options = self.get("options", {})
-
         if "licence" not in self:
             self.licence = "unknown"
-            print(f"❗ Setting licence={self.licence} because it was not provided.")
         if "copyright" not in self:
             self.copyright = "unknown"
-            print(f"❗ Setting copyright={self.copyright} because it was not provided.")
+
+        self.build = self.get("build", {})
+        if "group_by" not in self.build:
+            self.build.group_by = "monthly"
 
         check_dict_value_and_set(self.output, "flatten_grid", True)
         check_dict_value_and_set(self.output, "ensemble_dimension", 2)
@@ -192,16 +193,18 @@ class LoadersConfig(Config):
         if "order_by" in self.output:
             self.output.order_by = normalize_order_by(self.output.order_by)
 
-        self.output.chunking = self.output.get("chunking", {})
-        self.output.dtype = self.output.get("dtype", "float32")
+        if "chunking" not in self.output:
+            self.output.chunking = dict(dates=1, ensembles=1)
+        if "dtype" not in self.output:
+            self.output.dtype = "float32"
+
+        if "group_by" in self.build:
+            self.dates["group_by"] = self.build.group_by
 
         self.reading_chunks = self.get("reading_chunks")
         assert "flatten_values" not in self.output
         assert "flatten_grid" in self.output, self.output
         assert "statistics" in self.output
-
-        if "group_by" in self.options:
-            self.dates["group_by"] = self.options.group_by
 
     def get_serialisable_dict(self):
         return _prepare_serialisation(self)
