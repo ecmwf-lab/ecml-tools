@@ -9,10 +9,11 @@
 import datetime
 from copy import deepcopy
 
-from climetlab import load_source
 from climetlab.utils.availability import Availability
 
 from ecml_tools.create.utils import to_datetime_list
+
+from .. import _load_source as load_source
 
 DEBUG = False
 
@@ -92,6 +93,7 @@ def mars(context, dates, *requests, **kwargs):
         r = {k: v for k, v in r.items() if v != ("-",)}
         if DEBUG:
             context.trace("✅", f"load_source(mars, {r}")
+
         ds = ds + load_source("mars", **r)
     return ds
 

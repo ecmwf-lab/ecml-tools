@@ -8,10 +8,10 @@
 #
 from copy import deepcopy
 
-from climetlab import load_source
-
 from ecml_tools.create.functions.actions.mars import factorise_requests
 from ecml_tools.create.utils import to_datetime_list
+
+from .. import _load_source as load_source
 
 DEBUG = True
 
