@@ -33,3 +33,4 @@ output:
   remapping: 
     param_level: "{param}_{levelist}"
   statistics: param_level
+  statistics_end: 2021

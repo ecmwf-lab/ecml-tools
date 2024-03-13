@@ -11,110 +11,111 @@ import json
 import os
 import shutil
 import warnings
+from functools import wraps
+from unittest.mock import patch
 
-import climetlab
 import numpy as np
 import pytest
 import requests
+from climetlab import load_source
 
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
 from ecml_tools.data import open_zarr
 
+TEST_DATA_ROOT = "https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create/"
+
+
 HERE = os.path.dirname(__file__)
 # find_yamls
-NAMES = [os.path.basename(path).split(".")[0] for path in glob.glob(os.path.join(HERE, "*.yaml"))]
-# NAMES = [ name for name in NAMES if name not in [ "perturbations", ] ]
+NAMES = sorted([os.path.basename(path).split(".")[0] for path in glob.glob(os.path.join(HERE, "*.yaml"))])
+SKIP = ["perturbations"]
+NAMES = [name for name in NAMES if name not in SKIP]
 assert NAMES, "No yaml files found in " + HERE
 
 
-def _mockup_build_hash_filename(args, kwargs):
-    try:
-        string = json.dumps([args, kwargs])
-    except Exception as e:
-        warnings.warn(f"Could not build hash for {args}, {kwargs}, {e}")
-        return None
-    h = hashlib.md5(string.encode("utf8")).hexdigest()
-    return h + ".copy"
+def mockup_load_source(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with patch("climetlab.load_source", _load_source):
+            return func(*args, **kwargs)
+
+    return wrapper
 
 
-def _mockup_write(directory, ds, args, kwargs):
-    if not hasattr(ds, "path"):
-        return
-    filename = _mockup_build_hash_filename(args, kwargs)
-    path = os.path.join(directory, filename)
-    print(f"Saving to {path} for {args}, {kwargs}")
-    shutil.copy(ds.path, path)
+class LoadSource:
+    def __init__(self, read_dir=None, write_dir=None):
+        self.read_dir = read_dir
+        self.write_dir = write_dir
 
-
-def _mockup_read(directory, args, kwargs):
-    filename = _mockup_build_hash_filename(args, kwargs)
-    if filename is None:
-        return None
-    path = os.path.join(directory, filename)
-
-    if os.path.exists(path):
-        print(f"Mockup: Loading path {path} for {args}, {kwargs}")
-        _deactivate_patch()
-        ds = _climetlab_load_source("file", path)
-        _activate_patch()
-        return ds
-
-    elif path.startswith("http:") or path.startswith("https:"):
-        print(f"Mockup: Loading url {path} for {args}, {kwargs}")
+    def filename(self, args, kwargs):
         try:
-            _deactivate_patch()
-            ds = _climetlab_load_source("url", path)
-            _activate_patch()
+            string = json.dumps([args, kwargs])
+        except Exception as e:
+            warnings.warn(f"Could not build hash for {args}, {kwargs}, {e}")
+            return None
+        h = hashlib.md5(string.encode("utf8")).hexdigest()
+        return h + ".copy"
+
+    def write(self, directory, ds, args, kwargs):
+        if self.write_dir is None:
+            return
+
+        if not hasattr(ds, "path"):
+            return
+        filename = self.filename(args, kwargs)
+        path = os.path.join(directory, filename)
+        print(f"Saving to {path} for {args}, {kwargs}")
+        shutil.copy(ds.path, path)
+
+    def read(self, directory, args, kwargs):
+        if self.read_dir is None:
+            return None
+        filename = self.filename(args, kwargs)
+        if filename is None:
+            return None
+        path = os.path.join(directory, filename)
+
+        if os.path.exists(path):
+            print(f"Mockup: Loading path {path} for {args}, {kwargs}")
+            ds = load_source("file", path)
             return ds
-        except requests.exceptions.HTTPError:
-            print(f"Mockup: ❌ Cannot load from url for {path} for {args}, {kwargs}")
 
-    return None
+        elif path.startswith("http:") or path.startswith("https:"):
+            print(f"Mockup: Loading url {path} for {args}, {kwargs}")
+            try:
+                return load_source("url", path)
+            except requests.exceptions.HTTPError:
+                print(f"Mockup: ❌ Cannot load from url for {path} for {args}, {kwargs}")
 
+        return None
 
-TEST_DATA_ROOT = "https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create/"
+    def source_name(self, *args, **kwargs):
+        if args:
+            return args[0]
+        return kwargs["name"]
 
-LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY = os.environ.get("LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY")
-LOAD_SOURCE_MOCKUP_READ_DIRECTORY = os.environ.get("LOAD_SOURCE_MOCKUP_READ_DIRECTORY", TEST_DATA_ROOT)
+    def __call__(self, *args, **kwargs):
+        name = self.source_name(*args, **kwargs)
 
+        if name != "mars":
+            return load_source(*args, **kwargs)
 
-def _load_source(*args, **kwargs):
-    if args:
-        name = args[0]
-    else:
-        name = kwargs["name"]
-
-    if name != "mars":
-        return _climetlab_load_source(*args, **kwargs)
-
-    if LOAD_SOURCE_MOCKUP_READ_DIRECTORY:
-        ds = _mockup_read(LOAD_SOURCE_MOCKUP_READ_DIRECTORY, args, kwargs)
+        ds = self.read(self.read_dir, args, kwargs)
         if ds is not None:
             return ds
 
-    ds = _climetlab_load_source(*args, **kwargs)
+        ds = load_source(*args, **kwargs)
 
-    if LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY:
-        _mockup_write(LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY, ds, args, kwargs)
+        self.write(self.write_dir, ds, args, kwargs)
 
-    return ds
-
-
-# Monkey patching
-_climetlab_load_source = climetlab.load_source
+        return ds
 
 
-def _activate_patch():
-    climetlab.load_source = _load_source
-
-
-def _deactivate_patch():
-    climetlab.load_source = _climetlab_load_source
-
-
-if LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY or LOAD_SOURCE_MOCKUP_READ_DIRECTORY:
-    _activate_patch()
+_load_source = LoadSource(
+    read_dir=os.environ.get("LOAD_SOURCE_MOCKUP_READ_DIRECTORY", TEST_DATA_ROOT),
+    write_dir=os.environ.get("LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY"),
+)
 
 
 def compare_dot_zattrs(a, b):
@@ -209,6 +210,7 @@ class Comparer:
 
 
 @pytest.mark.parametrize("name", NAMES)
+@mockup_load_source
 def test_run(name):
     config = os.path.join(HERE, name + ".yaml")
     output = os.path.join(HERE, name + ".zarr")

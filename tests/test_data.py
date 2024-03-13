@@ -7,6 +7,7 @@
 
 import datetime
 from functools import cache
+from functools import wraps
 from unittest.mock import patch
 
 import numpy as np
@@ -30,6 +31,7 @@ VALUES = 10
 
 
 def mockup_open_zarr(func):
+    @wraps(func)
     def wrapper(*args, **kwargs):
         with patch("zarr.convenience.open", zarr_from_str):
             with patch("ecml_tools.data._name_to_path", lambda name, zarr_root: name):
