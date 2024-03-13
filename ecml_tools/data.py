@@ -487,6 +487,10 @@ class Zarr(Dataset):
         return self.z.attrs["resolution"]
 
     @property
+    def field_shape(self):
+        return tuple(self.z.attrs["field_shape"])
+
+    @property
     def frequency(self):
         try:
             return self.z.attrs["frequency"]
@@ -609,6 +613,10 @@ class Forwards(Dataset):
     @property
     def resolution(self):
         return self.forward.resolution
+
+    @property
+    def field_shape(self):
+        return self.forward.field_shape
 
     @property
     def frequency(self):
@@ -912,12 +920,10 @@ class Thinning(Masked):
         self.thinning = thinning
         self.method = method
 
-        assert method is None, f"Thinning method not supported: {method}"
-        latitudes = sorted(set(forward.latitudes))
-        longitudes = sorted(set(forward.longitudes))
-
-        latitudes = set(latitudes[::thinning])
-        longitudes = set(longitudes[::thinning])
+        latitudes = forward.latitudes.reshape(forward.field_shape)
+        longitudes = forward.longitudes.reshape(forward.field_shape)
+        latitudes = latitudes[::thinning, ::thinning].flatten()
+        longitudes = longitudes[::thinning, ::thinning].flatten()
 
         mask = [lat in latitudes and lon in longitudes for lat, lon in zip(forward.latitudes, forward.longitudes)]
         mask = np.array(mask, dtype=bool)

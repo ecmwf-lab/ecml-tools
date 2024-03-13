@@ -153,6 +153,10 @@ class Version:
         return self.metadata["resolution"]
 
     @property
+    def field_shape(self):
+        return self.metadata.get("field_shape")
+
+    @property
     def shape(self):
         if self.data and hasattr(self.data, "shape"):
             return self.data.shape
@@ -170,15 +174,16 @@ class Version:
 
     def info(self, detailed, size):
         print()
-        print(f'📅 Start     : {self.first_date.strftime("%Y-%m-%d %H:%M")}')
-        print(f'📅 End       : {self.last_date.strftime("%Y-%m-%d %H:%M")}')
-        print(f"⏰ Frequency : {self.frequency}h")
+        print(f'📅 Start      : {self.first_date.strftime("%Y-%m-%d %H:%M")}')
+        print(f'📅 End        : {self.last_date.strftime("%Y-%m-%d %H:%M")}')
+        print(f"⏰ Frequency  : {self.frequency}h")
         if self.n_missing_dates is not None:
-            print(f"🚫 Missing   : {self.n_missing_dates:,}")
-        print(f"🌎 Resolution: {self.resolution}")
+            print(f"🚫 Missing    : {self.n_missing_dates:,}")
+        print(f"🌎 Resolution : {self.resolution}")
+        print(f"🌎 Field shape: {self.field_shape}")
 
         print()
-        shape_str = "📐 Shape     : "
+        shape_str = "📐 Shape      : "
         if self.shape:
             shape_str += " × ".join(["{:,}".format(s) for s in self.shape])
         if self.uncompressed_data_size:
@@ -237,9 +242,9 @@ class Version:
             total_size, n = compute_directory_size(self.path)
 
         if total_size is not None:
-            print(f"💽 Size      : {bytes(total_size)} ({number(total_size)})")
+            print(f"💽 Size       : {bytes(total_size)} ({number(total_size)})")
         if n is not None:
-            print(f"📁 Files     : {number(n)}")
+            print(f"📁 Files      : {number(n)}")
 
     @property
     def statistics(self):
