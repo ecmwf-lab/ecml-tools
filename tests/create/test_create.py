@@ -6,14 +6,18 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 import glob
+import hashlib
+import json
 import os
+import shutil
+import warnings
 
+import climetlab
 import numpy as np
 import pytest
-from climetlab import load_source
+import requests
 
 from ecml_tools.create import Creator
-from ecml_tools.create.functions import enable_read_mars
 from ecml_tools.data import open_dataset
 from ecml_tools.data import open_zarr
 
@@ -31,82 +35,86 @@ NAMES = [
 NAMES = ["join"]
 assert NAMES, "No yaml files found in " + HERE
 
-TEST_DATA_ROOT = "https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create/"
-enable_read_mars("https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create")
 
-
-class Mockup:
-    write_directory = None
-    read_directory = None
-
-    def get_filename(self, r):
-        import hashlib
-
-        h = hashlib.md5(str(r).encode("utf8")).hexdigest()
-        return h + ".copy"
-
-    def write(self, ds, *args, **kwargs):
-        if self.write_directory is None:
-            return
-        if not hasattr(ds, "path"):
-            return
-
-        path = os.path.join(self.write_directory, self.get_filename([args, kwargs]))
-        print(f"Saving to {path} for {args}, {kwargs}")
-        import shutil
-
-        shutil.copy(ds.path, path)
-
-    def load_source(self, *args, **kwargs):
-        if self.read_directory is None:
-            return None
-        path = os.path.join(self.read_directory, self.get_filename([args, kwargs]))
-        if os.path.exists(path):
-            print(f"Loading path {path} for {args}, {kwargs}")
-            return load_source("file", path)
-        elif path.startswith("http"):
-            import requests
-
-            print(f"Loading url {path} for {args}, {kwargs}")
-            try:
-                return load_source("url", path)
-            except requests.exceptions.HTTPError:
-                pass
+def _mockup_build_hash_filename(args, kwargs):
+    try:
+        string = json.dumps([args, kwargs])
+    except Exception as e:
+        warnings.warn(f"Could not build hash for {args}, {kwargs}, {e}")
         return None
+    h = hashlib.md5(string.encode("utf8")).hexdigest()
+    return h + ".copy"
 
 
-MOCKUP = Mockup()
+def _mockup_write(directory, ds, args, kwargs):
+    if not hasattr(ds, "path"):
+        return
+    filename = _mockup_build_hash_filename(args, kwargs)
+    path = os.path.join(directory, filename)
+    print(f"Saving to {path} for {args}, {kwargs}")
+    shutil.copy(ds.path, path)
 
 
-def enable_save_mars(d):
-    MOCKUP.write_directory = d
+def _mockup_read(directory, args, kwargs):
+    filename = _mockup_build_hash_filename(args, kwargs)
+    if filename is None:
+        return None
+    path = os.path.join(directory, filename)
+
+    if os.path.exists(path):
+        print(f"Mockup: Loading path {path} for {args}, {kwargs}")
+        _deactivate_patch()
+        ds = _climetlab_load_source("file", path)
+        _activate_patch()
+        return ds
+
+    elif path.startswith("http:") or path.startswith("https:"):
+        print(f"Mockup: Loading url {path} for {args}, {kwargs}")
+        try:
+            _deactivate_patch()
+            ds = _climetlab_load_source("url", path)
+            _activate_patch()
+            return ds
+        except requests.exceptions.HTTPError:
+            pass
+
+    return None
 
 
-def disable_save_mars():
-    MOCKUP.write_directory = None
+TEST_DATA_ROOT = "https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create/"
 
-
-def enable_read_mars(d):
-    MOCKUP.read_directory = d
-
-
-def disable_read_mars():
-    MOCKUP.read_directory = None
-
-
-if os.environ.get("MOCKUP_MARS_SAVE_REQUESTS"):
-    enable_save_mars(os.environ.get("MOCKUP_MARS_SAVE_REQUESTS"))
-
-if os.environ.get("MOCKUP_MARS_READ_REQUESTS"):
-    enable_read_mars(os.environ.get("MOCKUP_MARS_READ_REQUESTS"))
+LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY = os.environ.get("LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY")
+LOAD_SOURCE_MOCKUP_READ_DIRECTORY = os.environ.get("LOAD_SOURCE_MOCKUP_READ_DIRECTORY", TEST_DATA_ROOT)
 
 
 def _load_source(*args, **kwargs):
-    ds = MOCKUP.load_source(*args, **kwargs)
-    if ds is None:
-        ds = load_source(*args, **kwargs)
-    MOCKUP.write(ds, *args, **kwargs)
+    if LOAD_SOURCE_MOCKUP_READ_DIRECTORY:
+        ds = _mockup_read(LOAD_SOURCE_MOCKUP_READ_DIRECTORY, args, kwargs)
+        if ds is not None:
+            return ds
+
+    ds = _climetlab_load_source(*args, **kwargs)
+
+    if LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY:
+        _mockup_write(LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY, ds, args, kwargs)
+
     return ds
+
+
+# Monkey patching
+_climetlab_load_source = climetlab.load_source
+
+
+def _activate_patch():
+    climetlab.load_source = _load_source
+
+
+def _deactivate_patch():
+    climetlab.load_source = _climetlab_load_source
+
+
+if LOAD_SOURCE_MOCKUP_WRITE_DIRECTORY or LOAD_SOURCE_MOCKUP_READ_DIRECTORY:
+    _activate_patch()
 
 
 def compare_dot_zattrs(a, b):
