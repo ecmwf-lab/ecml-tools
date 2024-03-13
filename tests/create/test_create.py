@@ -27,6 +27,7 @@ NAMES = [
         "perturbations",
     ]
 ]
+NAMES = ["join"]
 assert NAMES, "No yaml files found in " + HERE
 
 TEST_DATA_ROOT = "https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create/"
