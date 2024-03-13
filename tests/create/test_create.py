@@ -24,15 +24,7 @@ from ecml_tools.data import open_zarr
 HERE = os.path.dirname(__file__)
 # find_yamls
 NAMES = [os.path.basename(path).split(".")[0] for path in glob.glob(os.path.join(HERE, "*.yaml"))]
-NAMES = [
-    name
-    for name in NAMES
-    if name
-    not in [
-        "perturbations",
-    ]
-]
-NAMES = ["join"]
+# NAMES = [ name for name in NAMES if name not in [ "perturbations", ] ]
 assert NAMES, "No yaml files found in " + HERE
 
 
@@ -222,12 +214,7 @@ def test_run(name):
     output = os.path.join(HERE, name + ".zarr")
 
     # cache=None is using the default cache
-    c = Creator(
-        output,
-        config=config,
-        cache=None,
-        overwrite=True,
-    )
+    c = Creator(output, config=config, cache=None, overwrite=True)
     c.create()
 
     comparer = Comparer(name, output_path=output)
@@ -239,7 +226,5 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("name", help="Name of the test case")
-
     args = parser.parse_args()
-
     test_run(args.name)
