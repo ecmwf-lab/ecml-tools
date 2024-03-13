@@ -885,13 +885,25 @@ class Masked(Forwards):
 
     @debug_indexing
     def __getitem__(self, index):
+        if isinstance(index, tuple):
+            return self._get_tuple(index)
 
         result = self.forward[index]
-        print(index, result.shape)
         # We don't support subsetting the grid values
         assert result.shape[-1] == len(self.mask), (result.shape, len(self.mask))
 
         return result[..., self.mask]
+
+    @debug_indexing
+    @expand_list_indexing
+    def _get_tuple(self, index):
+        index, changes = index_to_slices(index, self.shape)
+        index, previous = update_tuple(index, self.axis, slice(None))
+        result = self.forward[index]
+        result = result[..., self.mask]
+        result = result[..., previous]
+        result = apply_index_to_slices_changes(result, changes)
+        return result
 
 
 class Thinning(Masked):
