@@ -190,6 +190,7 @@ class Coords:
         self._grid_points = grid_points
         self._resolution = first_field.resolution
         self._grid_values = grid_values
+        self._field_shape = first_field.shape
 
     @cached_property
     def variables(self):
@@ -216,6 +217,11 @@ class Coords:
         self._build_coords
         return self._grid_points
 
+    @cached_property
+    def field_shape(self):
+        self._build_coords
+        return self._field_shape
+
 
 class HasCoordsMixin:
     @cached_property
@@ -237,6 +243,10 @@ class HasCoordsMixin:
     @cached_property
     def grid_points(self):
         return self._coords.grid_points
+
+    @cached_property
+    def field_shape(self):
+        return self._coords.field_shape
 
     @cached_property
     def shape(self):

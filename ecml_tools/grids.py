@@ -14,17 +14,33 @@ from scipy.spatial import KDTree
 def plot_mask(path, mask, lats, lons, global_lats, global_lons):
     import matplotlib.pyplot as plt
 
+    middle = (np.amin(lons) + np.amax(lons)) / 2
+    print("middle", middle)
+    s = 1
+
+    # gmiddle = (np.amin(global_lons)+ np.amax(global_lons))/2
+
+    # print('gmiddle', gmiddle)
+    # global_lons = global_lons-gmiddle+middle
+    global_lons[global_lons >= 180] -= 360
+
     plt.figure(figsize=(10, 5))
-    plt.scatter(global_lons, global_lats, s=0.01, marker="o", c="r")
+    plt.scatter(global_lons, global_lats, s=s, marker="o", c="r")
     plt.savefig(path + "-global.png")
 
     plt.figure(figsize=(10, 5))
-    plt.scatter(global_lons[mask], global_lats[mask], s=0.1, c="k")
+    plt.scatter(global_lons[mask], global_lats[mask], s=s, c="k")
     plt.savefig(path + "-cutout.png")
 
     plt.figure(figsize=(10, 5))
-    plt.scatter(lons, lats, s=0.01)
+    plt.scatter(lons, lats, s=s)
     plt.savefig(path + "-lam.png")
+    # plt.scatter(lons, lats, s=0.01)
+
+    plt.figure(figsize=(10, 5))
+    plt.scatter(global_lons[mask], global_lats[mask], s=s, c="r")
+    plt.scatter(lons, lats, s=s)
+    plt.savefig(path + "-both.png")
     # plt.scatter(lons, lats, s=0.01)
 
 
@@ -64,27 +80,27 @@ class Triangle3D:
         a = np.dot(self.v1 - self.v0, h)
 
         if -epsilon < a < epsilon:
-            return None
+            return False
 
         f = 1.0 / a
         s = ray_origin - self.v0
         u = f * np.dot(s, h)
 
         if u < 0.0 or u > 1.0:
-            return None
+            return False
 
         q = np.cross(s, self.v1 - self.v0)
         v = f * np.dot(ray_direction, q)
 
         if v < 0.0 or u + v > 1.0:
-            return None
+            return False
 
         t = f * np.dot(self.v2 - self.v0, q)
 
         if t > epsilon:
-            return t
+            return True
 
-        return None
+        return False
 
 
 def cropping_mask(lats, lons, north, west, south, east):
@@ -106,7 +122,7 @@ def cutout_mask(
     global_lats,
     global_lons,
     cropping_distance=2.0,
-    min_distance=0.0,
+    min_distance_km=0.0,
     plot=None,
 ):
     """
@@ -114,6 +130,8 @@ def cutout_mask(
     """
 
     # TODO: transform min_distance from lat/lon to xyz
+
+    min_distance = min_distance_km / 6371.0
 
     assert global_lats.ndim == 1
     assert global_lons.ndim == 1
@@ -140,6 +158,7 @@ def cutout_mask(
     )
 
     # return mask
+    # mask = np.array([True] * len(global_lats), dtype=bool)
     global_lats_masked = global_lats[mask]
     global_lons_masked = global_lons[mask]
 
@@ -147,24 +166,35 @@ def cutout_mask(
     global_points = np.array(global_xyx).transpose()
 
     xyx = latlon_to_xyz(lats, lons)
-    points = np.array(xyx).transpose()
+    lam_points = np.array(xyx).transpose()
 
     # Use a KDTree to find the nearest points
-    kdtree = KDTree(points)
+    kdtree = KDTree(lam_points)
     distances, indices = kdtree.query(global_points, k=3)
 
     zero = np.array([0.0, 0.0, 0.0])
     ok = []
     for i, (global_point, distance, index) in enumerate(zip(global_points, distances, indices)):
-        t = Triangle3D(points[index[0]], points[index[1]], points[index[2]])
-        distance = np.min(distance)
+        t = Triangle3D(lam_points[index[0]], lam_points[index[1]], lam_points[index[2]])
+        # distance = np.min(distance)
         # The point is inside the triangle if the intersection with the ray
         # from the point to the center of the Earth is not None
         # (the direction of the ray is not important)
-        ok.append(
-            (t.intersect(zero, global_point) or t.intersect(global_point, zero))
-            # and (distance >= min_distance)
-        )
+
+        intersect = t.intersect(zero, global_point) or t.intersect(global_point, zero)
+        close = np.min(distance) <= min_distance
+
+        if not intersect and False:
+
+            if 0 <= global_lons_masked[i] <= 30:
+                if 55 <= global_lats_masked[i] <= 70:
+                    print(global_lats_masked[i], global_lons_masked[i], distance, intersect, close)
+                    print(lats[index[0]], lons[index[0]])
+                    print(lats[index[1]], lons[index[1]])
+                    print(lats[index[2]], lons[index[2]])
+                    assert False
+
+        ok.append(intersect and not close)
 
     j = 0
     ok = np.array(ok)
