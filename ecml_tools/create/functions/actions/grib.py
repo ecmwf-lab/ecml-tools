@@ -13,6 +13,7 @@ from climetlab.utils.patterns import Pattern
 
 
 def check(ds, paths, **kwargs):
+
     count = 1
     for k, v in kwargs.items():
         if isinstance(v, (tuple, list)):
@@ -41,6 +42,7 @@ def execute(context, dates, path, *args, **kwargs):
             s = s.sel(valid_datetime=dates, **kwargs)
             ds = ds + s
 
-    check(ds, given_paths, valid_datetime=dates, **kwargs)
+    if kwargs:
+        check(ds, given_paths, valid_datetime=dates, **kwargs)
 
     return ds
