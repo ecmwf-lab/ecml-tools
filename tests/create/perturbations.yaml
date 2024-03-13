@@ -1,27 +1,25 @@
 common:
-  sfc: &sfc
+  global: &global
     class: ea
     expver: "0001"
     grid: 20.0/20.0
+  sfc: &sfc
+    <<: *global
     levtype: sfc
     param: [2t]
     #levtype: sfc
     #param: [10u, 10v, 2d, 2t, lsm, msl, sdor, skt, slor, sp, tcw, z, cp, tp]
+  acc: &acc
+    <<: *global
+    levtype: sfc
+    param: [tp]
   pl: &pl
-    class: ea
-    expver: "0001"
-    grid: 20.0/20.0
+    <<: *global
     levtype: pl
     param: [q]
     level: [50]
     #param: [q, t, u, v, w, z]
     #level: [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
-  acc: &acc
-    class: ea
-    expver: "0001"
-    grid: 20.0/20.0
-    levtype: sfc
-    param: [tp]
 
   ensembles: &ensembles
     stream: enda
@@ -31,17 +29,6 @@ common:
   center: &center
     stream: oper
     type: an
-  constants: &constants
-          param:
-            - cos_latitude
-            - cos_longitude
-            - sin_latitude
-            - sin_longitude
-            - cos_julian_day
-            - cos_local_time
-            - sin_julian_day
-            - sin_local_time
-            - insolation
 
 dates:
   start: 2020-12-30 00:00:00
@@ -63,9 +50,6 @@ data_sources:
       - accumulations:
           <<: *ensembles
           <<: *acc
-     # - constants:
-     #     <<: *constants
-     #     template: ${data_sources.ensembles.join.0.mars}
   center:
     join:
       - mars:
@@ -77,16 +61,26 @@ data_sources:
       - accumulations:
           <<: *center
           <<: *acc
-     # - constants:
-     #     <<: *constants
-     #     template: ${data_sources.center.join.0.mars}
-          
+
 input:
-  ensemble_perturbations:
-    # the ensemble data which has one additional dimension
-    ensembles: ${data_sources.ensembles}
-    # the new center of the data
-    center: ${data_sources.center}
+  join:
+    - ensemble_perturbations:
+        # the ensemble data which has one additional dimension
+        ensembles: ${data_sources.ensembles}
+        # the new center of the data
+        center: ${data_sources.center}
+    - constants:
+        template: ${input.join.0.ensemble_perturbations}
+        param:
+          - cos_latitude
+          - cos_longitude
+          - sin_latitude
+          - sin_longitude
+          - cos_julian_day
+          - cos_local_time
+          - sin_julian_day
+          - sin_local_time
+          - insolation
 
 output:
   order_by: [valid_datetime, param_level, number]
