@@ -242,9 +242,9 @@ class Version:
             total_size, n = compute_directory_size(self.path)
 
         if total_size is not None:
-            print(f"💽 Size      : {bytes(total_size)} ({number(total_size)})")
+            print(f"💽 Size       : {bytes(total_size)} ({number(total_size)})")
         if n is not None:
-            print(f"📁 Files     : {number(n)}")
+            print(f"📁 Files      : {number(n)}")
 
     @property
     def statistics(self):
