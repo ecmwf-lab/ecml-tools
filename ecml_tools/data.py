@@ -869,6 +869,7 @@ class Masked(Forwards):
         super().__init__(forward)
         assert len(forward.shape) == 4, "Grids must be 1D for now"
         self.mask = mask
+        self.axis = 3
 
     @cached_property
     def shape(self):
@@ -882,26 +883,15 @@ class Masked(Forwards):
     def longitudes(self):
         return self.forward.longitudes[self.mask]
 
-    def __getitem__(self, index):
-        if isinstance(index, (int, slice)):
-            index = (index, slice(None), slice(None), slice(None))
-        return self._get_tuple(index)
-
     @debug_indexing
-    @expand_list_indexing
-    def _get_tuple(self, index):
-        assert self.axis >= len(index) or index[self.axis] == slice(
-            None
-        ), f"No support for selecting a subset of the 1D values {index}"
-        index, changes = index_to_slices(index, self.shape)
+    def __getitem__(self, index):
 
-        # In case index_to_slices has changed the last slice
-        index, _ = update_tuple(index, self.axis, slice(None))
+        result = self.forward[index]
+        print(index, result.shape)
+        # We don't support subsetting the grid values
+        assert result.shape[-1] == len(self.mask), (result.shape, len(self.mask))
 
-        result = self.forwards[index]
-        result = result[:, :, :, self.mask]
-
-        return apply_index_to_slices_changes(result, changes)
+        return result[..., self.mask]
 
 
 class Thinning(Masked):
@@ -1017,7 +1007,7 @@ class CutoutGrids(Grids):
     def _get_tuple(self, index):
         assert self.axis >= len(index) or index[self.axis] == slice(
             None
-        ), f"No support for selecting a subset of the 1D values {index}"
+        ), f"No support for selecting a subset of the 1D values {index} ({self.tree()})"
         index, changes = index_to_slices(index, self.shape)
 
         # In case index_to_slices has changed the last slice

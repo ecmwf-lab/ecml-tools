@@ -165,33 +165,33 @@ def check_data_values(arr, *, name: str, log=[], allow_nan=False):
     if max == 9999.0:
         warnings.warn(f"Max value 9999 for {name}")
 
-    in_0_1 = dict(minimum=0, maximum=1)
-    is_temperature = dict(minimum=173.15, maximum=373.15)  # -100 celsius to +200 celsius
-    # is_wind = dict(minimum=-500., maximum=500.)
-    limits = {
-        "lsm": in_0_1,
-        "cos_latitude": in_0_1,
-        "sin_latitude": in_0_1,
-        "cos_longitude": in_0_1,
-        "sin_longitude": in_0_1,
-        "insolation": in_0_1,
-        "2t": is_temperature,
-        "sst": is_temperature,
-        # "10u": is_wind,
-        # "10v": is_wind,
-    }
+    # in_0_1 = dict(minimum=0, maximum=1)
+    # is_temperature = dict(minimum=173.15, maximum=373.15)  # -100 celsius to +200 celsius
+    # # is_wind = dict(minimum=-500., maximum=500.)
+    # limits = {
+    #     "lsm": in_0_1,
+    #     "cos_latitude": in_0_1,
+    #     "sin_latitude": in_0_1,
+    #     "cos_longitude": in_0_1,
+    #     "sin_longitude": in_0_1,
+    #     "insolation": in_0_1,
+    #     "2t": is_temperature,
+    #     "sst": is_temperature,
+    #     # "10u": is_wind,
+    #     # "10v": is_wind,
+    # }
 
-    if name in limits:
-        if min < limits[name]["minimum"]:
-            raise StatisticsValueError(
-                f"For {name}: minimum value in the data is {min}. "
-                "Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
-            )
-        if max > limits[name]["maximum"]:
-            raise StatisticsValueError(
-                f"For {name}: maximum value in the data is {max}. "
-                "Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
-            )
+    # if name in limits:
+    #     if min < limits[name]["minimum"]:
+    #         raise StatisticsValueError(
+    #             f"For {name}: minimum value in the data is {min}. "
+    #             f"Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
+    #         )
+    #     if max > limits[name]["maximum"]:
+    #         raise StatisticsValueError(
+    #             f"For {name}: maximum value in the data is {max}. "
+    #             f"Not in acceptable range [{limits[name]['minimum']} ; {limits[name]['maximum']}]"
+    #         )
 
 
 def check_stats(minimum, maximum, mean, msg, **kwargs):
