@@ -7,11 +7,11 @@
 
 import datetime
 from functools import cache
+from unittest.mock import patch
 
 import numpy as np
 import zarr
 
-import ecml_tools.data
 from ecml_tools.data import Concat
 from ecml_tools.data import Ensemble
 from ecml_tools.data import Grids
@@ -27,6 +27,15 @@ from ecml_tools.data import _frequency_to_hours
 from ecml_tools.data import open_dataset
 
 VALUES = 10
+
+
+def mockup_open_zarr(func):
+    def wrapper(*args, **kwargs):
+        with patch("zarr.convenience.open", zarr_from_str):
+            with patch("ecml_tools.data._name_to_path", lambda name, zarr_root: name):
+                return func(*args, **kwargs)
+
+    return wrapper
 
 
 @cache
@@ -168,11 +177,6 @@ def zarr_from_str(name, mode):
         grids=int(args["grids"]) if args["grids"] is not None else None,
         missing=args["test"] == "missing",
     )
-
-
-# Monkey patching
-zarr.convenience.open = zarr_from_str
-ecml_tools.data._name_to_path = lambda name, zarr_root: name
 
 
 class IndexTester:
@@ -336,6 +340,7 @@ def simple_row(date, vars):
     return make_row(*values)
 
 
+@mockup_open_zarr
 def test_simple():
     test = DatasetTester("test-2021-2022-6h-o96-abcd")
     test.run(
@@ -352,6 +357,7 @@ def test_simple():
     )
 
 
+@mockup_open_zarr
 def test_concat():
     test = DatasetTester(
         "test-2021-2022-6h-o96-abcd",
@@ -371,6 +377,7 @@ def test_concat():
     )
 
 
+@mockup_open_zarr
 def test_join_1():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", "test-2021-2021-6h-o96-efgh")
     test.run(
@@ -388,6 +395,7 @@ def test_join_1():
     )
 
 
+@mockup_open_zarr
 def test_join_2():
     test = DatasetTester("test-2021-2021-6h-o96-abcd-1", "test-2021-2021-6h-o96-bdef-2")
     test.run(
@@ -414,6 +422,7 @@ def test_join_2():
     )
 
 
+@mockup_open_zarr
 def test_join_3():
     test = DatasetTester("test-2021-2021-6h-o96-abcd-1", "test-2021-2021-6h-o96-abcd-2")
 
@@ -438,6 +447,7 @@ def test_join_3():
     )
 
 
+@mockup_open_zarr
 def test_subset_1():
     test = DatasetTester("test-2021-2023-1h-o96-abcd", frequency=12)
     test.run(
@@ -454,6 +464,7 @@ def test_subset_1():
     )
 
 
+@mockup_open_zarr
 def test_subset_2():
     test = DatasetTester("test-2021-2023-1h-o96-abcd", start=2022, end=2022)
     test.run(
@@ -470,6 +481,7 @@ def test_subset_2():
     )
 
 
+@mockup_open_zarr
 def test_subset_3():
     test = DatasetTester("test-2021-2023-1h-o96-abcd", start=2022, end=2022, frequency=12)
     test.run(
@@ -486,6 +498,7 @@ def test_subset_3():
     )
 
 
+@mockup_open_zarr
 def test_subset_4():
     test = DatasetTester("test-2021-2023-1h-o96-abcd", start=202206, end=202208)
     test.run(
@@ -502,6 +515,7 @@ def test_subset_4():
     )
 
 
+@mockup_open_zarr
 def test_subset_5():
     test = DatasetTester("test-2021-2023-1h-o96-abcd", start=20220601, end=20220831)
     test.run(
@@ -518,6 +532,7 @@ def test_subset_5():
     )
 
 
+@mockup_open_zarr
 def test_subset_6():
     test = DatasetTester("test-2021-2023-1h-o96-abcd", start="2022-06-01", end="2022-08-31")
     test.run(
@@ -534,6 +549,7 @@ def test_subset_6():
     )
 
 
+@mockup_open_zarr
 def test_subset_7():
     test = DatasetTester("test-2021-2023-1h-o96-abcd", start="2022-06", end="2022-08")
     test.run(
@@ -550,6 +566,7 @@ def test_subset_7():
     )
 
 
+@mockup_open_zarr
 def test_subset_8():
     test = DatasetTester(
         "test-2021-2021-1h-o96-abcd",
@@ -570,6 +587,7 @@ def test_subset_8():
     )
 
 
+@mockup_open_zarr
 def test_select_1():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", select=["b", "d"])
     test.run(
@@ -586,6 +604,7 @@ def test_select_1():
     )
 
 
+@mockup_open_zarr
 def test_select_2():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", select=["c", "a"])
     test.run(
@@ -602,6 +621,7 @@ def test_select_2():
     )
 
 
+@mockup_open_zarr
 def test_select_3():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", select={"c", "a"})
     test.run(
@@ -618,6 +638,7 @@ def test_select_3():
     )
 
 
+@mockup_open_zarr
 def test_rename():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", rename={"a": "x", "c": "y"})
     test.run(
@@ -636,6 +657,7 @@ def test_rename():
     test.same_stats(test.ds, open_dataset("test-2021-2021-6h-o96-abcd"), "xbyd", "abcd")
 
 
+@mockup_open_zarr
 def test_drop():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", drop="a")
     test.run(
@@ -652,6 +674,7 @@ def test_drop():
     )
 
 
+@mockup_open_zarr
 def test_reorder_1():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", reorder=["d", "c", "b", "a"])
     test.run(
@@ -668,6 +691,7 @@ def test_reorder_1():
     )
 
 
+@mockup_open_zarr
 def test_reorder_2():
     test = DatasetTester("test-2021-2021-6h-o96-abcd", reorder=dict(a=3, b=2, c=1, d=0))
     test.run(
@@ -684,6 +708,7 @@ def test_reorder_2():
     )
 
 
+@mockup_open_zarr
 def test_constructor_1():
     ds1 = open_dataset("test-2021-2021-6h-o96-abcd")
 
@@ -704,6 +729,7 @@ def test_constructor_1():
     )
 
 
+@mockup_open_zarr
 def test_constructor_2():
     test = DatasetTester(
         datasets=[
@@ -725,6 +751,7 @@ def test_constructor_2():
     )
 
 
+@mockup_open_zarr
 def test_constructor_3():
     test = DatasetTester(
         {
@@ -748,6 +775,7 @@ def test_constructor_3():
     )
 
 
+@mockup_open_zarr
 def test_constructor_4():
     test = DatasetTester(
         "test-2021-2021-6h-o96-abcd",
@@ -770,6 +798,7 @@ def test_constructor_4():
     )
 
 
+@mockup_open_zarr
 def test_constructor_5():
     test = DatasetTester(
         {"dataset": "test-2021-2021-6h-o96-abcd-1", "rename": {"a": "x", "c": "y"}},
@@ -800,6 +829,7 @@ def test_constructor_5():
     test.same_stats(test.ds, open_dataset("test-2021-2021-6h-o96-abcd-2"), "abzt", "abcd")
 
 
+@mockup_open_zarr
 def test_dates():
     dates = None
     assert _as_first_date(2021, dates) == np.datetime64("2021-01-01T00:00:00")
@@ -822,6 +852,7 @@ def test_dates():
     assert _as_last_date("2021-01-01", dates) == np.datetime64("2021-01-01T23:59:59")
 
 
+@mockup_open_zarr
 def test_slice_1():
     test = DatasetTester("test-2021-2021-6h-o96-abcd")
     test.run(
@@ -838,6 +869,7 @@ def test_slice_1():
     )
 
 
+@mockup_open_zarr
 def test_slice_2():
     test = DatasetTester([f"test-{year}-{year}-12h-o96-abcd" for year in range(1940, 2023)])
     test.run(
@@ -854,6 +886,7 @@ def test_slice_2():
     )
 
 
+@mockup_open_zarr
 def test_slice_3():
     test = DatasetTester(
         [f"test-2020-2020-6h-o96-{vars}" for vars in ("abcd", "efgh", "ijkl", "mnop", "qrst", "uvwx", "yz")]
@@ -872,6 +905,7 @@ def test_slice_3():
     )
 
 
+@mockup_open_zarr
 def test_slice_4():
     test = DatasetTester([f"test-2020-2020-1h-o96-{vars}" for vars in ("abcd", "cd", "a", "c")])
     test.run(
@@ -888,6 +922,7 @@ def test_slice_4():
     )
 
 
+@mockup_open_zarr
 def test_slice_5():
     test = DatasetTester(
         [f"test-{year}-{year}-6h-o96-abcd" for year in range(2010, 2020)],
@@ -907,6 +942,7 @@ def test_slice_5():
     )
 
 
+@mockup_open_zarr
 def test_ensemble_1():
     test = DatasetTester(
         ensemble=[
@@ -934,6 +970,7 @@ def test_ensemble_1():
     )
 
 
+@mockup_open_zarr
 def test_ensemble_2():
     test = DatasetTester(
         ensemble=[
@@ -962,6 +999,7 @@ def test_ensemble_2():
     )
 
 
+@mockup_open_zarr
 def test_ensemble_3():
     test = DatasetTester(
         ensemble=[
@@ -990,6 +1028,7 @@ def test_ensemble_3():
     )
 
 
+@mockup_open_zarr
 def test_grids():
     test = DatasetTester(
         grids=[
@@ -1035,6 +1074,7 @@ def test_grids():
     assert (test.ds.latitudes == np.concatenate([ds1.latitudes, ds2.latitudes])).all()
 
 
+@mockup_open_zarr
 def test_statistics():
     test = DatasetTester(
         "test-2021-2021-6h-o96-abcd",
