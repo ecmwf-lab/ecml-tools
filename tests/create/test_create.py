@@ -76,7 +76,7 @@ def _mockup_read(directory, args, kwargs):
             _activate_patch()
             return ds
         except requests.exceptions.HTTPError:
-            pass
+            print(f"Mockup: ❌ Cannot load from url for {path} for {args}, {kwargs}")
 
     return None
 
@@ -88,6 +88,14 @@ LOAD_SOURCE_MOCKUP_READ_DIRECTORY = os.environ.get("LOAD_SOURCE_MOCKUP_READ_DIRE
 
 
 def _load_source(*args, **kwargs):
+    if args:
+        name = args[0]
+    else:
+        name = kwargs["name"]
+
+    if name != "mars":
+        return _climetlab_load_source(*args, **kwargs)
+
     if LOAD_SOURCE_MOCKUP_READ_DIRECTORY:
         ds = _mockup_read(LOAD_SOURCE_MOCKUP_READ_DIRECTORY, args, kwargs)
         if ds is not None:
