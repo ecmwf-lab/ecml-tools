@@ -8,7 +8,7 @@
 
 import numpy as np
 
-from ecml_tools.indexing import length_to_slices
+from ecml_tools.data.indexing import length_to_slices
 
 
 def test_length_to_slices():

@@ -156,7 +156,7 @@ class Dataset:
 
         if "thinning" in kwargs:
             thinning = kwargs.pop("thinning")
-            method = kwargs.pop("method", None)
+            method = kwargs.pop("method", "every-nth")
             return Thinning(self, thinning, method)._subset(**kwargs)
 
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
