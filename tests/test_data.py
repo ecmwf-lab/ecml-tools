@@ -13,19 +13,19 @@ from unittest.mock import patch
 import numpy as np
 import zarr
 
-from ecml_tools.data import Concat
-from ecml_tools.data import Ensemble
-from ecml_tools.data import Grids
-from ecml_tools.data import Join
-from ecml_tools.data import Rename
-from ecml_tools.data import Select
-from ecml_tools.data import Statistics
-from ecml_tools.data import Subset
-from ecml_tools.data import Zarr
-from ecml_tools.data import _as_first_date
-from ecml_tools.data import _as_last_date
-from ecml_tools.data import _frequency_to_hours
 from ecml_tools.data import open_dataset
+from ecml_tools.data.concat import Concat
+from ecml_tools.data.ensemble import Ensemble
+from ecml_tools.data.grids import Grids
+from ecml_tools.data.join import Join
+from ecml_tools.data.misc import _as_first_date
+from ecml_tools.data.misc import _as_last_date
+from ecml_tools.data.misc import _frequency_to_hours
+from ecml_tools.data.select import Rename
+from ecml_tools.data.select import Select
+from ecml_tools.data.statistics import Statistics
+from ecml_tools.data.stores import Zarr
+from ecml_tools.data.subset import Subset
 
 VALUES = 10
 
@@ -34,7 +34,7 @@ def mockup_open_zarr(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         with patch("zarr.convenience.open", zarr_from_str):
-            with patch("ecml_tools.data._name_to_path", lambda name, zarr_root: name):
+            with patch("ecml_tools.data.misc._name_to_path", lambda name, zarr_root: name):
                 return func(*args, **kwargs)
 
     return wrapper

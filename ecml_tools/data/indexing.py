@@ -161,3 +161,17 @@ def expand_list_indexing(method):
         return np.concatenate(result, axis=which)
 
     return wrapper
+
+
+def make_slice_or_index_from_list_or_tuple(indices):
+    """Convert a list or tuple of indices to a slice or an index, if possible."""
+
+    if len(indices) < 2:
+        return indices
+
+    step = indices[1] - indices[0]
+
+    if step > 0 and all(indices[i] - indices[i - 1] == step for i in range(1, len(indices))):
+        return slice(indices[0], indices[-1] + step, step)
+
+    return indices

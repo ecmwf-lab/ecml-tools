@@ -21,7 +21,7 @@ from climetlab import load_source
 
 from ecml_tools.create import Creator
 from ecml_tools.data import open_dataset
-from ecml_tools.data import open_zarr
+from ecml_tools.data.stores import open_zarr
 
 TEST_DATA_ROOT = "https://object-store.os-api.cci1.ecmwf.int/ml-tests/test-data/anemoi-datasets/create/"
 
