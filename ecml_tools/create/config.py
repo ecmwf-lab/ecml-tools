@@ -154,12 +154,6 @@ class LoadersConfig(Config):
         if "description" not in self:
             self.description = "No description provided."
 
-        if "config_format_version" not in self:
-            self.config_format_version = 3
-
-        if self.config_format_version != 3:
-            raise ValueError("Config format has changed. Must provide config with format version == 3.")
-
         if "dates" in self.output:
             raise ValueError("Obsolete: Dates should not be provided in output config.")
         if not isinstance(self.dates, dict):

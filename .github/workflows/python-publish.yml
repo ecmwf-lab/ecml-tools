@@ -59,7 +59,7 @@ jobs:
           github-token: ${{ github.token }}
           ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI_F }}
           # notification-summary: ${{ steps.qa.outputs.status }}
-          notification-summary: '❌ Build failed on ecml-tools. Please check the logs.'
+          notification-summary: ❌ Build failed on ecml-tools!
           notification-color: dc3545
           timezone: Europe/Paris
           verbose-logging: true
@@ -75,7 +75,7 @@ jobs:
           github-token: ${{ github.token }}
           ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI_F }}
           # notification-summary: ${{ steps.qa.outputs.status }}
-          notification-summary: '✅ New commit pushed on ecml-tools. Everything is fine.'
+          notification-summary: ✅ New commit on ecml-tools
           notification-color: 17a2b8
           timezone: Europe/Paris
           verbose-logging: true
