@@ -77,10 +77,10 @@ class Dataset:
             method = kwargs.pop("method", "every-nth")
             return Thinning(self, thinning, method)._subset(**kwargs)
 
-        if "bounding_box" in kwargs:
+        if "area" in kwargs:
             from .masked import Cropping
 
-            bbox = kwargs.pop("bounding_box")
+            bbox = kwargs.pop("area")
             return Cropping(self, bbox)._subset(**kwargs)
 
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))

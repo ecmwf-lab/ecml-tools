@@ -85,19 +85,19 @@ class Thinning(Masked):
 
 
 class Cropping(Masked):
-    def __init__(self, forward, bounding_box):
-        self.bounding_box = bounding_box
+    def __init__(self, forward, area):
+        self.area = area
 
-        if isinstance(bounding_box, Dataset):
-            north = np.amax(bounding_box.latitudes)
-            south = np.amin(bounding_box.latitudes)
-            east = np.amax(bounding_box.longitudes)
-            west = np.amin(bounding_box.longitudes)
-            bounding_box = (north, west, south, east)
+        if isinstance(area, Dataset):
+            north = np.amax(area.latitudes)
+            south = np.amin(area.latitudes)
+            east = np.amax(area.longitudes)
+            west = np.amin(area.longitudes)
+            area = (north, west, south, east)
 
-        mask = cropping_mask(forward.latitudes, forward.longitudes, *bounding_box)
+        mask = cropping_mask(forward.latitudes, forward.longitudes, *area)
 
         super().__init__(forward, mask)
 
     def tree(self):
-        return Node(self, [self.forward.tree()], bounding_box=self.bounding_box)
+        return Node(self, [self.forward.tree()], area=self.area)
