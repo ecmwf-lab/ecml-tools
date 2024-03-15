@@ -185,10 +185,15 @@ def cutout_mask(
         close = np.min(distance) <= min_distance
 
         if not intersect and False:
-
             if 0 <= global_lons_masked[i] <= 30:
                 if 55 <= global_lats_masked[i] <= 70:
-                    print(global_lats_masked[i], global_lons_masked[i], distance, intersect, close)
+                    print(
+                        global_lats_masked[i],
+                        global_lons_masked[i],
+                        distance,
+                        intersect,
+                        close,
+                    )
                     print(lats[index[0]], lons[index[0]])
                     print(lats[index[1]], lons[index[1]])
                     print(lats[index[2]], lons[index[2]])
