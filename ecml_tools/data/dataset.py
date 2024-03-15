@@ -12,10 +12,6 @@ from functools import cached_property
 from .debug import debug_indexing
 from .indexing import expand_list_indexing
 
-# from .misc import _as_first_date
-# from .misc import _as_last_date
-# from .misc import _frequency_to_hours
-
 LOG = logging.getLogger(__name__)
 
 
