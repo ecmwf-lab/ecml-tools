@@ -10,7 +10,9 @@ from functools import cached_property
 
 import numpy as np
 
+from ..grids import cropping_mask
 from . import Forwards
+from .dataset import Dataset
 from .debug import Node
 from .debug import debug_indexing
 from .indexing import apply_index_to_slices_changes
@@ -82,3 +84,23 @@ class Thinning(Masked):
 
     def tree(self):
         return Node(self, [self.forward.tree()], thinning=self.thinning, method=self.method)
+
+
+class Cropping(Masked):
+
+    def __init__(self, forward, bounding_box):
+        self.bounding_box = bounding_box
+
+        if isinstance(bounding_box, Dataset):
+            north = np.amax(bounding_box.latitudes)
+            south = np.amin(bounding_box.latitudes)
+            east = np.amax(bounding_box.longitudes)
+            west = np.amin(bounding_box.longitudes)
+            bounding_box = (north, west, south, east)
+
+        mask = cropping_mask(forward.latitudes, forward.longitudes, *bounding_box)
+
+        super().__init__(forward, mask)
+
+    def tree(self):
+        return Node(self, [self.forward.tree()], bounding_box=self.bounding_box)

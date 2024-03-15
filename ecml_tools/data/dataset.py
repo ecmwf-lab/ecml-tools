@@ -82,6 +82,12 @@ class Dataset:
             method = kwargs.pop("method", "every-nth")
             return Thinning(self, thinning, method)._subset(**kwargs)
 
+        if "bounding_box" in kwargs:
+            from .masked import Cropping
+
+            bbox = kwargs.pop("bounding_box")
+            return Cropping(self, bbox)._subset(**kwargs)
+
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 
     def _frequency_to_indices(self, frequency):
