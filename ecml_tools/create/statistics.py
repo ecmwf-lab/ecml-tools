@@ -97,7 +97,13 @@ def compute_statistics(array, check_variables_names=None, allow_nan=False):
         squares[i] = np.nansum(values * values, axis=1)
         count[i] = np.sum(~np.isnan(values), axis=1)
 
-    return {"minimum": minimum, "maximum": maximum, "sums": sums, "squares": squares, "count": count}
+    return {
+        "minimum": minimum,
+        "maximum": maximum,
+        "sums": sums,
+        "squares": squares,
+        "count": count,
+    }
 
 
 class TempStatistics:
@@ -201,7 +207,10 @@ class StatAggregator:
         offset = 0
         for _, _dates, stats in self.owner._gather_data():
             assert isinstance(stats, dict), stats
-            assert stats["minimum"].shape[0] == len(_dates), (stats["minimum"].shape, len(_dates))
+            assert stats["minimum"].shape[0] == len(_dates), (
+                stats["minimum"].shape,
+                len(_dates),
+            )
             assert stats["minimum"].shape[1] == len(self.variables_names), (
                 stats["minimum"].shape,
                 len(self.variables_names),
@@ -226,13 +235,19 @@ class StatAggregator:
             for k in self.NAMES:
                 stats[k] = stats[k][bitmap]
 
-            assert stats["minimum"].shape[0] == len(dates), (stats["minimum"].shape, len(dates))
+            assert stats["minimum"].shape[0] == len(dates), (
+                stats["minimum"].shape,
+                len(dates),
+            )
 
             # store data in self
             found |= set(dates)
             for name in self.NAMES:
                 array = getattr(self, name)
-                assert stats[name].shape[0] == len(dates), (stats[name].shape, len(dates))
+                assert stats[name].shape[0] == len(dates), (
+                    stats[name].shape,
+                    len(dates),
+                )
                 array[offset : offset + len(dates)] = stats[name]
             offset += len(dates)
 
@@ -243,7 +258,6 @@ class StatAggregator:
         print(f"Statistics for {len(found)} dates found.")
 
     def aggregate(self):
-
         minimum = np.nanmin(self.minimum, axis=0)
         maximum = np.nanmax(self.maximum, axis=0)
         sums = np.nansum(self.sums, axis=0)

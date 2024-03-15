@@ -29,7 +29,6 @@ class Scan(Command):
         command_parser.add_argument("paths", nargs="+", help="Paths to scan")
 
     def run(self, args):
-
         def match(path):
             return fnmatch.fnmatch(path, args.match)
 

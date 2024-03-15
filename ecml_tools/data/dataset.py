@@ -20,7 +20,6 @@ LOG = logging.getLogger(__name__)
 
 
 class Dataset:
-
     arguments = {}
 
     @cached_property

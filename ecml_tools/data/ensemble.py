@@ -16,7 +16,6 @@ LOG = logging.getLogger(__name__)
 
 
 class Ensemble(GivenAxis):
-
     def tree(self):
         return Node(self, [d.tree() for d in self.datasets])
 

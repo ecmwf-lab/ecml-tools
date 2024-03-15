@@ -24,7 +24,6 @@ LOG = logging.getLogger(__name__)
 
 
 class Masked(Forwards):
-
     def __init__(self, forward, mask):
         super().__init__(forward)
         assert len(forward.shape) == 4, "Grids must be 1D for now"
@@ -67,7 +66,6 @@ class Masked(Forwards):
 
 
 class Thinning(Masked):
-
     def __init__(self, forward, thinning, method):
         self.thinning = thinning
         self.method = method
@@ -87,7 +85,6 @@ class Thinning(Masked):
 
 
 class Cropping(Masked):
-
     def __init__(self, forward, bounding_box):
         self.bounding_box = bounding_box
 

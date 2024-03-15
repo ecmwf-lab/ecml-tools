@@ -28,7 +28,6 @@ class Node:
         self.kwargs = kwargs
 
     def _put(self, indent, result):
-
         def _spaces(indent):
             return " " * indent if indent else ""
 
