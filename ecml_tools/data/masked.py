@@ -11,10 +11,10 @@ from functools import cached_property
 import numpy as np
 
 from ..grids import cropping_mask
-from . import Forwards
 from .dataset import Dataset
 from .debug import Node
 from .debug import debug_indexing
+from .forewards import Forwards
 from .indexing import apply_index_to_slices_changes
 from .indexing import expand_list_indexing
 from .indexing import index_to_slices
