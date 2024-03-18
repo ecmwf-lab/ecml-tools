@@ -7,10 +7,12 @@
 # nor does it submit to any jurisdiction.
 #
 import datetime
+import warnings
 from collections import defaultdict
 from copy import deepcopy
 
 import climetlab as cml
+import numpy as np
 from climetlab.core.temporary import temp_file
 from climetlab.readers.grib.output import new_grib_output
 from climetlab.utils.availability import Availability
@@ -21,7 +23,7 @@ DEBUG = True
 
 
 class Accumulation:
-    def __init__(self, out, /, param, date, time, number, step, frequency, stream=None):
+    def __init__(self, out, /, param, date, time, number, step, frequency, **kwargs):
         self.out = out
         self.param = param
         self.date = date
@@ -34,17 +36,57 @@ class Accumulation:
         self.endStep = None
         self.done = False
         self.frequency = frequency
+        self._check = None
 
     @property
     def key(self):
         return (self.param, self.date, self.time, self.steps, self.number)
 
+    def check(self, field):
+        if self._check is None:
+            self._check = field.as_mars()
+            assert self.param == field.metadata("param"), (self.param, field.metadata("param"))
+            assert self.date == field.metadata("date"), (self.date, field.metadata("date"))
+            assert self.time == field.metadata("time"), (self.time, field.metadata("time"))
+            assert self.number == field.metadata("number"), (self.number, field.metadata("number"))
 
-class AccumulationFromStart(Accumulation):
+            return
+
+        mars = field.as_mars()
+        keys1 = sorted(self._check.keys())
+        keys2 = sorted(mars.keys())
+
+        assert keys1 == keys2, (keys1, keys2)
+
+        for k in keys1:
+            if k not in ("step",):
+                assert self._check[k] == mars[k], (k, self._check[k], mars[k])
+
+    def write(self, template):
+
+        assert self.startStep != self.endStep, (self.startStep, self.endStep)
+        assert np.all(self.values >= 0), (np.amin(self.values), np.amax(self.values))
+
+        self.out.write(
+            self.values,
+            template=template,
+            stepType="accum",
+            startStep=self.startStep,
+            endStep=self.endStep,
+        )
+        self.values = None
+        self.done = True
+
     def add(self, field, values):
+
+        self.check(field)
+
         step = field.metadata("step")
         if step not in self.steps:
             return
+
+        if not np.all(values >= 0):
+            warnings.warn(f"Negative values for {field}: {np.amin(values)} {np.amax(values)}")
 
         assert not self.done, (self.key, step)
         assert step not in self.seen, (self.key, step)
@@ -52,16 +94,31 @@ class AccumulationFromStart(Accumulation):
         startStep = field.metadata("startStep")
         endStep = field.metadata("endStep")
 
-        assert startStep == 0 or (startStep == endStep), (startStep, endStep, step)
+        if self.buggy_steps and startStep == endStep:
+            startStep = 0
+
         assert step == endStep, (startStep, endStep, step)
 
+        self.compute(values, startStep, endStep)
+
+        self.seen.add(step)
+
+        if len(self.seen) == len(self.steps):
+            self.write(template=field)
+
+
+class AccumulationFromStart(Accumulation):
+    buggy_steps = True
+
+    def compute(self, values, startStep, endStep):
+
+        assert startStep == 0, startStep
+
         if self.values is None:
-            import numpy as np
 
             self.values = np.copy(values)
             self.startStep = 0
             self.endStep = endStep
-            ready = False
 
         else:
             assert endStep != self.endStep, (self.endStep, endStep)
@@ -69,43 +126,38 @@ class AccumulationFromStart(Accumulation):
             if endStep > self.endStep:
                 # assert endStep - self.endStep == self.stepping, (self.endStep, endStep, self.stepping)
                 self.values = values - self.values
+                self.startStep = self.endStep
                 self.endStep = endStep
             else:
                 # assert self.endStep - endStep == self.stepping, (self.endStep, endStep, self.stepping)
                 self.values = self.values - values
+                self.startStep = endStep
 
-            ready = True
+            if not np.all(self.values >= 0):
+                warnings.warn(f"Negative values for {self.param}: {np.amin(self.values)} {np.amax(self.values)}")
+                self.values = np.maximum(self.values, 0)
 
-        self.seen.add(step)
+    @classmethod
+    def mars_date_time_steps(cls, dates, step1, step2, frequency, base_times):
+        assert frequency == 0, frequency
+        assert base_times is None, base_times
 
-        if ready:
-            self.out.write(
-                self.values,
-                template=field,
-                startStep=self.startStep,
-                endStep=self.endStep,
+        for valid_date in dates:
+            base_date = valid_date - datetime.timedelta(hours=step2)
+
+            yield (
+                base_date.year * 10000 + base_date.month * 100 + base_date.day,
+                base_date.hour * 100 + base_date.minute,
+                (step1, step2),
             )
-            self.values = None
-            self.done = True
 
 
 class AccumulationFromLastStep(Accumulation):
+    buggy_steps = False
 
-    def add(self, field, values):
-        step = field.metadata("step")
-        if step not in self.steps:
-            return
+    def compute(self, values, startStep, endStep):
 
-        assert not self.done, (self.key, step)
-        assert step not in self.seen, (self.key, step)
-
-        startStep = field.metadata("startStep")
-        endStep = field.metadata("endStep")
-
-        assert endStep == step, (startStep, endStep, step)
-        assert step not in self.seen, (self.key, step)
-
-        assert endStep - startStep == self.frequency, (startStep, endStep)
+        assert endStep - startStep == self.frequency, (startStep, endStep, self.frequency)
 
         if self.startStep is None:
             self.startStep = startStep
@@ -118,74 +170,46 @@ class AccumulationFromLastStep(Accumulation):
             self.endStep = max(self.endStep, endStep)
 
         if self.values is None:
-            import numpy as np
-
             self.values = np.zeros_like(values)
 
         self.values += values
 
-        self.seen.add(step)
+    @classmethod
+    def mars_date_time_steps(cls, dates, step1, step2, frequency, base_times):
 
-        if len(self.seen) == len(self.steps):
-            self.out.write(
-                self.values,
-                template=field,
-                startStep=self.startStep,
-                endStep=self.endStep,
+        if base_times is None:
+            base_times = [0, 6, 12, 18]
+
+        base_times = [t // 100 if t > 100 else t for t in base_times]
+        assert frequency
+
+        for valid_date in dates:
+
+            print(f"====> {valid_date=}")
+
+            base_date = valid_date - datetime.timedelta(hours=step2)
+            add_step = 0
+            while base_date.hour not in base_times:
+                # print(f'{base_date=}, {base_times=}, {add_step=} {frequency=}')
+                base_date -= datetime.timedelta(hours=frequency)
+                add_step += frequency
+
+            steps = []
+            for step in range(step1 + frequency, step2 + frequency, frequency):
+                steps.append(step + add_step)
+
+            yield (
+                base_date.year * 10000 + base_date.month * 100 + base_date.day,
+                base_date.hour * 100 + base_date.minute,
+                tuple(steps),
             )
-            self.values = None
-            self.done = True
-
-
-def accumulations_from_start(dates, step1, step2, frequency, base_times):
-    assert frequency == 0, frequency
-    assert base_times is None, base_times
-
-    for valid_date in dates:
-        base_date = valid_date - datetime.timedelta(hours=step2)
-
-        yield (
-            base_date.year * 10000 + base_date.month * 100 + base_date.day,
-            base_date.hour * 100 + base_date.minute,
-            (step1, step2),
-        )
-
-
-def accumulations_from_last_step(dates, step1, step2, frequency, base_times):
-
-    if base_times is None:
-        base_times = [0, 6, 12, 18]
-
-    base_times = [t // 100 if t > 100 else t for t in base_times]
-    assert frequency
-
-    for valid_date in dates:
-
-        print(f"====> {valid_date=}")
-
-        base_date = valid_date - datetime.timedelta(hours=step2)
-        add_step = 0
-        while base_date.hour not in base_times:
-            # print(f'{base_date=}, {base_times=}, {add_step=} {frequency=}')
-            base_date -= datetime.timedelta(hours=frequency)
-            add_step += frequency
-
-        steps = []
-        for step in range(step1 + frequency * 2, step2 + frequency, frequency):
-            steps.append(step)
-
-        yield (
-            base_date.year * 10000 + base_date.month * 100 + base_date.day,
-            base_date.hour * 100 + base_date.minute,
-            tuple(steps),
-        )
 
 
 def identity(x):
     return x
 
 
-def accumulations(
+def compute_accumulations(
     dates,
     data_accumulation_period,
     user_accumulation_period,
@@ -200,10 +224,15 @@ def accumulations(
     step1, step2 = user_accumulation_period
     assert step1 < step2, user_accumulation_period
 
-    if data_accumulation_period == 0:
-        mars_date_time_step = accumulations_from_start(dates, step1, step2, data_accumulation_period, base_times)
-    else:
-        mars_date_time_step = accumulations_from_last_step(dates, step1, step2, data_accumulation_period, base_times)
+    AccumulationClass = AccumulationFromStart if data_accumulation_period == 0 else AccumulationFromLastStep
+
+    mars_date_time_steps = AccumulationClass.mars_date_time_steps(
+        dates,
+        step1,
+        step2,
+        data_accumulation_period,
+        base_times,
+    )
 
     request = deepcopy(request)
 
@@ -212,7 +241,7 @@ def accumulations(
         param = [param]
 
     for p in param:
-        assert p in ["cp", "lsp", "tp"], p
+        assert p in ["cp", "lsp", "tp", "sf"], p
 
     number = request.get("number", [0])
     assert isinstance(number, (list, tuple))
@@ -231,11 +260,9 @@ def accumulations(
 
     requests = []
 
-    AccumulationClass = AccumulationFromStart if data_accumulation_period == 0 else AccumulationFromLastStep
-
     accumulations = {}
 
-    for date, time, steps in mars_date_time_step:
+    for date, time, steps in mars_date_time_steps:
         for p in param:
             for n in number:
                 requests.append(
@@ -305,7 +332,7 @@ if __name__ == "__main__":
       expver: '0001'
       grid: 20./20.
       levtype: sfc
-      param: tp
+      param: sf
     """
     )
 
@@ -316,10 +343,16 @@ if __name__ == "__main__":
             request["stream"] = "oper"
         return request
 
-    ds = accumulations(dates, 0, (6, 12), config, scda)
+    ds = compute_accumulations(dates, 0, (6, 12), config, scda)
     print()
-    for f in ds:
-        print(f.valid_datetime())
+    for d, f in zip(dates, ds.order_by("valid_datetime")):
+        print(
+            d,
+            f.valid_datetime(),
+            f.metadata("startStep"),
+            f.metadata("endStep"),
+            f.metadata("endStep") - f.metadata("startStep"),
+        )
 
     ################
 
@@ -334,7 +367,13 @@ if __name__ == "__main__":
     )
     print()
 
-    ds = accumulations(dates, 1, (0, 6), config, base_times=[6, 18])
+    ds = compute_accumulations(dates, 1, (0, 6), config, base_times=[6, 18])
     print()
-    for f in ds:
-        print(f.valid_datetime())
+    for d, f in zip(dates, ds.order_by("valid_datetime")):
+        print(
+            d,
+            f.valid_datetime(),
+            f.metadata("startStep"),
+            f.metadata("endStep"),
+            f.metadata("endStep") - f.metadata("startStep"),
+        )
