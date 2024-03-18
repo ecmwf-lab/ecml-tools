@@ -7,6 +7,8 @@
 # nor does it submit to any jurisdiction.
 #
 
+import re
+
 from climetlab.indexing.fieldset import FieldArray
 
 
@@ -30,12 +32,13 @@ class RenamedFieldFormat:
     def __init__(self, field, format):
         self.field = field
         self.format = format
+        self.bits = re.findall(r"{(\w+)}", format)
 
     def metadata(self, key):
         value = self.field.metadata(key)
-        # print('✅✅✅✅✅✅✅✅✅ ====> ', key, value, self.format)
         if "{" + key + "}" in self.format:
-            return self.format.format(**{key: value})
+            bits = {b: self.field.metadata(b) for b in self.bits}
+            return self.format.format(**bits)
         return value
 
     def __getattr__(self, name):
@@ -43,7 +46,8 @@ class RenamedFieldFormat:
 
 
 def execute(context, input, what="param", **kwargs):
-    if "{" in what:
-        return FieldArray([RenamedFieldFormat(fs, what) for fs in input])
+    # print('🍍🍍🍍🍍🍍🍍🍍🍍🍍🍍🍍🍍🍍 ==========', kwargs)
+    if what in kwargs:
+        return FieldArray([RenamedFieldFormat(fs, kwargs[what]) for fs in input])
 
     return FieldArray([RenamedFieldMapping(fs, what, kwargs) for fs in input])

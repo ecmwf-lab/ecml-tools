@@ -366,7 +366,7 @@ class ContentLoader(Loader):
                 LOG.info(f" -> Skipping {igroup} total={len(self.groups)} (already done)")
                 continue
             self.print(f" -> Processing {igroup} total={len(self.groups)}")
-            print("========", group)
+            # print("========", group)
             assert isinstance(group[0], datetime.datetime), group
 
             result = self.input.select(dates=group)
