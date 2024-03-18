@@ -392,7 +392,10 @@ class ContentLoader(Loader):
         dates = result.dates
 
         cube = result.get_cube()
-        assert cube.extended_user_shape[0] == len(dates), (cube.extended_user_shape[0], len(dates))
+        assert cube.extended_user_shape[0] == len(dates), (
+            cube.extended_user_shape[0],
+            len(dates),
+        )
 
         shape = cube.extended_user_shape
         dates_in_data = cube.user_coords["valid_datetime"]
@@ -445,7 +448,12 @@ class ContentLoader(Loader):
             load += time.time() - now
 
             name = self.variables_names[local_indexes[1]]
-            check_data_values(data[:], name=name, log=[i, data.shape, local_indexes], allow_nan=self.allow_nan)
+            check_data_values(
+                data[:],
+                name=name,
+                log=[i, data.shape, local_indexes],
+                allow_nan=self.allow_nan,
+            )
 
             now = time.time()
             array[local_indexes] = data
@@ -493,7 +501,10 @@ class StatisticsLoader(Loader):
 
         # remove missing dates
         if self.missing_dates:
-            assert type(self.missing_dates[0]) is dtype, (type(self.missing_dates[0]), dtype)
+            assert type(self.missing_dates[0]) is dtype, (
+                type(self.missing_dates[0]),
+                dtype,
+            )
         dates = [d for d in dates if d not in self.missing_dates]
 
         # filter dates according the the start and end dates in the metadata

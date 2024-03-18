@@ -35,7 +35,6 @@ repos:
   - id: ruff
     args:
     - --line-length=120
-    - --ignore=E203
     - --fix
     - --exit-non-zero-on-fix
     - --preview 

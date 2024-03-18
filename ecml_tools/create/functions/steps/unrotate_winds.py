@@ -38,7 +38,6 @@ def rotate_winds(
     south_pole_longitude,
     south_pole_rotation_angle=0,
 ):
-
     # Code from MIR
     assert south_pole_rotation_angle == 0
     C = np.deg2rad(90 - south_pole_latitude)

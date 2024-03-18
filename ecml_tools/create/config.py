@@ -139,7 +139,6 @@ class OutputSpecs:
 
 
 class LoadersConfig(Config):
-
     def __init__(self, config, *args, **kwargs):
         if "build" not in config:
             config["build"] = {}

@@ -10,9 +10,11 @@ from functools import cached_property
 
 import numpy as np
 
-from . import Forwards
+from ..grids import cropping_mask
+from .dataset import Dataset
 from .debug import Node
 from .debug import debug_indexing
+from .forewards import Forwards
 from .indexing import apply_index_to_slices_changes
 from .indexing import expand_list_indexing
 from .indexing import index_to_slices
@@ -22,7 +24,6 @@ LOG = logging.getLogger(__name__)
 
 
 class Masked(Forwards):
-
     def __init__(self, forward, mask):
         super().__init__(forward)
         assert len(forward.shape) == 4, "Grids must be 1D for now"
@@ -65,7 +66,6 @@ class Masked(Forwards):
 
 
 class Thinning(Masked):
-
     def __init__(self, forward, thinning, method):
         self.thinning = thinning
         self.method = method
@@ -82,3 +82,22 @@ class Thinning(Masked):
 
     def tree(self):
         return Node(self, [self.forward.tree()], thinning=self.thinning, method=self.method)
+
+
+class Cropping(Masked):
+    def __init__(self, forward, area):
+        self.area = area
+
+        if isinstance(area, Dataset):
+            north = np.amax(area.latitudes)
+            south = np.amin(area.latitudes)
+            east = np.amax(area.longitudes)
+            west = np.amin(area.longitudes)
+            area = (north, west, south, east)
+
+        mask = cropping_mask(forward.latitudes, forward.longitudes, *area)
+
+        super().__init__(forward, mask)
+
+    def tree(self):
+        return Node(self, [self.forward.tree()], area=self.area)

@@ -13,7 +13,6 @@ from climetlab.utils.patterns import Pattern
 
 
 def check(ds, paths, **kwargs):
-
     count = 1
     for k, v in kwargs.items():
         if isinstance(v, (tuple, list)):

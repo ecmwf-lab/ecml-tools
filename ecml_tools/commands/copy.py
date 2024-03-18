@@ -154,9 +154,26 @@ class CopyMixin:
         for name in sorted(source.keys()):
             if isinstance(source[name], zarr.hierarchy.Group):
                 group = target[name] if name in target else target.create_group(name)
-                self.copy_group(source[name], group, transfers, block_size, _copy, progress, rechunking)
+                self.copy_group(
+                    source[name],
+                    group,
+                    transfers,
+                    block_size,
+                    _copy,
+                    progress,
+                    rechunking,
+                )
             else:
-                self.copy_array(name, source, target, transfers, block_size, _copy, progress, rechunking)
+                self.copy_array(
+                    name,
+                    source,
+                    target,
+                    transfers,
+                    block_size,
+                    _copy,
+                    progress,
+                    rechunking,
+                )
 
     def copy(self, source, target, transfers, block_size, progress, rechunking):
         import zarr

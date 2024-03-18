@@ -256,7 +256,7 @@ class DatasetTester:
         assert isinstance(self.ds, expected_class)
         assert len(self.ds) == expected_length
         assert len([row for row in self.ds]) == len(self.ds)
-        assert self.ds.shape == expected_shape
+        assert self.ds.shape == expected_shape, (self.ds.shape, expected_shape)
         assert self.ds.variables == expected_variables
         assert self.ds.name_to_index == expected_name_to_index
         assert self.ds.dates[0] == start_date
@@ -1096,5 +1096,14 @@ def test_statistics():
     )
 
 
+@mockup_open_zarr
+def test_cropping():
+    test = DatasetTester(
+        "test-2021-2021-6h-o96-abcd",
+        area=(18, 11, 11, 18),
+    )
+    assert test.ds.shape == (365 * 4, 4, 1, 8)
+
+
 if __name__ == "__main__":
-    test_simple()
+    test_cropping()

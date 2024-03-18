@@ -12,15 +12,10 @@ from functools import cached_property
 from .debug import debug_indexing
 from .indexing import expand_list_indexing
 
-# from .misc import _as_first_date
-# from .misc import _as_last_date
-# from .misc import _frequency_to_hours
-
 LOG = logging.getLogger(__name__)
 
 
 class Dataset:
-
     arguments = {}
 
     @cached_property
@@ -81,6 +76,12 @@ class Dataset:
             thinning = kwargs.pop("thinning")
             method = kwargs.pop("method", "every-nth")
             return Thinning(self, thinning, method)._subset(**kwargs)
+
+        if "area" in kwargs:
+            from .masked import Cropping
+
+            bbox = kwargs.pop("area")
+            return Cropping(self, bbox)._subset(**kwargs)
 
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 

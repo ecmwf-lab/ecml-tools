@@ -51,7 +51,10 @@ class Creator:
 
         with self._cache_context():
             loader = ContentLoader.from_dataset_config(
-                path=self.path, statistics_tmp=self.statistics_tmp, print=self.print, parts=parts
+                path=self.path,
+                statistics_tmp=self.statistics_tmp,
+                print=self.print,
+                parts=parts,
             )
             loader.load()
 
