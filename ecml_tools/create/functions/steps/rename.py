@@ -10,7 +10,7 @@
 from climetlab.indexing.fieldset import FieldArray
 
 
-class RenamedField:
+class RenamedFieldMapping:
     def __init__(self, field, what, renaming):
         self.field = field
         self.what = what
@@ -26,5 +26,24 @@ class RenamedField:
         return getattr(self.field, name)
 
 
+class RenamedFieldFormat:
+    def __init__(self, field, format):
+        self.field = field
+        self.format = format
+
+    def metadata(self, key):
+        value = self.field.metadata(key)
+        # print('✅✅✅✅✅✅✅✅✅ ====> ', key, value, self.format)
+        if "{" + key + "}" in self.format:
+            return self.format.format(**{key: value})
+        return value
+
+    def __getattr__(self, name):
+        return getattr(self.field, name)
+
+
 def execute(context, input, what="param", **kwargs):
-    return FieldArray([RenamedField(fs, what, kwargs) for fs in input])
+    if "{" in what:
+        return FieldArray([RenamedFieldFormat(fs, what) for fs in input])
+
+    return FieldArray([RenamedFieldMapping(fs, what, kwargs) for fs in input])

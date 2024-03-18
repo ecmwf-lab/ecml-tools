@@ -139,16 +139,20 @@ class AccumulationFromStart(Accumulation):
 
     @classmethod
     def mars_date_time_steps(cls, dates, step1, step2, frequency, base_times):
-        assert frequency == 0, frequency
-        assert base_times is None, base_times
+        assert frequency in (0, None), frequency
 
         for valid_date in dates:
             base_date = valid_date - datetime.timedelta(hours=step2)
+            add_step = 0
+            while base_date.hour not in base_times:
+                # print(f'{base_date=}, {base_times=}, {add_step=} {frequency=}')
+                base_date -= datetime.timedelta(hours=1)
+                add_step += 1
 
             yield (
                 base_date.year * 10000 + base_date.month * 100 + base_date.day,
                 base_date.hour * 100 + base_date.minute,
-                (step1, step2),
+                (step1 + add_step, step2 + add_step),
             )
 
 
@@ -177,11 +181,7 @@ class AccumulationFromLastStep(Accumulation):
     @classmethod
     def mars_date_time_steps(cls, dates, step1, step2, frequency, base_times):
 
-        if base_times is None:
-            base_times = [0, 6, 12, 18]
-
-        base_times = [t // 100 if t > 100 else t for t in base_times]
-        assert frequency
+        assert frequency, frequency
 
         for valid_date in dates:
 
@@ -223,6 +223,11 @@ def compute_accumulations(
     assert len(user_accumulation_period) == 2, user_accumulation_period
     step1, step2 = user_accumulation_period
     assert step1 < step2, user_accumulation_period
+
+    if base_times is None:
+        base_times = [0, 6, 12, 18]
+
+    base_times = [t // 100 if t > 100 else t for t in base_times]
 
     AccumulationClass = AccumulationFromStart if data_accumulation_period in (0, None) else AccumulationFromLastStep
 
