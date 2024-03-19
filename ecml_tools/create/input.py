@@ -626,6 +626,7 @@ class StepFunctionResult(StepResult):
             return self.action.function(
                 FunctionContext(self),
                 self.upstream_result.datasource,
+                *self.action.args[1:],
                 **self.action.kwargs,
             )
 
@@ -843,11 +844,15 @@ def step_factory(config, context, action_path, previous_step):
     if isinstance(config[key], dict):
         args, kwargs = [], config[key]
 
+    if isinstance(config[key], str):
+        args, kwargs = [config[key]], {}
+
     if cls is None:
         if not is_function(key, "steps"):
             raise ValueError(f"Unknown step {key}")
         cls = FunctionStepAction
         args = [key] + args
+        # print("========", args)
 
     return cls(context, action_path, previous_step, *args, **kwargs)
 

@@ -8,7 +8,6 @@
 #
 
 import numpy as np
-from scipy.spatial import KDTree
 
 
 def plot_mask(path, mask, lats, lons, global_lats, global_lons):
@@ -128,6 +127,7 @@ def cutout_mask(
     """
     Return a mask for the points in [global_lats, global_lons] that are inside of [lats, lons]
     """
+    from scipy.spatial import KDTree
 
     # TODO: transform min_distance from lat/lon to xyz
 
@@ -184,16 +184,6 @@ def cutout_mask(
         intersect = t.intersect(zero, global_point) or t.intersect(global_point, zero)
         close = np.min(distance) <= min_distance
 
-        if not intersect and False:
-
-            if 0 <= global_lons_masked[i] <= 30:
-                if 55 <= global_lats_masked[i] <= 70:
-                    print(global_lats_masked[i], global_lons_masked[i], distance, intersect, close)
-                    print(lats[index[0]], lons[index[0]])
-                    print(lats[index[1]], lons[index[1]])
-                    print(lats[index[2]], lons[index[2]])
-                    assert False
-
         ok.append(intersect and not close)
 
     j = 0
@@ -226,6 +216,7 @@ def thinning_mask(
     """
     Return the list of points in [lats, lons] closest to [global_lats, global_lons]
     """
+    from scipy.spatial import KDTree
 
     assert global_lats.ndim == 1
     assert global_lons.ndim == 1
