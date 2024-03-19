@@ -106,6 +106,26 @@ class Accumulation:
         if len(self.seen) == len(self.steps):
             self.write(template=field)
 
+    @classmethod
+    def mars_date_time_steps(cls, dates, step1, step2, frequency, base_times, adjust_step):
+        assert frequency in (0, None), frequency
+
+        for valid_date in dates:
+            base_date = valid_date - datetime.timedelta(hours=step2)
+            add_step = 0
+            if base_date.hour not in base_times:
+                if not adjust_step:
+                    raise ValueError(
+                        f"Cannot find a base time in {base_times} that validates on {valid_date.isoformat()} for step={step2}"
+                    )
+
+                while base_date.hour not in base_times:
+                    # print(f'{base_date=}, {base_times=}, {add_step=} {frequency=}')
+                    base_date -= datetime.timedelta(hours=1)
+                    add_step += 1
+
+            yield cls._mars_date_time_step(base_date, step1, step2, add_step, frequency)
+
 
 class AccumulationFromStart(Accumulation):
     buggy_steps = True
@@ -138,22 +158,13 @@ class AccumulationFromStart(Accumulation):
                 self.values = np.maximum(self.values, 0)
 
     @classmethod
-    def mars_date_time_steps(cls, dates, step1, step2, frequency, base_times):
-        assert frequency in (0, None), frequency
-
-        for valid_date in dates:
-            base_date = valid_date - datetime.timedelta(hours=step2)
-            add_step = 0
-            while base_date.hour not in base_times:
-                # print(f'{base_date=}, {base_times=}, {add_step=} {frequency=}')
-                base_date -= datetime.timedelta(hours=1)
-                add_step += 1
-
-            yield (
-                base_date.year * 10000 + base_date.month * 100 + base_date.day,
-                base_date.hour * 100 + base_date.minute,
-                (step1 + add_step, step2 + add_step),
-            )
+    def _mars_date_time_step(cls, base_date, step1, step2, add_step, frequency):
+        assert not frequency, frequency
+        return (
+            base_date.year * 10000 + base_date.month * 100 + base_date.day,
+            base_date.hour * 100 + base_date.minute,
+            (step1 + add_step, step2 + add_step),
+        )
 
 
 class AccumulationFromLastStep(Accumulation):
@@ -179,30 +190,17 @@ class AccumulationFromLastStep(Accumulation):
         self.values += values
 
     @classmethod
-    def mars_date_time_steps(cls, dates, step1, step2, frequency, base_times):
+    def _mars_date_time_step(cls, base_date, step1, step2, add_step, frequency):
+        assert frequency > 0, frequency
 
-        assert frequency, frequency
-
-        for valid_date in dates:
-
-            print(f"====> {valid_date=}")
-
-            base_date = valid_date - datetime.timedelta(hours=step2)
-            add_step = 0
-            while base_date.hour not in base_times:
-                # print(f'{base_date=}, {base_times=}, {add_step=} {frequency=}')
-                base_date -= datetime.timedelta(hours=frequency)
-                add_step += frequency
-
-            steps = []
-            for step in range(step1 + frequency, step2 + frequency, frequency):
-                steps.append(step + add_step)
-
-            yield (
-                base_date.year * 10000 + base_date.month * 100 + base_date.day,
-                base_date.hour * 100 + base_date.minute,
-                tuple(steps),
-            )
+        steps = []
+        for step in range(step1, step2, frequency):
+            steps.append(step + add_step)
+        return (
+            base_date.year * 10000 + base_date.month * 100 + base_date.day,
+            base_date.hour * 100 + base_date.minute,
+            tuple(steps),
+        )
 
 
 def identity(x):
@@ -217,6 +215,8 @@ def compute_accumulations(
     patch=identity,
     base_times=None,
 ):
+    adjust_step = isinstance(user_accumulation_period, int)
+
     if not isinstance(user_accumulation_period, (list, tuple)):
         user_accumulation_period = (0, user_accumulation_period)
 
@@ -237,6 +237,7 @@ def compute_accumulations(
         step2,
         data_accumulation_period,
         base_times,
+        adjust_step,
     )
 
     request = deepcopy(request)
