@@ -50,8 +50,8 @@ def default_statistics_dates(dates):
     n_years = (last - first).days // 365
 
     if n_years >= 20:
-        end = datetime.datetime(last.year - 2, last.month, last.day, last.hour, last.minute, last.second)
-        print(f"Number of years {n_years} >= 20, leaving out 2 years. {end=}")
+        end = datetime.datetime(last.year - 3, last.month, last.day, last.hour, last.minute, last.second)
+        print(f"Number of years {n_years} >= 20, leaving out 3 years. {end=}")
 
     elif n_years >= 10:  # leave out 1 year
         end = datetime.datetime(last.year - 1, last.month, last.day, last.hour, last.minute, last.second)
