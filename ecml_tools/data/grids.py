@@ -125,7 +125,7 @@ class ConcatGrids(Grids):
 
 class CutoutGrids(Grids):
     def __init__(self, datasets, axis):
-        from .grids import cutout_mask
+        from ecml_tools.grids import cutout_mask
 
         super().__init__(datasets, axis)
         assert len(datasets) == 2, "CutoutGrids requires two datasets"

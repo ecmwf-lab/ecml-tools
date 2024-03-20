@@ -89,6 +89,9 @@ class Forwards(Dataset):
             **kwargs,
         )
 
+    def source(self, index):
+        return self.forward.source(index)
+
 
 class Combined(Forwards):
     def __init__(self, datasets):

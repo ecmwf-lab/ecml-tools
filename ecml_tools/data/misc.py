@@ -136,6 +136,10 @@ def _as_last_date(d, dates):
 
 
 def _concat_or_join(datasets, kwargs):
+
+    print(f"{kwargs=}")
+    if "adjust" in kwargs:
+        raise ValueError("Cannot use 'adjust' without specifying 'concat' or 'join'")
     datasets, kwargs = _auto_adjust(datasets, kwargs)
 
     # Study the dates
@@ -244,14 +248,28 @@ def _open_dataset(*args, zarr_root, **kwargs):
     for a in args:
         sets.append(_open(a, zarr_root))
 
+    if "join" in kwargs:
+        from .join import join_factory
+
+        assert not sets, sets
+        return join_factory(args, kwargs, zarr_root)
+
+    if "concat" in kwargs:
+        from .concat import concat_factory
+
+        assert not sets, sets
+        return concat_factory(args, kwargs, zarr_root)
+
     if "ensemble" in kwargs:
         from .ensemble import ensemble_factory
 
+        assert not sets, sets
         return ensemble_factory(args, kwargs, zarr_root)
 
     if "grids" in kwargs:
         from .grids import grids_factory
 
+        assert not sets, sets
         return grids_factory(args, kwargs, zarr_root)
 
     for name in ("datasets", "dataset"):

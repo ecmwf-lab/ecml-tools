@@ -18,6 +18,8 @@ from .indexing import apply_index_to_slices_changes
 from .indexing import expand_list_indexing
 from .indexing import index_to_slices
 from .indexing import update_tuple
+from .misc import _auto_adjust
+from .misc import _open
 
 LOG = logging.getLogger(__name__)
 
@@ -135,3 +137,21 @@ class Join(Combined):
 
     def tree(self):
         return Node(self, [d.tree() for d in self.datasets])
+
+
+def join_factory(args, kwargs, zarr_root):
+
+    datasets = kwargs.pop("join")
+    assert isinstance(datasets, (list, tuple))
+    assert len(args) == 0
+
+    assert isinstance(datasets, (list, tuple))
+
+    datasets = [_open(e, zarr_root) for e in datasets]
+
+    if len(datasets) == 1:
+        return datasets[0]._subset(**kwargs)
+
+    datasets, kwargs = _auto_adjust(datasets, kwargs)
+
+    return Join(datasets)._subset(**kwargs)

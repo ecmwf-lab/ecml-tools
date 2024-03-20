@@ -17,7 +17,7 @@ import semantic_version
 import tqdm
 
 from ecml_tools.data import open_dataset
-from ecml_tools.data import open_zarr
+from ecml_tools.data.stores import open_zarr
 from ecml_tools.utils.humanize import bytes
 from ecml_tools.utils.humanize import number
 from ecml_tools.utils.humanize import when
