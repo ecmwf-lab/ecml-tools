@@ -97,6 +97,13 @@ def _as_date(d, dates, last):
                 return np.datetime64(f"{year:04}-{month:02}-{day:02}T00:00:00")
 
     if isinstance(d, str):
+
+        if "-" in d and ":" in d:
+            date, time = d.replace(" ", "T").split("T")
+            year, month, day = date.split("-")
+            hour, minute, second = time.split(":")
+            return np.datetime64(f"{year:04}-{month:02}-{day:02}T{hour}:{minute}:{second}")
+
         if "-" in d:
             assert ":" not in d
             bits = d.split("-")
