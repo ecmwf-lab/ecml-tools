@@ -83,6 +83,15 @@ class Dataset:
             bbox = kwargs.pop("area")
             return Cropping(self, bbox)._subset(**kwargs)
 
+        # Keep last
+        if "shuffle" in kwargs:
+            from .subset import Subset
+
+            shuffle = kwargs.pop("shuffle")
+
+            if shuffle:
+                return Subset(self, self._shuffle_indices())._subset(**kwargs)
+
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 
     def _frequency_to_indices(self, frequency):
@@ -95,6 +104,11 @@ class Dataset:
         step = requested_frequency // dataset_frequency
 
         return range(0, len(self), step)
+
+    def _shuffle_indices(self):
+        import numpy as np
+
+        return np.random.permutation(len(self))
 
     def _dates_to_indices(self, start, end):
         from .misc import _as_first_date

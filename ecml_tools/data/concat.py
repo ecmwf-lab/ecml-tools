@@ -6,6 +6,7 @@
 # nor does it submit to any jurisdiction.
 
 import logging
+from functools import cached_property
 
 import numpy as np
 
@@ -23,7 +24,8 @@ from .misc import _open
 LOG = logging.getLogger(__name__)
 
 
-class Concat(Combined):
+class ConcatMixin:
+
     def __len__(self):
         return sum(len(i) for i in self.datasets)
 
@@ -64,6 +66,18 @@ class Concat(Combined):
         result = [d[i] for (d, i) in zip(self.datasets, slices) if i is not None]
 
         return np.concatenate(result)
+
+    @cached_property
+    def missing(self):
+        result = set()
+        offset = 0
+        for d in self.datasets:
+            result = result | set(m + offset for m in d.missing)
+            offset += len(d)
+        return result
+
+
+class Concat(ConcatMixin, Combined):
 
     def check_compatibility(self, d1, d2):
         super().check_compatibility(d1, d2)

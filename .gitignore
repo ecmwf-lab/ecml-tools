@@ -178,3 +178,8 @@ bar
 test.py
 cutout.png
 *.out
+
+_build/
+?
+?.*
+~*

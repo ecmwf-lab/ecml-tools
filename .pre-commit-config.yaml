@@ -37,7 +37,7 @@ repos:
     - --line-length=120
     - --fix
     - --exit-non-zero-on-fix
-    - --preview 
+    - --preview
     - --exclude
     - 'dev/*.py'
 #- repo: https://github.com/pre-commit/mirrors-mypy
@@ -46,3 +46,17 @@ repos:
 #  -   id: mypy
 #      verbose: true
 #      entry: bash -c 'mypy "$@" || true' --
+- repo: https://github.com/dzhu/rstfmt
+  rev: v0.0.14
+  hooks:
+    - id: rstfmt
+
+# - repo: https://github.com/rstcheck/rstcheck
+#   rev: v6.2.0
+#   hooks:
+#     - id: rstcheck
+#       args:
+#         - '--ignore-roles'
+#         - 'doc'
+#         - '--ignore-directives'
+#         - 'toctree'

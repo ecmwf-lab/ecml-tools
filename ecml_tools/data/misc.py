@@ -255,6 +255,16 @@ def _open_dataset(*args, zarr_root, **kwargs):
     for a in args:
         sets.append(_open(a, zarr_root))
 
+    if "zip" in kwargs:
+        from .unchecked import zip_factory
+
+        assert not sets, sets
+        return zip_factory(args, kwargs, zarr_root)
+    if "chain" in kwargs:
+        from .unchecked import chain_factory
+
+        assert not sets, sets
+        return chain_factory(args, kwargs, zarr_root)
     if "join" in kwargs:
         from .join import join_factory
 
