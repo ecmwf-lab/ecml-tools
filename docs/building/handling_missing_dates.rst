@@ -8,3 +8,16 @@ in the time series. The missing dates will be filled ``np.nan`` values.
 
 .. literalinclude:: missing_dates.yaml
    :language: yaml
+
+*Anemoi* will ignore the missing dates when computing the
+:ref:`statistics <gathering_statistics>`.
+
+You can retrieve the list indices corresponding to the missing dates by
+accessing the ``missing`` attribute of the dataset object.
+
+.. code:: python
+
+   print(ds.missing)
+
+If you access a missing index, the dataset will throw a
+``MissingDateError``.

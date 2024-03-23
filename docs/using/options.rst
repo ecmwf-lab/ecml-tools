@@ -27,7 +27,7 @@ dataset:
 
    open_dataset(path, statistics=other_path)
    open_dataset(path, statistics=other_dataset)
-   open_dataset(path, statistics={"dataset": other_path, ...})
+   open_dataset(path, statistics={"dataset": other_path, "...": ...})
 
 This also applies when combining datasets:
 
@@ -36,7 +36,13 @@ This also applies when combining datasets:
    open_dataset(ensembles=[dataset1, dataset2, ...])
    open_dataset(ensembles=[path1, path2, ...])
    open_dataset(ensembles=[dataset1, path2, ...])
-   open_dataset(ensembles=[{"dataset": path1, ...}, {"dataset": path2, ...}, ...])
+   open_dataset(
+       ensembles=[
+           {"dataset": path1, "...": ...},
+           {"dataset": path2, "...": ...},
+           ...,
+       ]
+   )
 
 *********
  Options
@@ -72,8 +78,12 @@ package, as described in :ref:`datasets-building`.
    from ecml_tools.data import open_dataset
 
    ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2")
-   ds = open_dataset("/path/to/datasets/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2.zarr")
-   ds = open_dataset("https://example.com/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2.zarr")
+   ds = open_dataset(
+       "/path/to/datasets/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2.zarr"
+   )
+   ds = open_dataset(
+       "https://example.com/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2.zarr"
+   )
    ds = open_dataset("s3://bucket/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2.zarr")
 
 Alternatively, you can pass an already opened dataset:
@@ -127,7 +137,7 @@ select
 
    ds = open_dataset(
        "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-       select = ["2t", "tp"],
+       select=["2t", "tp"],
    )
 
 .. code:: python
@@ -136,7 +146,7 @@ select
 
    ds = open_dataset(
        "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-       select = {"2t", "tp"},
+       select={"2t", "tp"},
    )
 
 drop
@@ -148,7 +158,7 @@ You can also drop some variables:
 
    ds = open_dataset(
        "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-       drop = ["10u", "10v"],
+       drop=["10u", "10v"],
    )
 
 reorder
@@ -162,7 +172,7 @@ and reorder them:
 
    ds = open_dataset(
        "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-       reorder = ["2t", "msl", "sp", "10u", "10v"],
+       reorder=["2t", "msl", "sp", "10u", "10v"],
    )
 
 ... or using a dictionary
@@ -171,7 +181,7 @@ and reorder them:
 
    ds = open_dataset(
        "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-       reorder = {"2t": 0, "msl": 1, "sp": 2, "10u": 3, "10v": 4},
+       reorder={"2t": 0, "msl": 1, "sp": 2, "10u": 3, "10v": 4},
    )
 
 rename
@@ -181,9 +191,9 @@ You can also rename variables:
 
 .. code:: python
 
-    ds = open_dataset(
+   ds = open_dataset(
        "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
-       rename = {"2t": "t2m"},
+       rename={"2t": "t2m"},
    )
 
 This will be useful when your join datasets and do not want variables
@@ -228,7 +238,7 @@ chronological order with no gaps between them.
 
    ds = open_dataset(
        "aifs-ea-an-oper-0001-mars-o96-1940-1978-1h-v2",
-       "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2"
+       "aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
    )
 
 .. image:: concat.png

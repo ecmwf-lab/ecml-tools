@@ -11,10 +11,10 @@ from .misc import _open_dataset
 
 LOG = logging.getLogger(__name__)
 
-__all__ = ["open_dataset", "MissingDate"]
+__all__ = ["open_dataset", "MissingDateError"]
 
 
-class MissingDate(Exception):
+class MissingDateError(Exception):
     pass
 
 

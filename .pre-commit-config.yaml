@@ -46,10 +46,10 @@ repos:
 #  -   id: mypy
 #      verbose: true
 #      entry: bash -c 'mypy "$@" || true' --
-- repo: https://github.com/dzhu/rstfmt
-  rev: v0.0.14
-  hooks:
-    - id: rstfmt
+# - repo: https://github.com/dzhu/rstfmt
+#   rev: v0.0.14
+#   hooks:
+#     - id: rstfmt
 
 # - repo: https://github.com/rstcheck/rstcheck
 #   rev: v6.2.0
@@ -60,3 +60,20 @@ repos:
 #         - 'doc'
 #         - '--ignore-directives'
 #         - 'toctree'
+
+- repo: https://github.com/thclark/pre-commit-sphinx
+  rev: 0.0.1
+  hooks:
+    - id: build-docs
+      additional_dependencies:
+        - sphinx
+        - sphinx_rtd_theme
+        - nbsphinx
+      args:
+        - --cache-dir
+        - docs/_build/doctrees
+        - --html-dir
+        - docs/_build/html
+        - --source-dir
+        - docs
+      language_version: python3

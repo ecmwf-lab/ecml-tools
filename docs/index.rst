@@ -49,6 +49,7 @@ models from existing recipes but with their own data.
 -  :doc:`building/introduction`
 -  :doc:`building/sources`
 -  :doc:`building/filters`
+-  :doc:`building/statistics`
 
 .. toctree::
    :maxdepth: 1
@@ -61,6 +62,7 @@ models from existing recipes but with their own data.
    building/naming_variables
    building/handling_missing_dates
    building/handling_missing_values
+   building/statistics
 
 *********
  License

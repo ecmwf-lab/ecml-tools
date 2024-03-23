@@ -12,7 +12,7 @@ from functools import cached_property
 import numpy as np
 import zarr
 
-from . import MissingDate
+from . import MissingDateError
 from .dataset import Dataset
 from .debug import DEBUG_ZARR_LOADING
 from .debug import Node
@@ -314,7 +314,7 @@ class ZarrWithMissingDates(Zarr):
         raise TypeError(f"Unsupported index {n} {type(n)}")
 
     def _report_missing(self, n):
-        raise MissingDate(f"Date {self.missing_to_dates[n]} is missing (index={n})")
+        raise MissingDateError(f"Date {self.missing_to_dates[n]} is missing (index={n})")
 
     def tree(self):
         return Node(self, [], path=self.path, missing=sorted(self.missing))

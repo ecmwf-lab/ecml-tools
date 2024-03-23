@@ -15,6 +15,9 @@
 # sys.path.insert(0, os.path.abspath('.'))
 
 import datetime
+import os
+
+read_the_docs_build = os.environ.get("READTHEDOCS", None) == "True"
 
 # top = os.path.realpath(os.path.dirname(os.path.dirname(__file__)))
 # sys.path.insert(0, top)
@@ -51,6 +54,7 @@ release = "0.1.0"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "sphinx.ext.todo",
     "sphinx_rtd_theme",
     "nbsphinx",
 ]
@@ -79,3 +83,6 @@ html_theme = "sphinx_rtd_theme"
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
 html_css_files = ["style.css"]
+
+
+todo_include_todos = not read_the_docs_build
