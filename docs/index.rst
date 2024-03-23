@@ -31,26 +31,33 @@ models from existing recipes but with their own data.
    firststeps
    examples
 
-**Datasets**
+**Using training datasets**
 
--  :doc:`datasets/about`
--  :doc:`datasets/building`
--  :doc:`datasets/sources`
--  :doc:`datasets/filters`
--  :doc:`datasets/using`
--  :doc:`datasets/options`
+-  :doc:`using/introduction`
+-  :doc:`using/options`
 
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: Training datasets
+   :caption: Using datasets
 
-   datasets/about
-   datasets/building
-   datasets/sources
-   datasets/filters
-   datasets/using
-   datasets/options
+   using/introduction
+   using/options
+
+**Building training datasets**
+
+-  :doc:`building/introduction`
+-  :doc:`building/sources`
+-  :doc:`building/filters`
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Building datasets
+
+   building/introduction
+   building/sources
+   building/filters
 
 *********
  License
@@ -61,7 +68,5 @@ models from existing recipes but with their own data.
 .. __: http://www.apache.org/licenses/LICENSE-2.0.html
 
 .. _ecml-tools: https://github.com/ecmwf-lab/ecml-tools
-
-.. _pytorch: https://pytorch.org
 
 .. _zarr: https://zarr.readthedocs.io/

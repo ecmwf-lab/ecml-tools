@@ -1,8 +1,8 @@
 .. _datasets-building:
 
-###################
- Building datasets
-###################
+##############
+ Introduction
+##############
 
 ..
    .. figure:: build.png
