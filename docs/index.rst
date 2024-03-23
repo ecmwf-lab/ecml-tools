@@ -58,6 +58,9 @@ models from existing recipes but with their own data.
    building/introduction
    building/sources
    building/filters
+   building/naming_variables
+   building/handling_missing_dates
+   building/handling_missing_values
 
 *********
  License

@@ -14,5 +14,26 @@ the MARS language specification.
    mars:
        levtype: sfc
        param: [2t, msl]
+       grid: [0.25, 0.25]
+
+Data from several levels types must be requested in separate requests,
+with the `join` key.
+
+.. code:: yaml
+
+   join:
+
+    - mars:
+        levtype: sfc
+        param: [2t, msl]
+        grid: [0.25, 0.25]
+
+    - mars:
+        levtype: pl
+        param: [u, v]
+        grid: [0.25, 0.25]
+
+See :ref:`naming-variables` for information on how to name the variables
+when mixing single level and multi-levels variables in the same dataset.
 
 .. _mars language specification: https://confluence.ecmwf.int/display/UDOC/MARS+user+documentation
