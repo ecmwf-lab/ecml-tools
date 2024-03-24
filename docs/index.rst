@@ -42,6 +42,13 @@ datasets <building-introduction>`.
 **Using training datasets**
 
 -  :doc:`using/introduction`
+-  :doc:`using/opening`
+-  :doc:`using/subsetting`
+-  :doc:`using/combining`
+-  :doc:`using/selecting`
+-  :doc:`using/grids`
+-  :doc:`using/statistics`
+-  :doc:`using/other`
 -  :doc:`using/options`
 
 .. toctree::
@@ -50,6 +57,13 @@ datasets <building-introduction>`.
    :caption: Using datasets
 
    using/introduction
+   using/opening
+   using/subsetting
+   using/combining
+   using/selecting
+   using/grids
+   using/statistics
+   using/other
    using/options
 
 **Building training datasets**

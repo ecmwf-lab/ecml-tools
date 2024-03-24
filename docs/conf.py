@@ -57,6 +57,8 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx_rtd_theme",
     "nbsphinx",
+    "sphinx.ext.graphviz",
+    "sphinx.ext.intersphinx",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -66,6 +68,10 @@ extensions = [
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "'**.ipynb_checkpoints'"]
+
+intersphinx_mapping = {
+    "python": ("https://python.readthedocs.io/en/latest", None),
+}
 
 
 # https://www.notion.so/Deepnote-Launch-Buttons-63c642a5e875463495ed2341e83a4b2a
