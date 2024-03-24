@@ -17,7 +17,7 @@ the MARS language specification.
        grid: [0.25, 0.25]
 
 Data from several levels types must be requested in separate requests,
-with the `join` key.
+with the ``join`` command.
 
 .. code:: yaml
 

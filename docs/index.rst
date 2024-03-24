@@ -47,6 +47,7 @@ models from existing recipes but with their own data.
 **Building training datasets**
 
 -  :doc:`building/introduction`
+-  :doc:`building/operations`
 -  :doc:`building/sources`
 -  :doc:`building/filters`
 -  :doc:`building/statistics`
@@ -57,6 +58,7 @@ models from existing recipes but with their own data.
    :caption: Building datasets
 
    building/introduction
+   building/operations
    building/sources
    building/filters
    building/naming_variables
