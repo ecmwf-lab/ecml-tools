@@ -32,13 +32,13 @@ class Dataset:
 
             from .subset import Subset
 
-            return Subset(self, self._dates_to_indices(start, end))._subset(**kwargs)
+            return Subset(self, self._dates_to_indices(start, end), dict(start=start, end=end))._subset(**kwargs)
 
         if "frequency" in kwargs:
             from .subset import Subset
 
             frequency = kwargs.pop("frequency")
-            return Subset(self, self._frequency_to_indices(frequency))._subset(**kwargs)
+            return Subset(self, self._frequency_to_indices(frequency), dict(frequency=frequency))._subset(**kwargs)
 
         if "select" in kwargs:
             from .select import Select
@@ -90,7 +90,7 @@ class Dataset:
             shuffle = kwargs.pop("shuffle")
 
             if shuffle:
-                return Subset(self, self._shuffle_indices())._subset(**kwargs)
+                return Subset(self, self._shuffle_indices(), dict(shuffle=True))._subset(**kwargs)
 
         raise NotImplementedError("Unsupported arguments: " + ", ".join(kwargs))
 

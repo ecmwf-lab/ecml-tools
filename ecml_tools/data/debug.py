@@ -45,6 +45,53 @@ class Node:
         self._put(0, result)
         return "\n".join(result)
 
+    def graph(self, digraph, nodes):
+        label = self.dataset.__class__.__name__.lower()
+        if self.kwargs:
+            param = []
+            for k, v in self.kwargs.items():
+                if k == "path" and isinstance(v, str):
+                    v = os.path.basename(v)
+                if isinstance(v, (list, tuple)):
+                    v = ", ".join(str(i) for i in v)
+                else:
+                    v = str(v)
+                v = textwrap.shorten(v, width=40, placeholder="...")
+                # if len(self.kwargs) == 1:
+                #     param.append(v)
+                # else:
+                param.append(f"{k}={v}")
+            label = f'{label}({",".join(param)})'
+
+        label += "\n" + "\n".join(
+            textwrap.shorten(str(v), width=40, placeholder="...")
+            for v in (
+                self.dataset.dates[0],
+                self.dataset.dates[-1],
+                self.dataset.frequency,
+                self.dataset.shape,
+                self.dataset.variables,
+            )
+        )
+
+        nodes[f"N{id(self)}"] = label
+        for kid in self.kids:
+            digraph.append(f"N{id(self)} -> N{id(kid)}")
+            kid.graph(digraph, nodes)
+
+    def digraph(self):
+        digraph = ["digraph {"]
+        digraph.append("node [shape=box];")
+        nodes = {}
+
+        self.graph(digraph, nodes)
+
+        for node, label in nodes.items():
+            digraph.append(f'{node} [label="{label}"];')
+
+        digraph.append("}")
+        return "\n".join(digraph)
+
 
 class Source:
     """Class used to follow the provenance of a data point."""

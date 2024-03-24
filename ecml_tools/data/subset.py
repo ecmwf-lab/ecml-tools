@@ -26,13 +26,14 @@ LOG = logging.getLogger(__name__)
 class Subset(Forwards):
     """Select a subset of the dates."""
 
-    def __init__(self, dataset, indices):
+    def __init__(self, dataset, indices, reason):
         while isinstance(dataset, Subset):
             indices = [dataset.indices[i] for i in indices]
             dataset = dataset.dataset
 
         self.dataset = dataset
         self.indices = list(indices)
+        self.reason = {k: v for k, v in reason.items() if v is not None}
 
         # Forward other properties to the super dataset
         super().__init__(dataset)
@@ -101,4 +102,4 @@ class Subset(Forwards):
         return {self.indices[i] for i in self.dataset.missing if i in self.indices}
 
     def tree(self):
-        return Node(self, [self.dataset.tree()])
+        return Node(self, [self.dataset.tree()], **self.reason)

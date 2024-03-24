@@ -215,7 +215,7 @@ def _auto_adjust(datasets, kwargs):
         for p in ("select", "frequency", "start", "end"):
             kwargs[p] = "matching"
 
-    adjust = {}
+    adjust = [{} for _ in datasets]
 
     if kwargs.get("select") == "matching":
         kwargs.pop("select")
@@ -230,22 +230,32 @@ def _auto_adjust(datasets, kwargs):
         if len(variables) == 0:
             raise ValueError("No common variables")
 
-        adjust["select"] = sorted(variables)
+        for i, d in enumerate(datasets):
+            if set(d.variables) != variables:
+                adjust[i]["select"] = sorted(variables)
 
     if kwargs.get("start") == "matching":
         kwargs.pop("start")
-        adjust["start"] = max(d.dates[0] for d in datasets).astype(object)
+        start = max(d.dates[0] for d in datasets).astype(object)
+        for i, d in enumerate(datasets):
+            if start != d.dates[0]:
+                adjust[i]["start"] = start
 
     if kwargs.get("end") == "matching":
         kwargs.pop("end")
-        adjust["end"] = min(d.dates[-1] for d in datasets).astype(object)
+        end = min(d.dates[-1] for d in datasets).astype(object)
+        for i, d in enumerate(datasets):
+            if end != d.dates[-1]:
+                adjust[i]["end"] = end
 
     if kwargs.get("frequency") == "matching":
         kwargs.pop("frequency")
-        adjust["frequency"] = max(d.frequency for d in datasets)
+        frequency = max(d.frequency for d in datasets)
+        for i, d in enumerate(datasets):
+            if d.frequency != frequency:
+                adjust[i]["frequency"] = frequency
 
-    if adjust:
-        datasets = [d._subset(**adjust) for d in datasets]
+    datasets = [d._subset(**adjust[i]) for i, d in enumerate(datasets)]
 
     return datasets, kwargs
 

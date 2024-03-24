@@ -81,6 +81,7 @@ class Join(Combined):
             # No overlay
             return self
 
+        variables = [v[1:-1] for v in self.variables if v[0] == "(" and v[-1] == ")"]
         indices = list(indices.values())
 
         i = 0
@@ -95,7 +96,7 @@ class Join(Combined):
 
         from .select import Select
 
-        return Select(self, indices, {"overlay": True})
+        return Select(self, indices, {"overlay": variables})
 
     @cached_property
     def variables(self):
@@ -154,4 +155,4 @@ def join_factory(args, kwargs, zarr_root):
 
     datasets, kwargs = _auto_adjust(datasets, kwargs)
 
-    return Join(datasets)._subset(**kwargs)
+    return Join(datasets)._overlay()._subset(**kwargs)
