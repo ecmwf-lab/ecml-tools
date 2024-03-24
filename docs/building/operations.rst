@@ -11,13 +11,9 @@
 The join is the process of combining several sources data. Each
 source is expected to provide different variables at the same dates.
 
-.. code-block:: yaml
+.. literalinclude:: input.yaml
+    :language: yaml
 
-    input:
-        join:
-            - source1
-            - source2
-            - ...
 
 
 ********
@@ -42,12 +38,5 @@ first step of a pipe is typically a source, a join or another pipe.
 The following steps are filters.
 
 
-.. code-block:: yaml
-
-    input:
-        pipe:
-            - source
-            - filter1
-            - filter2
-            - ...
-
+.. literalinclude:: pipe.yaml
+    :language: yaml

@@ -148,7 +148,7 @@ training = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     start=1979,
     end=2020)
 
-test = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2"
+test = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
     start=2021,
     end=2022)
 ```
