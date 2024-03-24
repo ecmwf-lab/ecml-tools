@@ -1,4 +1,4 @@
-.. _dataset-filters:
+.. _filters:
 
 #########
  Filters

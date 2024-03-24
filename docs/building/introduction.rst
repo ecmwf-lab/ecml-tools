@@ -1,4 +1,4 @@
-.. _datasets-building:
+.. _building-introduction:
 
 ##############
  Introduction
@@ -41,14 +41,13 @@ source
    The `source` is a software component that given a list of dates and
    variables will return the corresponding fields. A example of source
    is ECMWF's MARS archive, a collection of GRIB or NetCDF files, a
-   database, etc. See :ref:`dataset-sources` for more information.
+   database, etc. See :ref:`sources` for more information.
 
 filter
    A `filter` is a software component that takes as input the output of
    a source or the output of another filter can modify the fields and/or
    their metadata. For example, typical filters are interpolations,
-   renaming of variables, etc. See :ref:`dataset-filters` for more
-   information.
+   renaming of variables, etc. See :ref:`filters` for more information.
 
 ************
  Operations
@@ -71,6 +70,9 @@ concat
    operation that handle different dates. This is typically used to
    build a dataset that spans several years, when the several sources
    are involved, each providing a different period.
+
+Each operation is considered as a :ref:`source <sources>`, therefore
+operations can be combined to build complex datasets.
 
 *****************
  Getting started

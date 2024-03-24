@@ -11,11 +11,19 @@
 *Anemoi* is a framework for developing machine learning weather
 forecasting models. It comprises of components or packages for preparing
 training datasets, conducting ML model training and a registry for
-datasets and trained models. Anemoi provides tools for operational
+datasets and trained models. *Anemoi* provides tools for operational
 inference, including interfacing to verification software. As a
 framework it seeks to handle many of the complexities that
 meteorological organisations will share, allowing them to easily train
 models from existing recipes but with their own data.
+
+An *Anemoi dataset* is a thin wrapper around a zarr_ store that is
+optimised for training data-driven weather forecasting models. It is
+organised in such a way that I/O operations are minimised.
+
+This documentation is divided into two main sections: :ref:`how to use
+existing datasets <using-introduction>` and :ref:`how to build new
+datasets <building-introduction>`.
 
 -  :doc:`overview`
 -  :doc:`installing`

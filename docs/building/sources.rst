@@ -1,4 +1,4 @@
-.. _dataset-sources:
+.. _sources:
 
 #########
  Sources
