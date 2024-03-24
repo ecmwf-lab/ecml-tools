@@ -33,9 +33,9 @@ each providing a different period.
  pipe
 ******
 
-The pipe is the process of transforming fields using filters. The first
-step of a pipe is typically a source, a join or another pipe. The
-following steps are filters.
+The pipe is the process of transforming fields using :ref:`filters
+<filters>`. The first step of a pipe is typically a source, a join or
+another pipe. The following steps are filters.
 
 .. literalinclude:: pipe.yaml
    :language: yaml

@@ -38,4 +38,5 @@ You can change the frequency of the dataset by passing a string with the
 
 .. code:: python
 
-   ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2", frequency="6h")
+   ds = open_dataset("aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v2",
+      frequency="6h")
